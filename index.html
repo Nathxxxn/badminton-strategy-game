@@ -13,15 +13,42 @@
   </div>
 
   <!--
-    Temporary boot script for feature/court-rendering.
+    Temporary boot script for feature/player-renderer.
     Will be replaced by src/js/main.js once the full app is wired up.
   -->
   <script type="module">
-    import { Court } from './src/js/court.js';
+    import { Court }    from './src/js/court.js';
+    import { Renderer } from './src/js/renderer.js';
 
-    const canvas = document.getElementById('game-canvas');
-    const court  = new Court(canvas);
-    court.draw();
+    const canvas   = document.getElementById('game-canvas');
+    const court    = new Court(canvas);
+    const renderer = new Renderer(canvas, court);
+
+    // Sample scene — mirrors the POS_ATK_001 exercise format from CLAUDE.md
+    const players = {
+      ally1:     { x: 0.5,  y: 0.65, label: 'YOU' },
+      ally2:     { x: 0.7,  y: 0.85, movingTo: { x: 0.6, y: 0.78 } },
+      opponent1: { x: 0.25, y: 0.2  },
+      opponent2: { x: 0.7,  y: 0.3  },
+    };
+
+    const shuttlecock = {
+      position:   { x: 0.25, y: 0.15 },
+      trajectory: [
+        { x: 0.7,  y: 0.85 },
+        { x: 0.25, y: 0.15 },
+      ],
+      speed:  'fast',
+      height: 'low',
+    };
+
+    function render() {
+      court.draw();
+      renderer.drawScene(players, shuttlecock, 'ally1');
+    }
+
+    render();
+    window.addEventListener('resize', render);
   </script>
 </body>
 </html>
