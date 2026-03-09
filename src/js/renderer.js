@@ -9,9 +9,12 @@
  *  - Draw the shuttlecock (yellow circle + feather cork)
  *  - Draw the trajectory arc as a dotted path
  *
- * All positions are normalized (0–1) and converted via court.toCanvas().
+ * All positions are normalized (0–1), snapped to the 50 cm grid via snap.js,
+ * then converted to canvas pixels via court.toCanvas().
  * This module is purely visual — it does not own game state.
  */
+
+import { snapToGrid } from './snap.js';
 
 // ─── Visual constants ──────────────────────────────────────────────────────────
 
@@ -96,7 +99,8 @@ export class Renderer {
 
   _drawPlayer(pos, isAlly, label, isActive) {
     const { ctx, court } = this;
-    const { x, y }  = court.toCanvas(pos.x, pos.y);
+    const snapped       = snapToGrid(pos.x, pos.y);
+    const { x, y }      = court.toCanvas(snapped.x, snapped.y);
     const r         = court.courtW * PLAYER_RADIUS_RATIO;
     const fill      = isAlly ? ALLY_FILL   : OPP_FILL;
     const stroke    = isAlly ? ALLY_STROKE : OPP_STROKE;
@@ -133,7 +137,8 @@ export class Renderer {
 
   _drawGhostPlayer(pos, isAlly) {
     const { ctx, court } = this;
-    const { x, y } = court.toCanvas(pos.x, pos.y);
+    const snapped  = snapToGrid(pos.x, pos.y);
+    const { x, y } = court.toCanvas(snapped.x, snapped.y);
     const r        = court.courtW * PLAYER_RADIUS_RATIO;
     const fill     = isAlly ? ALLY_FILL : OPP_FILL;
 
@@ -148,8 +153,10 @@ export class Renderer {
 
   _drawMovementArrow(from, to, isAlly) {
     const { ctx, court } = this;
-    const a = court.toCanvas(from.x, from.y);
-    const b = court.toCanvas(to.x,   to.y);
+    const sf = snapToGrid(from.x, from.y);
+    const st = snapToGrid(to.x,   to.y);
+    const a  = court.toCanvas(sf.x, sf.y);
+    const b  = court.toCanvas(st.x, st.y);
     const r = court.courtW * PLAYER_RADIUS_RATIO;
 
     // Direction unit vector
@@ -205,7 +212,8 @@ export class Renderer {
   _drawShuttlecock(shuttlecock) {
     const { ctx, court } = this;
     const { position, height } = shuttlecock;
-    const { x, y } = court.toCanvas(position.x, position.y);
+    const snapped  = snapToGrid(position.x, position.y);
+    const { x, y } = court.toCanvas(snapped.x, snapped.y);
 
     // Radius scales with height ('high' = larger)
     const baseR  = court.courtW * SHUTTLE_RADIUS_RATIO;
@@ -240,7 +248,10 @@ export class Renderer {
     if (!trajectory || trajectory.length < 2) return;
 
     const { ctx, court } = this;
-    const points = trajectory.map(p => court.toCanvas(p.x, p.y));
+    const points = trajectory.map(p => {
+      const s = snapToGrid(p.x, p.y);
+      return court.toCanvas(s.x, s.y);
+    });
 
     // Number of trail dots based on speed
     const segments = TRAIL_SEGMENTS[speed] ?? TRAIL_SEGMENTS.medium;
