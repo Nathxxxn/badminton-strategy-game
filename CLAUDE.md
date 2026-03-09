@@ -363,9 +363,12 @@ Zone IDs follow the pattern: `{side}-{depth}-{lateral}`
 Example: `opponent-front-center`, `ally-back-left`
 
 ### Coordinate system
-All positions are normalized 0.0 → 1.0:
-- x: 0.0 = left sideline, 1.0 = right sideline
-- y: 0.0 = top of court (opponent's back), 1.0 = bottom (ally's back)
+All positions are normalized 0.0 - 1.0
+- x: 0.0 (left sideline), 1.0 (right sideline)
+- y: 0.0 (top of court, opponents' back), 1.0 (bottom, ally's back)
+**- DISCRETIZATION: The real court is 13.4m x 6.1m. The virtual coordinate space MUST be discretized into a grid representing 50x50cm squares (approx. 12 columns x 26 rows).**
+**- MOVEMENT & CLICKS: All visual player positions and user click inputs must mathematically "snap" to the nearest intersection of this 50cm grid before being processed or rendered.**
+
 
 ---
 
