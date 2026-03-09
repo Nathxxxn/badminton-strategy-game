@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Badminton Strategy</title>
+  <link rel="stylesheet" href="src/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <!--
+    Temporary boot script for feature/court-rendering.
+    Will be replaced by src/js/main.js once the full app is wired up.
+  -->
+  <script type="module">
+    import { Court } from './src/js/court.js';
+
+    const canvas = document.getElementById('game-canvas');
+    const court  = new Court(canvas);
+    court.draw();
+  </script>
+</body>
+</html>
