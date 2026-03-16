@@ -6,22 +6,112 @@
   <meta name="theme-color" content="#1a1a2e">
   <title>Badminton Strategy</title>
   <link rel="stylesheet" href="src/css/style.css">
+  <style>
+    /* ── HUD overlay (temporary, will move to hud.js / screens.js) ── */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      background: rgba(10, 10, 30, 0.75);
+      backdrop-filter: blur(6px);
+      color: #e2e8f0;
+      font: 14px/1 system-ui, sans-serif;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #hud-score  { font-size: 18px; font-weight: 700; color: #fbbf24; }
+    #hud-turn   { font-size: 13px; color: #94a3b8; letter-spacing: .03em; }
+    #hud-combo  { font-size: 13px; color: #34d399; min-width: 60px; text-align: right; }
+
+    /* ── Instruction card ── */
+    #instruction {
+      position: fixed;
+      bottom: 24px; left: 50%; transform: translateX(-50%);
+      max-width: 360px; width: calc(100% - 48px);
+      background: rgba(15, 20, 50, 0.90);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 12px;
+      padding: 14px 18px;
+      color: #e2e8f0;
+      font: 14px/1.5 system-ui, sans-serif;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+    #instruction .label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    #instruction .label.pos  { color: #60a5fa; }   /* blue  = positioning */
+    #instruction .label.shot { color: #f97316; }   /* orange = shot       */
+    #instruction .text { color: #cbd5e1; font-size: 13px; }
+    #instruction.hidden { opacity: 0; }
+
+    /* ── End-of-rally overlay ── */
+    #end-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 30, 0.88);
+      color: #e2e8f0;
+      font: system-ui, sans-serif;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+    }
+    #end-screen h2    { font-size: 28px; margin: 0; color: #fbbf24; }
+    #end-screen p     { font-size: 16px; color: #94a3b8; margin: 0; }
+    #end-screen button {
+      margin-top: 8px;
+      padding: 12px 32px;
+      border: none; border-radius: 8px;
+      background: #2563eb; color: #fff;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+    }
+    #end-screen button:hover { background: #1d4ed8; }
+  </style>
 </head>
 <body>
   <div id="app">
     <canvas id="game-canvas"></canvas>
   </div>
 
-  <!--
-    Temporary boot script for feature/animations.
-    Will be replaced by src/js/main.js once the full app is wired up.
-  -->
+  <div id="hud">
+    <div id="hud-score">0 pts</div>
+    <div id="hud-turn">Tour 1 / 4</div>
+    <div id="hud-combo"></div>
+  </div>
+
+  <div id="instruction">
+    <div class="label" id="instr-label">Placement</div>
+    <div class="text"  id="instr-text">Chargement…</div>
+  </div>
+
+  <div id="end-screen">
+    <h2 id="end-title">Fin du rally !</h2>
+    <p  id="end-score"></p>
+    <p  id="end-detail"></p>
+    <button id="end-btn">Rejouer</button>
+  </div>
+
   <script type="module">
-    import { Court }       from './src/js/court.js';
-    import { Renderer }    from './src/js/renderer.js';
-    import { ZoneOverlay } from './src/js/zones.js';
-    import { DragShooter } from './src/js/drag.js';
-    import { Animator }    from './src/js/animations.js';
+    import { Court }        from './src/js/court.js';
+    import { Renderer }     from './src/js/renderer.js';
+    import { ZoneOverlay, getZoneAt } from './src/js/zones.js';
+    import { DragShooter }  from './src/js/drag.js';
+    import { Animator }     from './src/js/animations.js';
+    import { snapToGrid }   from './src/js/snap.js';
+
+    // ─── Init ────────────────────────────────────────────────────────────────
 
     const canvas   = document.getElementById('game-canvas');
     const court    = new Court(canvas);
@@ -29,94 +119,334 @@
     const zones    = new ZoneOverlay(canvas, court);
     const anim     = new Animator(canvas, court);
 
-    // Sample shot exercise — shuttlecock arrives at ally's front-center
-    const players = {
-      ally1:     { x: 0.5,  y: 0.55, label: 'YOU' },
-      ally2:     { x: 0.5,  y: 0.82 },
-      opponent1: { x: 0.3,  y: 0.25 },
-      opponent2: { x: 0.7,  y: 0.25 },
-    };
+    // ─── Rally data ──────────────────────────────────────────────────────────
+    // 4 turns: positioning → shot → positioning → shot
 
-    const shuttlecock = {
-      position:   { x: 0.5, y: 0.52 },
-      trajectory: [
-        { x: 0.5, y: 0.35 },
-        { x: 0.5, y: 0.52 },
-      ],
-      speed:  'slow',
-      height: 'high',
-    };
+    const RALLY = [
+      {
+        type: 'positioning',
+        label: 'Placement',
+        text: 'Ton partenaire (A2) vient de smasher en cross. Où dois-tu te positionner pour couvrir le retour ?',
+        players: {
+          ally1:     { x: 0.50, y: 0.65, label: 'YOU' },
+          ally2:     { x: 0.70, y: 0.85, movingTo: { x: 0.60, y: 0.78 } },
+          opponent1: { x: 0.25, y: 0.20 },
+          opponent2: { x: 0.70, y: 0.30 },
+        },
+        shuttlecock: {
+          position:   { x: 0.25, y: 0.15 },
+          trajectory: [ { x: 0.70, y: 0.85 }, { x: 0.25, y: 0.15 } ],
+          speed: 'fast', height: 'low',
+        },
+        correctZones:    ['ally-front-center', 'ally-front-left'],
+        optimalPosition: { x: 0.40, y: 0.56 },
+        explanation: 'Avance vers le filet pour intercepter le retour faible de B1.',
+      },
+      {
+        type: 'shot',
+        label: 'Tir',
+        text: 'Le volant flotte haut devant toi au filet. B1 et B2 sont en défense côte à côte. Frappe dans le trou !',
+        players: {
+          ally1:     { x: 0.50, y: 0.55, label: 'YOU' },
+          ally2:     { x: 0.50, y: 0.82 },
+          opponent1: { x: 0.30, y: 0.25 },
+          opponent2: { x: 0.70, y: 0.25 },
+        },
+        shuttlecock: {
+          from:     { x: 0.50, y: 0.35 },
+          position: { x: 0.50, y: 0.52 },
+          trajectory: [ { x: 0.50, y: 0.35 }, { x: 0.50, y: 0.52 } ],
+          speed: 'slow', height: 'high',
+        },
+        correctZones: ['opponent-front-center'],
+        explanation:  'Le trou central entre B1 et B2 est la cible optimale.',
+      },
+      {
+        type: 'positioning',
+        label: 'Placement',
+        text: "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper. Où te places-tu ?",
+        players: {
+          ally1:     { x: 0.45, y: 0.55, label: 'YOU' },
+          ally2:     { x: 0.50, y: 0.88 },
+          opponent1: { x: 0.35, y: 0.25 },
+          opponent2: { x: 0.65, y: 0.10 },
+        },
+        shuttlecock: {
+          position:   { x: 0.55, y: 0.10 },
+          trajectory: [ { x: 0.65, y: 0.10 }, { x: 0.55, y: 0.10 } ],
+          speed: 'slow', height: 'high',
+        },
+        correctZones:    ['ally-mid-center', 'ally-mid-left', 'ally-mid-right'],
+        optimalPosition: { x: 0.50, y: 0.70 },
+        explanation:     'Reste en position mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque.',
+      },
+      {
+        type: 'shot',
+        label: 'Tir',
+        text: "B1 a renvoyé un drive en ligne. Le volant arrive vite sur ta droite. Contre-attaque !",
+        players: {
+          ally1:     { x: 0.70, y: 0.60, label: 'YOU' },
+          ally2:     { x: 0.30, y: 0.75 },
+          opponent1: { x: 0.25, y: 0.25 },
+          opponent2: { x: 0.65, y: 0.30 },
+        },
+        shuttlecock: {
+          from:     { x: 0.65, y: 0.30 },
+          position: { x: 0.68, y: 0.58 },
+          trajectory: [ { x: 0.65, y: 0.30 }, { x: 0.68, y: 0.58 } ],
+          speed: 'fast', height: 'normal',
+        },
+        correctZones: ['opponent-back-left', 'opponent-back-center'],
+        explanation:  'Contre en fond de court côté gauche pour forcer B1 à reculer.',
+      },
+    ];
 
-    // Base render: court + zones + static players. Animations draw on top each frame.
-    function renderBase() {
-      court.draw();
-      zones.drawCorrectZones(['opponent-front-center', 'opponent-front-left']);
-      renderer.drawScene(players, shuttlecock, 'ally1');
+    // ─── State ───────────────────────────────────────────────────────────────
+
+    let turnIndex = 0;
+    let score     = 0;
+    let combo     = 0;
+    let correct   = 0;
+    let rafId     = null;
+
+    const drag = new DragShooter(canvas, court, onShotFired);
+
+    // ─── HUD helpers ─────────────────────────────────────────────────────────
+
+    function updateHUD() {
+      document.getElementById('hud-score').textContent = `${score} pts`;
+      document.getElementById('hud-turn').textContent  =
+        turnIndex < RALLY.length
+          ? `Tour ${turnIndex + 1} / ${RALLY.length}`
+          : `Fin du rally`;
+      const comboEl = document.getElementById('hud-combo');
+      comboEl.textContent = combo >= 2 ? `×${combo} COMBO` : '';
     }
 
-    // Drag render loop
-    let rafId = null;
-    function startLoop() {
+    function setInstruction(turn) {
+      const el    = document.getElementById('instruction');
+      const label = document.getElementById('instr-label');
+      const text  = document.getElementById('instr-text');
+      el.classList.remove('hidden');
+      label.textContent = turn.label;
+      label.className   = `label ${turn.type === 'shot' ? 'shot' : 'pos'}`;
+      text.textContent  = turn.text;
+    }
+
+    function hideInstruction() {
+      document.getElementById('instruction').classList.add('hidden');
+    }
+
+    // ─── Render helpers ───────────────────────────────────────────────────────
+
+    function renderTurn(turn, showShuttle = true) {
+      court.draw();
+      if (showShuttle) {
+        renderer.drawScene(turn.players, turn.shuttlecock, 'ally1');
+      } else {
+        renderer.drawScene(turn.players, null, 'ally1');
+      }
+    }
+
+    function startDragLoop(turn) {
       if (rafId !== null) return;
-      function loop() { renderBase(); drag.draw(); rafId = requestAnimationFrame(loop); }
+      function loop() {
+        renderTurn(turn);
+        drag.draw();
+        rafId = requestAnimationFrame(loop);
+      }
       rafId = requestAnimationFrame(loop);
     }
-    function stopLoop() {
+
+    function stopDragLoop() {
       if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-      renderBase();
     }
 
-    // On shot: animate flight from shuttlecock → aim point, then flash feedback
-    const drag = new DragShooter(canvas, court, async (shot) => {
-      stopLoop();
-      drag.deactivate();
+    async function runAnim(factory, turn, showShuttle = false) {
+      let done = false;
+      factory().then(() => { done = true; });
+      while (!done) {
+        renderTurn(turn, showShuttle);
+        await nextFrame();
+      }
+    }
 
-      // 1. Fly the shuttlecock to the aimed position
-      const flyBase = () => { court.draw(); zones.drawCorrectZones(['opponent-front-center', 'opponent-front-left']); renderer.drawScene(players, null, 'ally1'); };
-      anim._drawBase = flyBase;  // hook so Animator redraws court each frame
+    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
 
-      // Run flight: redraw court each frame so shuttle draws on top
-      await runAnimLoop(() => anim.flyShuttle(shuttlecock.position, shot.aimPoint, 'slow', 'high'));
+    // ─── Positioning turn ─────────────────────────────────────────────────────
 
-      // 2. Flash correct/wrong feedback
-      const inCorrect = ['opponent-front-center', 'opponent-front-left'].includes(
-        (await import('./src/js/zones.js')).getZoneAt(shot.aimPoint.x, shot.aimPoint.y)
+    function startPositioningTurn(turn) {
+      renderTurn(turn);
+      setInstruction(turn);
+      updateHUD();
+      canvas.style.cursor = 'crosshair';
+      canvas.addEventListener('pointerup', onPositionClick, { once: true });
+    }
+
+    async function onPositionClick(e) {
+      canvas.style.cursor = 'default';
+      const turn = RALLY[turnIndex];
+
+      const rect   = canvas.getBoundingClientRect();
+      const rawPos = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
+      const pos    = snapToGrid(
+        Math.max(0, Math.min(1, rawPos.x)),
+        Math.max(0, Math.min(1, rawPos.y)),
       );
-      await runAnimLoop(() => anim.flashFeedback(inCorrect ? 'correct' : 'wrong'));
 
-      // Show marker + re-arm
-      renderBase();
-      inCorrect ? zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y)
-                : zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
+      // Only accept clicks on ally's half
+      if (pos.y < 0.5) {
+        renderTurn(turn);
+        zones.drawWrongZones([getZoneAt(pos.x, pos.y)].filter(Boolean));
+        await showExplanation('⚠ Clique sur ta moitié du terrain !', '#f97316');
+        canvas.addEventListener('pointerup', onPositionClick, { once: true });
+        canvas.style.cursor = 'crosshair';
+        return;
+      }
 
-      setTimeout(() => { drag.activate(shuttlecock.position); renderBase(); }, 1000);
+      const clickedZone = getZoneAt(pos.x, pos.y);
+      const isCorrect   = turn.correctZones.includes(clickedZone);
+      const pts         = calcPoints(isCorrect, turn);
+
+      // Animate player moving to clicked position
+      await runAnim(() => anim.movePlayer(turn.players.ally1, pos, true), turn);
+
+      // Highlight result
+      renderTurn(turn);
+      turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+      if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
+      else            zones.drawCheckmark(pos.x, pos.y);
+
+      await runAnim(() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong'), turn);
+
+      await showExplanation(
+        isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
+        isCorrect ? '#34d399' : '#f87171',
+      );
+
+      applyScore(pts, isCorrect);
+      nextTurn();
+    }
+
+    // ─── Shot turn ────────────────────────────────────────────────────────────
+
+    async function startShotTurn(turn) {
+      // Animate incoming shuttlecock
+      await runAnim(
+        () => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high'),
+        turn, false,
+      );
+      renderTurn(turn);
+      setInstruction(turn);
+      updateHUD();
+      canvas.addEventListener('pointerdown', () => startDragLoop(turn), { once: true, passive: true });
+      drag.activate(turn.shuttlecock.position);
+    }
+
+    async function onShotFired(shot) {
+      stopDragLoop();
+      drag.deactivate();
+      const turn = RALLY[turnIndex];
+
+      const aimZone   = getZoneAt(shot.aimPoint.x, shot.aimPoint.y);
+      const isCorrect = turn.correctZones.includes(aimZone);
+      const pts       = calcPoints(isCorrect, turn);
+
+      // Animate shot flight
+      await runAnim(
+        () => anim.flyShuttle(turn.shuttlecock.position, shot.aimPoint, 'fast', 'low'),
+        turn, false,
+      );
+
+      // Highlight result
+      renderTurn(turn, false);
+      turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+      if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
+      else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
+
+      await runAnim(() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong'), turn, false);
+
+      await showExplanation(
+        isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
+        isCorrect ? '#34d399' : '#f87171',
+      );
+
+      applyScore(pts, isCorrect);
+      nextTurn();
+    }
+
+    // ─── Scoring ──────────────────────────────────────────────────────────────
+
+    function calcPoints(isCorrect, turn) {
+      if (!isCorrect) return 0;
+      return 100 * (1 + Math.max(0, combo - 1) * 0.5);
+    }
+
+    function applyScore(pts, isCorrect) {
+      score += pts;
+      if (isCorrect) { combo++; correct++; } else { combo = 0; }
+      updateHUD();
+    }
+
+    // ─── Turn sequencing ──────────────────────────────────────────────────────
+
+    function nextTurn() {
+      turnIndex++;
+      if (turnIndex >= RALLY.length) {
+        showEndScreen();
+        return;
+      }
+      setTimeout(() => runTurn(turnIndex), 800);
+    }
+
+    function runTurn(index) {
+      const turn = RALLY[index];
+      if (turn.type === 'positioning') startPositioningTurn(turn);
+      else                             startShotTurn(turn);
+    }
+
+    function showEndScreen() {
+      hideInstruction();
+      const pct   = Math.round((correct / RALLY.length) * 100);
+      const stars = pct >= 90 ? '★★★' : pct >= 60 ? '★★☆' : '★☆☆';
+      document.getElementById('end-title').textContent = `${stars}  Fin du rally !`;
+      document.getElementById('end-score').textContent = `Score : ${Math.round(score)} pts`;
+      document.getElementById('end-detail').textContent =
+        `${correct} / ${RALLY.length} bonnes réponses`;
+      document.getElementById('end-screen').style.display = 'flex';
+    }
+
+    document.getElementById('end-btn').addEventListener('click', () => {
+      document.getElementById('end-screen').style.display = 'none';
+      turnIndex = 0; score = 0; combo = 0; correct = 0;
+      updateHUD();
+      runTurn(0);
     });
 
-    /**
-     * Run an animation factory (returns Promise) while continuously
-     * redrawing the base frame so each anim frame composites on top.
-     */
-    async function runAnimLoop(factory) {
-      let done = false;
-      const promise = factory().then(() => { done = true; });
-      while (!done) {
-        renderBase();
-        await new Promise(r => requestAnimationFrame(r));
-      }
-      await promise;
+    // ─── Feedback text helper ─────────────────────────────────────────────────
+
+    function showExplanation(text, color) {
+      return new Promise(resolve => {
+        const el = document.getElementById('instr-text');
+        el.textContent = text;
+        el.style.color = color;
+        document.getElementById('instruction').classList.remove('hidden');
+        setTimeout(() => {
+          el.style.color = '';
+          resolve();
+        }, 1800);
+      });
     }
 
-    canvas.addEventListener('pointerdown', startLoop, { passive: true });
-    canvas.addEventListener('pointerup',   stopLoop,  { passive: true });
+    // ─── Start ───────────────────────────────────────────────────────────────
 
-    // On page load: animate the incoming shuttle before arming drag
-    (async () => {
-      await runAnimLoop(() => anim.flyShuttle({ x: 0.5, y: 0.35 }, shuttlecock.position, 'slow', 'high'));
-      renderBase();
-      drag.activate(shuttlecock.position);
-    })();
+    updateHUD();
+    runTurn(0);
 
-    window.addEventListener('resize', () => { court._resize(); renderBase(); });
+    window.addEventListener('resize', () => {
+      court._resize();
+      renderTurn(RALLY[Math.min(turnIndex, RALLY.length - 1)]);
+    });
   </script>
 </body>
 </html>
