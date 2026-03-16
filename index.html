@@ -13,42 +13,86 @@
   </div>
 
   <!--
-    Temporary boot script for feature/player-renderer.
+    Temporary boot script for feature/drag-mechanic.
     Will be replaced by src/js/main.js once the full app is wired up.
   -->
   <script type="module">
-    import { Court }    from './src/js/court.js';
-    import { Renderer } from './src/js/renderer.js';
+    import { Court }       from './src/js/court.js';
+    import { Renderer }    from './src/js/renderer.js';
+    import { ZoneOverlay } from './src/js/zones.js';
+    import { DragShooter } from './src/js/drag.js';
 
     const canvas   = document.getElementById('game-canvas');
     const court    = new Court(canvas);
     const renderer = new Renderer(canvas, court);
+    const zones    = new ZoneOverlay(canvas, court);
 
-    // Sample scene — mirrors the POS_ATK_001 exercise format from CLAUDE.md
+    // Sample shot exercise — shuttlecock arrives at ally's front-center
     const players = {
-      ally1:     { x: 0.5,  y: 0.65, label: 'YOU' },
-      ally2:     { x: 0.7,  y: 0.85, movingTo: { x: 0.6, y: 0.78 } },
-      opponent1: { x: 0.25, y: 0.2  },
-      opponent2: { x: 0.7,  y: 0.3  },
+      ally1:     { x: 0.5,  y: 0.55, label: 'YOU' },
+      ally2:     { x: 0.5,  y: 0.82 },
+      opponent1: { x: 0.3,  y: 0.25 },
+      opponent2: { x: 0.7,  y: 0.25 },
     };
 
     const shuttlecock = {
-      position:   { x: 0.25, y: 0.15 },
+      position:   { x: 0.5, y: 0.52 },
       trajectory: [
-        { x: 0.7,  y: 0.85 },
-        { x: 0.25, y: 0.15 },
+        { x: 0.5, y: 0.35 },
+        { x: 0.5, y: 0.52 },
       ],
-      speed:  'fast',
-      height: 'low',
+      speed:  'slow',
+      height: 'high',
     };
+
+    // Render loop — redraws every frame while dragging, once otherwise
+    let rafId = null;
 
     function render() {
       court.draw();
+      zones.drawCorrectZones(['opponent-front-center', 'opponent-front-left']);
       renderer.drawScene(players, shuttlecock, 'ally1');
+      drag.draw();  // draws aim line on top if dragging
     }
 
+    function startLoop() {
+      if (rafId !== null) return;
+      function loop() {
+        render();
+        rafId = requestAnimationFrame(loop);
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function stopLoop() {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      render();  // one final static frame
+    }
+
+    // Wire up drag shooter
+    const drag = new DragShooter(canvas, court, (shot) => {
+      stopLoop();
+      console.log('Shot fired:', shot);
+      // Show click marker at aim point
+      zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
+      // Re-arm for next attempt (dev testing only)
+      setTimeout(() => {
+        drag.activate(shuttlecock.position);
+        render();
+      }, 1200);
+    });
+
+    // Start listening for canvas pointer events to trigger render loop
+    canvas.addEventListener('pointerdown', startLoop, { passive: true });
+    canvas.addEventListener('pointerup',   stopLoop,  { passive: true });
+
+    // Initial static render + arm drag
     render();
-    window.addEventListener('resize', render);
+    drag.activate(shuttlecock.position);
+    window.addEventListener('resize', () => { court._resize(); render(); });
   </script>
 </body>
 </html>
