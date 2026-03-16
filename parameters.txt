@@ -1,0 +1,39 @@
+PlacementEngine :
+
+Entrées :
+playerPos = {x:0.2,y:0.5} #Position après déplacement
+partnerPos = {x:0.6,y:0.5} #Position après déplacement
+shotContext = {type : 'CLEAR', endPos : {x:0.6,y:0.5}} #Shot type
+isHitter = true
+
+Sorties :
+{
+            total: Math.round(finalScore),
+            breakdown: {
+                partner: partnerScore,
+                formation: formationScore
+            },
+            realDistance: this.calculateDistMeters(playerPos, partnerPos).toFixed(2),
+            ideal : {
+                x : idealPos.x,
+                y : idealPos.y,
+            }
+
+TacticalEngine :
+
+Entrées :
+incoming = { type : 'SMASH'}
+user = {type : 'NET_DROP' , endPos = {x : 0.5, y : 0.5}}
+opponents = {opp1 : {x : 0.5, y : 0.5}, opp2 : {x : 0.5, y : 0.5}}
+
+Sorties :
+{
+            score: Math.min(100, Math.max(0, Math.round(totalScore))),
+            isReversTargeted: isRevers,
+            isBodyHit: hittingBody,
+            reachMeters: rules.reach,
+            details: { 
+                placement: distanceScore, 
+                bonus: totalScore - distanceScore 
+            }
+        }
