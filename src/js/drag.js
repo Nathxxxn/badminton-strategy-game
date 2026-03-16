@@ -66,6 +66,16 @@ const LINE_ALPHA = 0.88;
 /** Spin arc color */
 const SPIN_COLOUR = 'rgba(196, 181, 253, 0.7)';  // violet-300
 
+// Trajectory preview
+/** Number of points to sample along the preview arc */
+const TRAJ_PREVIEW_STEPS = 28;
+/** Dash pattern for the preview arc */
+const TRAJ_PREVIEW_DASH = [5, 5];
+/** Landing indicator outer radius (CSS px) */
+const LANDING_OUTER_R = 10;
+/** Landing indicator crosshair arm length (CSS px) */
+const LANDING_CROSS   = 7;
+
 // ─── DragShooter class ────────────────────────────────────────────────────────
 
 export class DragShooter {
@@ -160,7 +170,8 @@ export class DragShooter {
   draw() {
     if (!this._dragging || !this._origin || !this._current) return;
 
-    const { power, spin } = this._computeShot();
+    const { aimPoint, power, spin } = this._computeShot();
+    this._drawTrajectoryPreview(aimPoint, power);
     this._drawAimLine(power, spin);
   }
 
@@ -297,6 +308,67 @@ export class DragShooter {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Draw a dashed parabolic arc from the shuttlecock to the predicted landing
+   * point, plus a landing indicator circle+crosshair.
+   * Only rendered when aim is directed toward the opponent's half (y < 0.5).
+   *
+   * Arc height adapts to power: tall arc for drop, flat arc for smash.
+   */
+  _drawTrajectoryPreview(aimPoint, power) {
+    // Only show preview when aiming at opponent's half
+    if (aimPoint.y >= 0.5) return;
+
+    const { ctx, court } = this;
+    const from = court.toCanvas(this._shuttleNorm.x, this._shuttleNorm.y);
+    const to   = court.toCanvas(aimPoint.x, aimPoint.y);
+
+    // Arc height: inversely proportional to power (drop = tall, smash = flat)
+    const arcFraction = 0.35 - power * 0.28;  // 0.35 (drop) → 0.07 (smash)
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const arcH = Math.max(18, dist * arcFraction);
+
+    const colour = this._powerColour(power);
+
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = 1.8;
+    ctx.setLineDash(TRAJ_PREVIEW_DASH);
+    ctx.lineCap     = 'round';
+
+    // Sample the parabolic arc and draw as polyline
+    ctx.beginPath();
+    for (let i = 0; i <= TRAJ_PREVIEW_STEPS; i++) {
+      const t  = i / TRAJ_PREVIEW_STEPS;
+      const px = from.x + (to.x - from.x) * t;
+      const py = from.y + (to.y - from.y) * t - arcH * Math.sin(Math.PI * t);
+      if (i === 0) ctx.moveTo(px, py);
+      else         ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Landing indicator: pulsing circle + crosshair
+    ctx.globalAlpha = 0.75;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = 1.5;
+
+    // Outer ring
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, LANDING_OUTER_R, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Crosshair
+    const s = LANDING_CROSS;
+    ctx.beginPath();
+    ctx.moveTo(to.x - s, to.y); ctx.lineTo(to.x + s, to.y);
+    ctx.moveTo(to.x, to.y - s); ctx.lineTo(to.x, to.y + s);
+    ctx.stroke();
+
+    ctx.restore();
+  }
 
   _drawAimLine(power, spin) {
     const { ctx } = this;

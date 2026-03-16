@@ -239,6 +239,33 @@ export class ZoneOverlay {
     ctx.restore();
   }
 
+  /**
+   * Highlight a zone with a frosted-glass white overlay — used during hover
+   * in positioning exercises to show which zone the cursor is over.
+   * The terrain surface remains visible underneath.
+   *
+   * @param {string} id  zone ID, or null to draw nothing
+   */
+  drawHoverZone(id) {
+    if (!id) return;
+    const zone = ZONES[id];
+    if (!zone) return;
+
+    const { ctx, court } = this;
+    const topLeft     = court.toCanvas(zone.x0, zone.y0);
+    const bottomRight = court.toCanvas(zone.x1, zone.y1);
+    const w = bottomRight.x - topLeft.x;
+    const h = bottomRight.y - topLeft.y;
+
+    ctx.save();
+    ctx.fillStyle   = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(topLeft.x, topLeft.y, w, h);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth   = 1.5;
+    ctx.strokeRect(topLeft.x, topLeft.y, w, h);
+    ctx.restore();
+  }
+
   // ─── Private helpers ───────────────────────────────────────────────────────
 
   /**

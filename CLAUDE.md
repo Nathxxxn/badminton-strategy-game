@@ -379,6 +379,14 @@ All positions are normalized 0.0 - 1.0
 - Opponents: red circles with white label (B1, B2)
 - `movingTo` shown as a translucent ghost circle + dashed arrow from current position
 - Active player (whose turn it is) has a pulsing glow
+- **On movement: ALL players animate simultaneously** to their next positions (Promise.all).
+  Each player in the exercise data may carry a `movingTo` field used for animation.
+
+### Zone hover (positioning exercises)
+- While the player hovers over the ally half, the zone under the cursor is highlighted with a
+  **translucent white rectangle** (`rgba(255,255,255,0.12)`) — frosted-glass effect, terrain visible underneath.
+- Implemented via `ZoneOverlay.drawHoverZone(id)` — called every render frame during hover.
+- On click: the selected zone briefly pulses before the movement animation starts.
 
 ### Shuttlecock
 - Yellow circle with a small feather trail
@@ -391,8 +399,20 @@ All positions are normalized 0.0 - 1.0
 - Drags outward: a line extends from the shuttlecock toward the aim point
 - Line color changes with power: green (soft) → yellow (medium) → red (full power)
 - Curved drag creates a slight arc in the aim line to indicate spin
+- **Trajectory preview**: while dragging, a dashed parabolic arc extends from the shuttlecock
+  to the predicted landing point on the opponent's half. Arc shape adapts to power:
+  flat arc for smash (high power), tall arc for drop (low power).
+- **Landing indicator**: a pulsing circle + crosshair shows the predicted landing point.
+  Only rendered when the aim is directed toward the opponent's half (y < 0.5).
 - Release fires the shot
 - Power zones: 0-0.3 = drop/net shot, 0.3-0.6 = drive/push, 0.6-1.0 = smash/clear
+
+### Animation timeline (post-shot)
+- After the player fires a shot: shuttlecock flies toward the landing point AND opponent
+  players start moving simultaneously (Promise.all) on a coherent time scale.
+- Flight speed matches shot power: smash ≈ 280ms, drive ≈ 500ms, drop ≈ 800ms.
+- Opponent reactions (movement to cover the landing) start at the same time as the flight.
+- After landing: brief pause, then feedback flash + explanation.
 
 ### Feedback
 - Correct: green highlight on the target zone, checkmark, +XP animation

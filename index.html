@@ -121,6 +121,14 @@
 
     // ─── Rally data ──────────────────────────────────────────────────────────
     // 4 turns: positioning → shot → positioning → shot
+    //
+    // Positioning turns:
+    //   players[id].movingTo = where that player will move when the turn resolves
+    //   (ally1.movingTo is set at runtime = player's click)
+    //
+    // Shot turns:
+    //   opponentReactions = where opponents move when the shuttle is hit
+    //   (computed proportional to aimPoint at runtime, but defaults given here)
 
     const RALLY = [
       {
@@ -130,8 +138,8 @@
         players: {
           ally1:     { x: 0.50, y: 0.65, label: 'YOU' },
           ally2:     { x: 0.70, y: 0.85, movingTo: { x: 0.60, y: 0.78 } },
-          opponent1: { x: 0.25, y: 0.20 },
-          opponent2: { x: 0.70, y: 0.30 },
+          opponent1: { x: 0.25, y: 0.20, movingTo: { x: 0.30, y: 0.32 } },
+          opponent2: { x: 0.70, y: 0.30, movingTo: { x: 0.65, y: 0.28 } },
         },
         shuttlecock: {
           position:   { x: 0.25, y: 0.15 },
@@ -167,9 +175,9 @@
         text: "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper. Où te places-tu ?",
         players: {
           ally1:     { x: 0.45, y: 0.55, label: 'YOU' },
-          ally2:     { x: 0.50, y: 0.88 },
-          opponent1: { x: 0.35, y: 0.25 },
-          opponent2: { x: 0.65, y: 0.10 },
+          ally2:     { x: 0.50, y: 0.88, movingTo: { x: 0.50, y: 0.82 } },
+          opponent1: { x: 0.35, y: 0.25, movingTo: { x: 0.30, y: 0.30 } },
+          opponent2: { x: 0.65, y: 0.10, movingTo: { x: 0.60, y: 0.18 } },
         },
         shuttlecock: {
           position:   { x: 0.55, y: 0.10 },
@@ -178,7 +186,7 @@
         },
         correctZones:    ['ally-mid-center', 'ally-mid-left', 'ally-mid-right'],
         optimalPosition: { x: 0.50, y: 0.70 },
-        explanation:     'Reste en position mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque.',
+        explanation:     'Reste en mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque.',
       },
       {
         type: 'shot',
@@ -197,146 +205,182 @@
           speed: 'fast', height: 'normal',
         },
         correctZones: ['opponent-back-left', 'opponent-back-center'],
-        explanation:  'Contre en fond de court côté gauche pour forcer B1 à reculer.',
+        explanation:  'Contre en fond de court à gauche pour forcer B1 à reculer.',
       },
     ];
 
     // ─── State ───────────────────────────────────────────────────────────────
 
-    let turnIndex = 0;
-    let score     = 0;
-    let combo     = 0;
-    let correct   = 0;
-    let rafId     = null;
+    let turnIndex  = 0;
+    let score      = 0;
+    let combo      = 0;
+    let correct    = 0;
+    let dragRafId  = null;
+    let hoverZone  = null;   // zone under cursor during positioning
 
     const drag = new DragShooter(canvas, court, onShotFired);
 
-    // ─── HUD helpers ─────────────────────────────────────────────────────────
+    // ─── HUD ─────────────────────────────────────────────────────────────────
 
     function updateHUD() {
       document.getElementById('hud-score').textContent = `${score} pts`;
       document.getElementById('hud-turn').textContent  =
-        turnIndex < RALLY.length
-          ? `Tour ${turnIndex + 1} / ${RALLY.length}`
-          : `Fin du rally`;
+        turnIndex < RALLY.length ? `Tour ${turnIndex + 1} / ${RALLY.length}` : 'Fin du rally';
       const comboEl = document.getElementById('hud-combo');
       comboEl.textContent = combo >= 2 ? `×${combo} COMBO` : '';
     }
 
     function setInstruction(turn) {
-      const el    = document.getElementById('instruction');
-      const label = document.getElementById('instr-label');
-      const text  = document.getElementById('instr-text');
+      const el = document.getElementById('instruction');
       el.classList.remove('hidden');
-      label.textContent = turn.label;
-      label.className   = `label ${turn.type === 'shot' ? 'shot' : 'pos'}`;
-      text.textContent  = turn.text;
+      document.getElementById('instr-label').textContent = turn.label;
+      document.getElementById('instr-label').className   = `label ${turn.type === 'shot' ? 'shot' : 'pos'}`;
+      document.getElementById('instr-text').textContent  = turn.text;
+      document.getElementById('instr-text').style.color  = '';
     }
 
     function hideInstruction() {
       document.getElementById('instruction').classList.add('hidden');
     }
 
-    // ─── Render helpers ───────────────────────────────────────────────────────
+    // ─── Rendering ───────────────────────────────────────────────────────────
 
-    function renderTurn(turn, showShuttle = true) {
+    /**
+     * Base frame: court + optional hover zone + players + optional shuttle.
+     * Does NOT draw animations — those composite on top each rAF tick.
+     */
+    function renderBase(turn, { showShuttle = true, hoverZoneId = null } = {}) {
       court.draw();
-      if (showShuttle) {
-        renderer.drawScene(turn.players, turn.shuttlecock, 'ally1');
-      } else {
-        renderer.drawScene(turn.players, null, 'ally1');
-      }
+      if (hoverZoneId) zones.drawHoverZone(hoverZoneId);
+      renderer.drawScene(turn.players, showShuttle ? turn.shuttlecock : null, 'ally1');
     }
 
-    function startDragLoop(turn) {
-      if (rafId !== null) return;
-      function loop() {
-        renderTurn(turn);
-        drag.draw();
-        rafId = requestAnimationFrame(loop);
+    // ─── Animation runner ─────────────────────────────────────────────────────
+
+    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+
+    /**
+     * Start multiple animations simultaneously, redraw base each frame.
+     * @param {Array<() => Promise>} starters  — each returns a Promise
+     * @param {function} baseRender            — called each frame before animations draw
+     */
+    async function runAnims(starters, baseRender) {
+      let remaining = starters.length;
+      const promises = starters.map(fn => fn().then(() => { remaining--; }));
+      while (remaining > 0) {
+        baseRender();
+        await nextFrame();
       }
-      rafId = requestAnimationFrame(loop);
+      await Promise.all(promises);
+    }
+
+    // ─── Drag render loop ─────────────────────────────────────────────────────
+
+    function startDragLoop(turn) {
+      if (dragRafId !== null) return;
+      function loop() {
+        renderBase(turn, { showShuttle: true });
+        drag.draw();
+        dragRafId = requestAnimationFrame(loop);
+      }
+      dragRafId = requestAnimationFrame(loop);
     }
 
     function stopDragLoop() {
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (dragRafId !== null) { cancelAnimationFrame(dragRafId); dragRafId = null; }
     }
-
-    async function runAnim(factory, turn, showShuttle = false) {
-      let done = false;
-      factory().then(() => { done = true; });
-      while (!done) {
-        renderTurn(turn, showShuttle);
-        await nextFrame();
-      }
-    }
-
-    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
 
     // ─── Positioning turn ─────────────────────────────────────────────────────
 
     function startPositioningTurn(turn) {
-      renderTurn(turn);
+      hoverZone = null;
+      renderBase(turn);
       setInstruction(turn);
       updateHUD();
       canvas.style.cursor = 'crosshair';
-      canvas.addEventListener('pointerup', onPositionClick, { once: true });
+      canvas.addEventListener('pointermove', onPositionHover);
+      canvas.addEventListener('pointerup',   onPositionClick, { once: true });
+    }
+
+    function onPositionHover(e) {
+      const turn = RALLY[turnIndex];
+      const rect = canvas.getBoundingClientRect();
+      const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
+      const pos  = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
+      const newHover = (pos.y >= 0.5) ? getZoneAt(pos.x, pos.y) : null;
+      if (newHover !== hoverZone) {
+        hoverZone = newHover;
+        renderBase(turn, { hoverZoneId: hoverZone });
+      }
     }
 
     async function onPositionClick(e) {
+      canvas.removeEventListener('pointermove', onPositionHover);
       canvas.style.cursor = 'default';
+      hoverZone = null;
+
       const turn = RALLY[turnIndex];
+      const rect = canvas.getBoundingClientRect();
+      const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
+      const pos  = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
 
-      const rect   = canvas.getBoundingClientRect();
-      const rawPos = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
-      const pos    = snapToGrid(
-        Math.max(0, Math.min(1, rawPos.x)),
-        Math.max(0, Math.min(1, rawPos.y)),
-      );
-
-      // Only accept clicks on ally's half
+      // Reject clicks on opponent half
       if (pos.y < 0.5) {
-        renderTurn(turn);
+        renderBase(turn);
         zones.drawWrongZones([getZoneAt(pos.x, pos.y)].filter(Boolean));
         await showExplanation('⚠ Clique sur ta moitié du terrain !', '#f97316');
-        canvas.addEventListener('pointerup', onPositionClick, { once: true });
+        canvas.addEventListener('pointermove', onPositionHover);
+        canvas.addEventListener('pointerup',   onPositionClick, { once: true });
         canvas.style.cursor = 'crosshair';
         return;
       }
 
       const clickedZone = getZoneAt(pos.x, pos.y);
       const isCorrect   = turn.correctZones.includes(clickedZone);
-      const pts         = calcPoints(isCorrect, turn);
 
-      // Animate player moving to clicked position
-      await runAnim(() => anim.movePlayer(turn.players.ally1, pos, true), turn);
+      // Build movement animations for ALL players simultaneously
+      const movementStarters = [];
+      // ally1 → player's chosen position
+      movementStarters.push(() => anim.movePlayer(turn.players.ally1, pos, true));
+      // all other players with a movingTo target
+      for (const [id, data] of Object.entries(turn.players)) {
+        if (id !== 'ally1' && data.movingTo) {
+          const isAlly = id.startsWith('ally');
+          movementStarters.push(() => anim.movePlayer(data, data.movingTo, isAlly));
+        }
+      }
 
-      // Highlight result
-      renderTurn(turn);
+      await runAnims(movementStarters, () => renderBase(turn));
+
+      // Freeze result frame
+      renderBase(turn);
       turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
       if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
       else            zones.drawCheckmark(pos.x, pos.y);
 
-      await runAnim(() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong'), turn);
+      await runAnims(
+        [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
+        () => { renderBase(turn); turn.correctZones.forEach(z => zones.drawCorrectZones([z])); },
+      );
 
       await showExplanation(
         isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
         isCorrect ? '#34d399' : '#f87171',
       );
 
-      applyScore(pts, isCorrect);
+      applyScore(calcPoints(isCorrect), isCorrect);
       nextTurn();
     }
 
     // ─── Shot turn ────────────────────────────────────────────────────────────
 
     async function startShotTurn(turn) {
-      // Animate incoming shuttlecock
-      await runAnim(
-        () => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high'),
-        turn, false,
+      // Animate incoming shuttle
+      await runAnims(
+        [() => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high')],
+        () => renderBase(turn, { showShuttle: false }),
       );
-      renderTurn(turn);
+      renderBase(turn);
       setInstruction(turn);
       updateHUD();
       canvas.addEventListener('pointerdown', () => startDragLoop(turn), { once: true, passive: true });
@@ -350,36 +394,56 @@
 
       const aimZone   = getZoneAt(shot.aimPoint.x, shot.aimPoint.y);
       const isCorrect = turn.correctZones.includes(aimZone);
-      const pts       = calcPoints(isCorrect, turn);
 
-      // Animate shot flight
-      await runAnim(
-        () => anim.flyShuttle(turn.shuttlecock.position, shot.aimPoint, 'fast', 'low'),
-        turn, false,
+      // Flight speed matches shot power: drop=slow, drive=medium, smash=fast
+      const flightSpeed = shot.power < 0.3 ? 'slow' : shot.power < 0.6 ? 'medium' : 'fast';
+
+      // Opponents react toward the landing zone simultaneously with the flight
+      const opp1 = turn.players.opponent1;
+      const opp2 = turn.players.opponent2;
+      const lx   = shot.aimPoint.x;
+      const ly   = shot.aimPoint.y;
+      // Each opponent moves halfway between their current position and the landing point
+      const opp1Target = { x: (opp1.x + lx) / 2, y: (opp1.y + ly) / 2 };
+      const opp2Target = { x: (opp2.x + lx) / 2, y: (opp2.y + ly) / 2 };
+
+      await runAnims(
+        [
+          () => anim.flyShuttle(turn.shuttlecock.position, shot.aimPoint, flightSpeed, 'low'),
+          () => anim.movePlayer(opp1, opp1Target, false),
+          () => anim.movePlayer(opp2, opp2Target, false),
+        ],
+        () => renderBase(turn, { showShuttle: false }),
       );
 
-      // Highlight result
-      renderTurn(turn, false);
+      // Freeze result frame
+      renderBase(turn, { showShuttle: false });
       turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
       if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
       else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
 
-      await runAnim(() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong'), turn, false);
+      await runAnims(
+        [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
+        () => {
+          renderBase(turn, { showShuttle: false });
+          turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+        },
+      );
 
       await showExplanation(
         isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
         isCorrect ? '#34d399' : '#f87171',
       );
 
-      applyScore(pts, isCorrect);
+      applyScore(calcPoints(isCorrect), isCorrect);
       nextTurn();
     }
 
     // ─── Scoring ──────────────────────────────────────────────────────────────
 
-    function calcPoints(isCorrect, turn) {
+    function calcPoints(isCorrect) {
       if (!isCorrect) return 0;
-      return 100 * (1 + Math.max(0, combo - 1) * 0.5);
+      return Math.round(100 * (1 + Math.max(0, combo - 1) * 0.5));
     }
 
     function applyScore(pts, isCorrect) {
@@ -392,11 +456,8 @@
 
     function nextTurn() {
       turnIndex++;
-      if (turnIndex >= RALLY.length) {
-        showEndScreen();
-        return;
-      }
-      setTimeout(() => runTurn(turnIndex), 800);
+      if (turnIndex >= RALLY.length) { showEndScreen(); return; }
+      setTimeout(() => runTurn(turnIndex), 700);
     }
 
     function runTurn(index) {
@@ -409,10 +470,9 @@
       hideInstruction();
       const pct   = Math.round((correct / RALLY.length) * 100);
       const stars = pct >= 90 ? '★★★' : pct >= 60 ? '★★☆' : '★☆☆';
-      document.getElementById('end-title').textContent = `${stars}  Fin du rally !`;
-      document.getElementById('end-score').textContent = `Score : ${Math.round(score)} pts`;
-      document.getElementById('end-detail').textContent =
-        `${correct} / ${RALLY.length} bonnes réponses`;
+      document.getElementById('end-title').textContent  = `${stars}  Fin du rally !`;
+      document.getElementById('end-score').textContent  = `Score : ${score} pts`;
+      document.getElementById('end-detail').textContent = `${correct} / ${RALLY.length} bonnes réponses`;
       document.getElementById('end-screen').style.display = 'flex';
     }
 
@@ -423,7 +483,7 @@
       runTurn(0);
     });
 
-    // ─── Feedback text helper ─────────────────────────────────────────────────
+    // ─── Feedback text ────────────────────────────────────────────────────────
 
     function showExplanation(text, color) {
       return new Promise(resolve => {
@@ -431,10 +491,7 @@
         el.textContent = text;
         el.style.color = color;
         document.getElementById('instruction').classList.remove('hidden');
-        setTimeout(() => {
-          el.style.color = '';
-          resolve();
-        }, 1800);
+        setTimeout(() => { el.style.color = ''; resolve(); }, 1800);
       });
     }
 
@@ -445,7 +502,7 @@
 
     window.addEventListener('resize', () => {
       court._resize();
-      renderTurn(RALLY[Math.min(turnIndex, RALLY.length - 1)]);
+      renderBase(RALLY[Math.min(turnIndex, RALLY.length - 1)]);
     });
   </script>
 </body>
