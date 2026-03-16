@@ -1,6 +1,5 @@
 /**
- * Moteur Tactique Badminton
- * Coordonnées normalisées (0.0 à 1.0) sur un demi-terrain de 6.70m x 6.10m
+ * Moteur Tactique Badminton - Version 2.0
  */
 
 const SHOT_PARAMS = {
@@ -12,68 +11,92 @@ const SHOT_PARAMS = {
     CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
 };
 
-class BadmintonEngine {
+class TacticalEngine {
     constructor() {
-        this.HALF_LENGTH = 6.70; // axe Y (fond vers filet)
-        this.WIDTH = 6.10;       // axe X (largeur)
-        this.RIVIERE_LIMITE = 1.98 / 6.70; // La ligne de service court (~2m du filet)
+        this.HALF_LENGTH = 6.70; 
+        this.WIDTH = 6.10;       
+        this.RIVIERE_LIMITE = 1.98 / 6.70; 
     }
 
-    /**
-     * @param {Object} incoming - { type, startPos: {x,y}, endPos: {x,y} }
-     * @param {Object} user - { type, startPos: {x,y}, endPos: {x,y} }
-     * @param {Array} opponents - [{x, y}, {x, y}]
-     */
     evaluateSituation(incoming, user, opponents) {
         const rules = SHOT_PARAMS[user.type];
         const incomingRules = SHOT_PARAMS[incoming.type];
 
-        // 1. VERIFICATION DES DROITS DE REPONSE
+        // 1. VERIFICATION OUT & VALIDITÉ
+        if (user.endPos.x < 0 || user.endPos.x > 1 || user.endPos.y < 0 || user.endPos.y > 1) {
+            return { score: 0, message: "OUT !" };
+        }
         if (!incomingRules.allowed.includes(user.type)) {
-            return { score: 0, message: "Type de coup invalide pour cette situation" };
+            return { score: 0, message: "Type de coup invalide" };
         }
 
-        // 2. LOGIQUE SPECIFIQUE (Rivière / Fond)
-        // La "rivière" est proche du filet (y proche de 0 dans notre repère de demi-terrain)
-        const isFromRiviere = incoming.endPos.y <= this.RIVIERE_LIMITE;
-        
-
-        if (user.type === 'DRIVE' && !isFromRiviere) {
-            return { score: 0, message: "Le drive n'est possible que si le volant est dans la rivière" };
-        }
-        if (user.type === 'KILL' && isFromRiviere) {
-            return { score: 0, message: "Le kill n'est possible que si le volant vient du fond de court" };
-        }
-
-        // 3. CALCUL DU SCORE DE BASE
-        let score = 50 + rules.bonus;
-
-        // 4. DISTANCE AUX ADVERSAIRES
-        // On convertit les coordonnées normalisées en mètres pour un calcul de distance réel
+        // 2. DISTANCE ET ADVERSAIRE CIBLE
         let minDistanceMeters = Infinity;
+        let targetOpponent = null;
+
         opponents.forEach(opp => {
             const dx = (user.endPos.x - opp.x) * this.WIDTH;
             const dy = (user.endPos.y - opp.y) * this.HALF_LENGTH;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < minDistanceMeters) minDistanceMeters = dist;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < minDistanceMeters) {
+                minDistanceMeters = dist;
+                targetOpponent = opp;
+            }
         });
 
-        // Plus le volant tombe loin de l'adversaire, plus on gagne de points
-        // On considère qu'à 4m de distance, on a le bonus max
-        score += Math.min(40, (minDistanceMeters / 4) * 40);
+        let distanceScore = Math.min(90, (minDistanceMeters / 4.0) * 90);
+        let totalScore = 0;
+        let hittingBody = false;
 
-        // 5. MALUS SPECIFIQUES AU CLEAR
+        // 3. SCALING ATTAQUE OU SCORE DE BASE
+        if (user.type === 'KILL') {
+            totalScore = 75 + (distanceScore / 90) * (90 - 75) + 10;
+        } else if (user.type === 'SMASH') {
+            totalScore = 60 + (distanceScore / 90) * (90 - 60) + rules.bonus;
+        } else if (user.type === 'DROP') {
+            totalScore = 45 + (distanceScore / 90) * (90 - 45) + rules.bonus;
+        } else {
+            totalScore = distanceScore + rules.bonus;
+        }
+
+        // 4. MALUS & BONUS SPÉCIFIQUES (Avant le test de seuil)
+        const isRightSide = user.endPos.x > targetOpponent.x;
+        const isRevers = (targetOpponent.hand === 'right' && !isRightSide) || 
+                         (targetOpponent.hand === 'left' && isRightSide);
+
+        if (user.type === 'SMASH') {
+            const dxMeters = (user.endPos.x - targetOpponent.x) * this.WIDTH;
+            const dyMeters = (user.endPos.y - targetOpponent.y) * this.HALF_LENGTH;
+            const distToCoupDroit = Math.abs(dxMeters - (targetOpponent.hand === 'right' ? 0.3 : -0.3));
+            if (distToCoupDroit < 0.5 && Math.abs(dyMeters) < 0.5) {
+                totalScore += 10;
+                hittingBody = true;
+            }
+        }
+
         if (user.type === 'CLEAR') {
-            // Malus si à moins de 2m d'un joueur
-            if (minDistanceMeters < 2.0) score -= 10;
-            // Malus si à moins de 5m du filet (profondeur)
-            // Dans notre repère, y=0 est le filet, donc on veut y > (5 / 6.70)
-            if (user.endPos.y < (5.0 / 6.70)) score -= 10;
+            if (isRevers) totalScore += 5;
+            if (minDistanceMeters < 2.0) totalScore -= 20;
+            if (user.endPos.y < (5.0 / 6.70)) totalScore -= 20;
+        }
+
+        // 5. TEST DE SEUIL FINAL (Le "Coup Gagnant")
+        // Si le score cumulé dépasse le seuil, on s'assure que le bonus de coup est au max
+        const threshold = (user.type === 'CLEAR') ? 85 : 80;
+        if (totalScore >= threshold && user.type !== 'CLEAR') {
+            // On ajuste pour que le bonus de coup contribue à hauteur de 10
+            totalScore = Math.max(totalScore, distanceScore + 10);
         }
 
         return {
-            score: Math.min(100, Math.max(0, Math.round(score))),
-            reachMeters: rules.reach
+            score: Math.min(100, Math.max(0, Math.round(totalScore))),
+            isReversTargeted: isRevers,
+            isBodyHit: hittingBody,
+            reachMeters: rules.reach,
+            details: { 
+                placement: distanceScore, 
+                totalPreBonus: totalScore 
+            }
         };
     }
 }
