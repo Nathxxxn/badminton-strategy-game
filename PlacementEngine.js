@@ -11,7 +11,7 @@ class PlacementEngine {
     }
 
     /**
-     * Calcule la position idéale en défense après un Clear adverse
+     * Calcule la position idéale en défense après un Clear
      */
     getIdealDefensePos(shuttleLand, isPlayerLeft) {
         let ideal = { x: 0, y: 0.5 }; 
@@ -139,6 +139,39 @@ class PlacementEngine {
         return ideal;
     }
 
+    /**
+     * Calcule la position idéale après un Net Drop (Contre-amorti) de notre équipe
+     * @param {Object} shuttleLand - Point d'impact chez l'adversaire {x, y}
+     * @param {boolean} isHitter - Le joueur évalué est-il celui qui a fait le coup ?
+     */
+    getIdealNetDropPos(shuttleLand, isHitter) {
+        let ideal = { x: 0.5, y: 0.5 };
+
+        if (isHitter) {
+            // JOUEUR AVANT : Reste au filet
+            // Règle : Entre le point d'impact et 1m vers le milieu
+            const shiftTowardCenter = (shuttleLand.x < 0.5) ? 0.08 : -0.08; // ~50cm vers le centre en normalisé
+            ideal.x = Math.max(0.15, Math.min(0.85, shuttleLand.x + shiftTowardCenter));
+            
+            // Un peu devant la ligne de service (rivière à 1.98m)
+            ideal.y = 1.70 / this.HALF_LENGTH;
+        } else {
+            // JOUEUR ARRIERE : Couverture
+            // Règle : Se décale vers le centre si le partenaire est sur un côté
+            const isExcentric = Math.abs(shuttleLand.x - 0.5) > 0.25;
+            if (isExcentric) {
+                // Se rapproche de la ligne médiane (0.5)
+                ideal.x = 0.5 + (shuttleLand.x < 0.5 ? -0.1 : 0.1); 
+            } else {
+                ideal.x = 0.5;
+            }
+
+            // Règle : Environ 3.5m derrière le partenaire (1.70m + 3.0m = 4.70m)
+            ideal.y = 4.70 / this.HALF_LENGTH;
+        }
+        return ideal;
+    }
+
     calculateDistMeters(pos1, pos2) {
         const dx = (pos1.x - pos2.x) * this.WIDTH;
         const dy = (pos1.y - pos2.y) * this.HALF_LENGTH;
@@ -178,20 +211,58 @@ class PlacementEngine {
         return 0;
     }
 
-    evaluateGlobalPlacement(playerPos, partnerPos, idealPos, shotContext) {
+    /**
+     * Déduit le rôle et la position initiale du joueur évalué
+     * @param {Array} teamPlayers - Liste des 2 joueurs [{id, startX, startY}, ...]
+     * @param {number} playerId - L'ID du joueur qu'on évalue
+     * @param {number} hitterId - L'ID du joueur qui a frappé le volant
+     */
+
+
+    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter) {
         const partnerScore = this.getPartnerDistanceScore(playerPos, partnerPos);
         
+        const shotType = shotContext.type;
+        const shuttleEndPos = shotContext.endPos;
+
+        let idealPos;
+        const isPlayerLeft = (playerPos.x < partnerPos.x);
+        // 1. Déterminer la position idéale selon le type de coup
+        switch (shotType) {
+            case 'CLEAR':
+                idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft);
+                break;
+            case 'KILL':
+                idealPos = this.getIdealKillPos(shuttleEndPos, isHitter);
+                break;
+            case 'DRIVE':
+                idealPos = this.getIdealDrivePos(shuttleEndPos, isHitter);
+                break;
+            case 'SMASH':
+                idealPos = this.getIdealSmashPos(shuttleEndPos, isHitter);
+                break;
+            case 'DROP':
+                idealPos = this.getIdealDropPos(shuttleEndPos, isHitter);
+                break;
+            case 'NET_DROP':
+                idealPos = this.getIdealNetDropPos(shuttleEndPos, isHitter);
+                break;
+            default:
+                idealPos = { x: 0.5, y: 0.5 }; // Sécurité
+        }
+
+
         // Définit des tolérances spécifiques au contexte (Attaque vs Défense)
         let tolX = 0.5;
         let tolY = 1.0;
 
-        if (shotContext === 'KILL' || shotContext === 'DRIVE') {
+        if (shotType === 'KILL' || shotType === 'DRIVE') {
             // En kill/drive, la précision latérale est souvent plus critique (fermer l'angle)
             tolX = 0.4;
             tolY = 0.6;
         }
 
-        if (shotContext === 'SMASH' || shotContext === 'DROP') {
+        if (shotType === 'SMASH' || shotType === 'DROP') {
             // En attaque, la précision latérale est souvent plus critique (fermer l'angle)
             tolX = 1.0;
             tolY = 0.5;

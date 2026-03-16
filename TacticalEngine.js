@@ -48,7 +48,7 @@ class TacticalEngine {
         let totalScore = 0;
         let hittingBody = false;
 
-        // 3. SCALING ATTAQUE OU SCORE DE BASE
+        // 3. SCALING
         if (user.type === 'KILL') {
             totalScore = 75 + (distanceScore / 90) * (90 - 75) + 10;
         } else if (user.type === 'SMASH') {
@@ -59,7 +59,7 @@ class TacticalEngine {
             totalScore = distanceScore + rules.bonus;
         }
 
-        // 4. MALUS & BONUS SPÉCIFIQUES (Avant le test de seuil)
+        // 4. MALUS & BONUS
         const isRightSide = user.endPos.x > targetOpponent.x;
         const isRevers = (targetOpponent.hand === 'right' && !isRightSide) || 
                          (targetOpponent.hand === 'left' && isRightSide);
@@ -80,11 +80,9 @@ class TacticalEngine {
             if (user.endPos.y < (5.0 / 6.70)) totalScore -= 20;
         }
 
-        // 5. TEST DE SEUIL FINAL (Le "Coup Gagnant")
-        // Si le score cumulé dépasse le seuil, on s'assure que le bonus de coup est au max
+        // 5. SEUIL
         const threshold = (user.type === 'CLEAR') ? 85 : 80;
-        if (totalScore >= threshold && user.type !== 'CLEAR') {
-            // On ajuste pour que le bonus de coup contribue à hauteur de 10
+        if (totalScore >= threshold) {
             totalScore = Math.max(totalScore, distanceScore + 10);
         }
 
@@ -95,7 +93,53 @@ class TacticalEngine {
             reachMeters: rules.reach,
             details: { 
                 placement: distanceScore, 
-                totalPreBonus: totalScore 
+                bonus : Math.round(totalScore - distanceScore)
+            }
+        };
+    }
+
+    findBestShotExhaustive(incoming, opponents) {
+        const shotTypes = Object.keys(SHOT_PARAMS);
+        let best = { score: -1, type: '', endPos: { x: 0.5, y: 0.5 } };
+
+        const stepX = 0.5 / this.WIDTH;
+        const stepY = 0.5 / this.HALF_LENGTH;
+
+        shotTypes.forEach(type => {
+            if (!SHOT_PARAMS[incoming.type].allowed.includes(type)) return;
+
+            for (let x = 0.05; x <= 0.95; x += stepX) {
+                for (let y = 0.05; y <= 0.95; y += stepY) {
+                    const res = this.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents);
+                    if (res.score > best.score) {
+                        best = { score: res.score, type: type, endPos: {x, y}, details: res };
+                    }
+                }
+            }
+        });
+        return best;
+    }
+    /**
+     * Analyse complète : Évalue le coup du joueur ET cherche la meilleure solution
+     * @param {Object} incoming - {type, endPos}
+     * @param {Object} user - {type, endPos}
+     * @param {Array} opponents - [{x, y, hand}]
+     */
+    getCompleteAnalysis(incoming, user, opponents) {
+        // 1. Évaluer ce que le joueur a fait
+        const playerAnalysis = this.evaluateSituation(incoming, user, opponents);
+
+        // 2. Chercher ce qu'il aurait dû faire (le "corrigé")
+        // On ne passe que incoming et opponents car cette fonction teste tous les types de coups
+        const bestPossible = this.findBestShotExhaustive(incoming, opponents);
+
+        return {
+            player: playerAnalysis,
+            best: {
+                type: bestPossible.type,
+                endPos: bestPossible.endPos,
+                score: bestPossible.score,
+                message: `Le meilleur coup était un ${bestPossible.type}`
             }
         };
     }
