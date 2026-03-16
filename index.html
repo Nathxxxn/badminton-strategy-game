@@ -13,7 +13,7 @@
   </div>
 
   <!--
-    Temporary boot script for feature/drag-mechanic.
+    Temporary boot script for feature/animations.
     Will be replaced by src/js/main.js once the full app is wired up.
   -->
   <script type="module">
@@ -21,11 +21,13 @@
     import { Renderer }    from './src/js/renderer.js';
     import { ZoneOverlay } from './src/js/zones.js';
     import { DragShooter } from './src/js/drag.js';
+    import { Animator }    from './src/js/animations.js';
 
     const canvas   = document.getElementById('game-canvas');
     const court    = new Court(canvas);
     const renderer = new Renderer(canvas, court);
     const zones    = new ZoneOverlay(canvas, court);
+    const anim     = new Animator(canvas, court);
 
     // Sample shot exercise — shuttlecock arrives at ally's front-center
     const players = {
@@ -45,54 +47,76 @@
       height: 'high',
     };
 
-    // Render loop — redraws every frame while dragging, once otherwise
-    let rafId = null;
-
-    function render() {
+    // Base render: court + zones + static players. Animations draw on top each frame.
+    function renderBase() {
       court.draw();
       zones.drawCorrectZones(['opponent-front-center', 'opponent-front-left']);
       renderer.drawScene(players, shuttlecock, 'ally1');
-      drag.draw();  // draws aim line on top if dragging
     }
 
+    // Drag render loop
+    let rafId = null;
     function startLoop() {
       if (rafId !== null) return;
-      function loop() {
-        render();
-        rafId = requestAnimationFrame(loop);
-      }
+      function loop() { renderBase(); drag.draw(); rafId = requestAnimationFrame(loop); }
       rafId = requestAnimationFrame(loop);
     }
-
     function stopLoop() {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      render();  // one final static frame
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      renderBase();
     }
 
-    // Wire up drag shooter
-    const drag = new DragShooter(canvas, court, (shot) => {
+    // On shot: animate flight from shuttlecock → aim point, then flash feedback
+    const drag = new DragShooter(canvas, court, async (shot) => {
       stopLoop();
-      console.log('Shot fired:', shot);
-      // Show click marker at aim point
-      zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
-      // Re-arm for next attempt (dev testing only)
-      setTimeout(() => {
-        drag.activate(shuttlecock.position);
-        render();
-      }, 1200);
+      drag.deactivate();
+
+      // 1. Fly the shuttlecock to the aimed position
+      const flyBase = () => { court.draw(); zones.drawCorrectZones(['opponent-front-center', 'opponent-front-left']); renderer.drawScene(players, null, 'ally1'); };
+      anim._drawBase = flyBase;  // hook so Animator redraws court each frame
+
+      // Run flight: redraw court each frame so shuttle draws on top
+      await runAnimLoop(() => anim.flyShuttle(shuttlecock.position, shot.aimPoint, 'slow', 'high'));
+
+      // 2. Flash correct/wrong feedback
+      const inCorrect = ['opponent-front-center', 'opponent-front-left'].includes(
+        (await import('./src/js/zones.js')).getZoneAt(shot.aimPoint.x, shot.aimPoint.y)
+      );
+      await runAnimLoop(() => anim.flashFeedback(inCorrect ? 'correct' : 'wrong'));
+
+      // Show marker + re-arm
+      renderBase();
+      inCorrect ? zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y)
+                : zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
+
+      setTimeout(() => { drag.activate(shuttlecock.position); renderBase(); }, 1000);
     });
 
-    // Start listening for canvas pointer events to trigger render loop
+    /**
+     * Run an animation factory (returns Promise) while continuously
+     * redrawing the base frame so each anim frame composites on top.
+     */
+    async function runAnimLoop(factory) {
+      let done = false;
+      const promise = factory().then(() => { done = true; });
+      while (!done) {
+        renderBase();
+        await new Promise(r => requestAnimationFrame(r));
+      }
+      await promise;
+    }
+
     canvas.addEventListener('pointerdown', startLoop, { passive: true });
     canvas.addEventListener('pointerup',   stopLoop,  { passive: true });
 
-    // Initial static render + arm drag
-    render();
-    drag.activate(shuttlecock.position);
-    window.addEventListener('resize', () => { court._resize(); render(); });
+    // On page load: animate the incoming shuttle before arming drag
+    (async () => {
+      await runAnimLoop(() => anim.flyShuttle({ x: 0.5, y: 0.35 }, shuttlecock.position, 'slow', 'high'));
+      renderBase();
+      drag.activate(shuttlecock.position);
+    })();
+
+    window.addEventListener('resize', () => { court._resize(); renderBase(); });
   </script>
 </body>
 </html>
