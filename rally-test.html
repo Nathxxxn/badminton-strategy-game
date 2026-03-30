@@ -49,6 +49,23 @@
     }
     #replay-btn:hover  { background: #1d4ed8; transform: scale(1.03); }
     #replay-btn.show   { opacity: 1; display: block; }
+
+    #shot-selector {
+      position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: all; user-select: none;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #shot-selector.visible { opacity: 1; }
+    .shot-btn {
+      padding: 9px 14px; border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.45);
+      font: 600 11px/1 system-ui; letter-spacing: 0.10em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.18s; white-space: nowrap; text-align: center;
+    }
+    .shot-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.80); }
+    .shot-btn.selected { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.50); color: #fff; }
   </style>
 </head>
 <body>
@@ -61,6 +78,12 @@
   </div>
 
   <div id="hint"></div>
+  <div id="shot-selector">
+    <button class="shot-btn" data-shot="drop">Drop</button>
+    <button class="shot-btn selected" data-shot="drive">Drive</button>
+    <button class="shot-btn" data-shot="clear">Clear</button>
+    <button class="shot-btn" data-shot="smash">Smash</button>
+  </div>
 
   <div id="intro-screen">
     <div id="intro-title">Mini Échange</div>
@@ -112,6 +135,16 @@
     const pointText = document.getElementById('point-text');
     const replayBtn = document.getElementById('replay-btn');
     const dots      = [0,1,2].map(i => document.getElementById(`rd${i}`));
+    const shotSelEl = document.getElementById('shot-selector');
+    const shotBtns  = document.querySelectorAll('.shot-btn');
+
+    function updateShotSelector() {
+      shotBtns.forEach(btn => btn.classList.toggle('selected', S.selectedShot === btn.dataset.shot));
+    }
+    shotBtns.forEach(btn => btn.addEventListener('click', () => {
+      S.selectedShot = btn.dataset.shot;
+      updateShotSelector();
+    }));
 
     // ── CONSTANTS ─────────────────────────────────────────────────────────────
     const PLAYER_START  = { x:0.50, y:0.75 };
@@ -348,7 +381,10 @@
       });
     }
     function setHint(t) { hintEl.textContent=t; hintEl.style.opacity=t?'1':'0'; }
-    function goPhase(p) { S.phase=p; S.phaseMs=null; }
+    function goPhase(p) {
+      S.phase=p; S.phaseMs=null;
+      shotSelEl.classList.toggle('visible', p === 'player_shoot');
+    }
 
     // ── PHASE: INTRO ──────────────────────────────────────────────────────────
     function doIntro(ts) {
