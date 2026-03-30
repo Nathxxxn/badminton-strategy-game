@@ -161,6 +161,9 @@
     };
     const R1_LANDING    = { x:0.68, y:0.70 };   // round 0 fixed landing
 
+    // Movement radius per opp shot type (normalized court units, ref = courtH = 13.4m)
+    const MOVE_RADII = { smash: 0.10, drive: 0.18, drop: 0.26, clear: 0.30 };
+
     // ── MATH ──────────────────────────────────────────────────────────────────
     const eio  = t => -(Math.cos(Math.PI*t)-1)/2;
     const lerp = (a,b,t) => a+(b-a)*t;
@@ -361,6 +364,7 @@
 
         dragOrigin:  null, dragCurrent: null, dragActive: false, selectedShot: 'drive',
         frozenArc:   null,   // {fromNorm,toNorm,power,shotType,col}
+        moveRadius:  0.20,   // set on entering player_move from opp shot type
         flightT:     0, flightDur: 550, flightStartMs: null,
 
         landingEffect: null, // {norm,startMs,col}
@@ -384,6 +388,9 @@
     function goPhase(p) {
       S.phase=p; S.phaseMs=null;
       shotSelEl.classList.toggle('visible', p === 'player_shoot');
+      if (p === 'player_move' && S.oppFlight) {
+        S.moveRadius = MOVE_RADII[S.oppFlight.shotType] ?? MOVE_RADII.drive;
+      }
     }
 
     // ── PHASE: INTRO ──────────────────────────────────────────────────────────
@@ -456,22 +463,45 @@
       if(el>520) { S.landingEffect=null; setHint('Déplace-toi pour recevoir !'); goPhase('player_move'); }
     }
 
+    // ── DRAW: movement radius circle ─────────────────────────────────────────
+    function drawMoveRadius(centerNorm, radiusNorm) {
+      const c   = court.toCanvas(centerNorm.x, centerNorm.y);
+      const rPx = radiusNorm * court.courtH;
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle   = '#3b82f6';
+      ctx.beginPath(); ctx.arc(c.x, c.y, rPx, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 0.28;
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([6,5]);
+      ctx.beginPath(); ctx.arc(c.x, c.y, rPx, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+
     // ── PHASE: PLAYER MOVE (click to move) ───────────────────────────────────
     function doPlayerMove(ts) {
       drawPlayer(S.oppNorm,1,{isOpp:true});
       drawShuttle(S.shuttleNorm);
       drawLandingRing(S.shuttleNorm,'#3b82f6',0.45,true);
+      drawMoveRadius(S.playerNorm, S.moveRadius);
 
       const cn=S.cursorNorm;
       if(cn && cn.y>0.5 && cn.y<=1) {
+        const dx=cn.x-S.playerNorm.x, dy=cn.y-S.playerNorm.y;
+        const d=Math.hypot(dx,dy);
+        const outside=d>S.moveRadius;
+        const ghost=outside
+          ? {x:S.playerNorm.x+(dx/d)*S.moveRadius, y:S.playerNorm.y+(dy/d)*S.moveRadius}
+          : cn;
         const fC=court.toCanvas(S.playerNorm.x,S.playerNorm.y);
-        const tC=court.toCanvas(cn.x,cn.y);
-        ctx.save();ctx.globalAlpha=0.35;ctx.strokeStyle='#3b82f6';ctx.lineWidth=1.5;
+        const tC=court.toCanvas(ghost.x,ghost.y);
+        ctx.save();ctx.globalAlpha=outside?0.18:0.35;ctx.strokeStyle='#3b82f6';ctx.lineWidth=1.5;
         ctx.setLineDash([5,4]);ctx.lineCap='round';
         ctx.beginPath();ctx.moveTo(fC.x,fC.y);ctx.lineTo(tC.x,tC.y);ctx.stroke();
         ctx.setLineDash([]);ctx.restore();
         drawPlayer(S.playerNorm);
-        drawPlayer(cn,0.82,{ghost:true});
+        drawPlayer(ghost, outside?0.30:0.82, {ghost:true});
       } else {
         drawPlayer(S.playerNorm);
       }
@@ -669,10 +699,14 @@
       if(S.phase!=='player_move') return;
       const pos=cpx(e), n=court.toNormalized(pos.x,pos.y);
       if(n.y<=0.5||n.y>1||n.x<0||n.x>1) return;
-      const d=dist(S.playerNorm,n);
+      const dx=n.x-S.playerNorm.x, dy=n.y-S.playerNorm.y;
+      const d=Math.hypot(dx,dy);
       if(d<0.01) return;
-      const moveDur=Math.round(Math.min(560,Math.max(280,280+d*420)));
-      S.playerMove={from:{...S.playerNorm},to:{...n},dur:moveDur,startMs:null,arrivingMs:null};
+      const clamped=d<=S.moveRadius
+        ? n
+        : {x:S.playerNorm.x+(dx/d)*S.moveRadius, y:S.playerNorm.y+(dy/d)*S.moveRadius};
+      const moveDur=Math.round(Math.min(560,Math.max(280,280+Math.min(d,S.moveRadius)*420)));
+      S.playerMove={from:{...S.playerNorm},to:clamped,dur:moveDur,startMs:null,arrivingMs:null};
       S.cursorNorm=null;
       setHint('');
       goPhase('player_moving');
