@@ -42,7 +42,7 @@ class KinematicEngine {
     shotPossibility (shotType){
         const allowedReach = this.SHOT_PARAM[shotType].reach;
         const allowedShots = this.SHOT_PARAM[shotType].allowed;
-        
+
         return {allowedReach : allowedReach,
                 allowedShots : allowedShots
             }
@@ -55,33 +55,4 @@ class KinematicEngine {
 
     }
 
-    /**
-     * Évalue si le replacement choisi est physiquement possible
-     * @param {string} shotType - Le coup que NOTRE équipe vient de faire
-     * @param {Object} startPos - {x, y}
-     * @param {Object} endPos - {x, y}
-     */
-    evaluateMovementPossibility(shotType, startPos, endPos) {
-        const distance = this.getTraveledDistance(startPos, endPos);
-        const allowedRadius = this.MOVING_RADII[shotType] || 2.0;
-
-        // Le mouvement est-il dans le rayon autorisé ?
-        const isPossible = distance <= allowedRadius;
-
-        // Calcul d'un score de "faisabilité"
-        // 100 si dans le rayon, décroissance rapide au-delà
-        let mobilityScore = 1;
-        if (distance > allowedRadius) {
-            const diff = distance - allowedRadius;
-            mobilityScore = 0; 
-        }
-
-        return {
-            isPossible: isPossible,
-            mobilityScore: mobilityScore,
-            distanceMeters: distance.toFixed(2),
-            allowedRadius: allowedRadius,
-            excess: (distance > allowedRadius) ? (distance - allowedRadius).toFixed(2) : 0
-        };
-    }
 }
