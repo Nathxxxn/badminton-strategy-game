@@ -18,6 +18,14 @@ class KinematicEngine {
             NET_DROP: 2.5, // Moyen/Long : coup de finesse au filet
             CLEAR: 3     // COURT : exception, on doit se fixer car on attend un smash
         };
+        this.SHOT_PARAMS = {
+            SMASH:      { id: 'SMASH',reach: 2.0, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
+            KILL:       { id: 'KILL', reach: 0.5, allowed: ['NET_DROP'] },
+            DRIVE:      { id: 'DRIVE',  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
+            DROP:       { id: 'DROP',  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
+            NET_DROP:   { id: 'NET_DROP',  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE', 'KILL'] },
+            CLEAR:      { id: 'CLEAR',  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
+        };
     }
 
     /**
@@ -29,6 +37,12 @@ class KinematicEngine {
         const dx = (endPos.x - startPos.x) * this.WIDTH;
         const dy = (endPos.y - startPos.y) * this.HALF_LENGTH;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    shotPossibility (shotType){
+        const allowedReach = this.SHOT_PARAM[shotType];
+        const allowedShot = this.????
+
     }
 
     movementPossibility (shotType){
