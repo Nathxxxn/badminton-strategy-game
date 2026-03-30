@@ -119,6 +119,13 @@
     const ACTIVATION_R  = 52;   // px radius to start drag
     const MAX_DRAG_PX   = 160;
     const SERVE_POWERS  = [0.44, 0.60, 0.80];
+
+    const SHOT_TYPES = {
+      drop:  { label: 'Drop',  targetYMin: 0.35, targetYMax: 0.45, arcMult: 0.55, flightSpeedBase: 850, flightSpeedRange: 150 },
+      drive: { label: 'Drive', targetYMin: 0.20, targetYMax: 0.35, arcMult: 0.10, flightSpeedBase: 450, flightSpeedRange: 150 },
+      clear: { label: 'Clear', targetYMin: 0.05, targetYMax: 0.15, arcMult: 0.70, flightSpeedBase: 700, flightSpeedRange: 200 },
+      smash: { label: 'Smash', targetYMin: 0.08, targetYMax: 0.20, arcMult: 0.08, flightSpeedBase: 300, flightSpeedRange: 100 },
+    };
     const R1_LANDING    = { x:0.68, y:0.70 };   // round 0 fixed landing
 
     // ── MATH ──────────────────────────────────────────────────────────────────
@@ -141,7 +148,10 @@
     }
 
     // ── ARC DRAWING ───────────────────────────────────────────────────────────
-    function arcH(power, dPx) { return Math.max(14, dPx*(0.35-power*0.28)); }
+    function arcH(power, dPx, shotType) {
+      const def = SHOT_TYPES[shotType || 'drive'];
+      return Math.max(10, dPx * def.arcMult);
+    }
 
     function arcAt(fC, tC, h, t) {
       const te=eio(t);
@@ -282,15 +292,16 @@
     }
 
     // ── PROJECT PLAYER SHOT LANDING ───────────────────────────────────────────
-    function projectLanding(origin, current, shuttleNorm) {
+    function projectLanding(origin, current, shuttleNorm, shotType) {
       const dx=current.x-origin.x, dy=current.y-origin.y;
       if(dy<=0) return null;
       const power=Math.min(1,Math.hypot(dx,dy)/MAX_DRAG_PX);
       if(power<0.05) return null;
-      const targetY=0.08+(1-power)*0.34;
+      const def=SHOT_TYPES[shotType||'drive'];
+      const targetY=def.targetYMax - power*(def.targetYMax-def.targetYMin);
       const ratio=dx/dy;
       const landX=Math.max(0.03,Math.min(0.97, shuttleNorm.x-ratio*(shuttleNorm.y-targetY)));
-      return {landNorm:{x:landX, y:targetY}, power};
+      return {landNorm:{x:landX, y:targetY}, power, shotType: shotType||'drive'};
     }
 
     // ── COMPUTE OPP COUNTER LANDING ───────────────────────────────────────────
@@ -315,8 +326,8 @@
         oppMove:      null,   // {from,to,dur,startMs} — reactive to player shot
         playerMove:   null,   // {from,to,dur,startMs,arrivingMs}
 
-        dragOrigin:  null, dragCurrent: null, dragActive: false,
-        frozenArc:   null,   // {fromNorm,toNorm,power,col}
+        dragOrigin:  null, dragCurrent: null, dragActive: false, selectedShot: 'drive',
+        frozenArc:   null,   // {fromNorm,toNorm,power,shotType,col}
         flightT:     0, flightDur: 550, flightStartMs: null,
 
         landingEffect: null, // {norm,startMs,col}
@@ -366,7 +377,7 @@
         const tC=court.toCanvas(landing.x,landing.y);
         const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
         const dur=320+(1-power)*530;
-        S.oppFlight={fromNorm:{...S.oppNorm},toNorm:{...landing},power,col:powerColor(power),dur,startMs:null};
+        S.oppFlight={fromNorm:{...S.oppNorm},toNorm:{...landing},power,shotType:'drive',col:powerColor(power),dur,startMs:null};
         S.shuttleNorm={...S.oppNorm};
         goPhase('opp_flight');
       }
@@ -380,7 +391,7 @@
       const fC=court.toCanvas(f.fromNorm.x,f.fromNorm.y);
       const tC=court.toCanvas(f.toNorm.x,f.toNorm.y);
       const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
-      const h=arcH(f.power,dPx);
+      const h=arcH(f.power,dPx,f.shotType);
 
       drawLandingRing(f.toNorm,f.col,0.7,true);
       drawShuttleInFlight(fC,tC,h,t);
@@ -465,12 +476,12 @@
       drawPlayer(S.oppNorm,1,{isOpp:true});
 
       if(S.dragActive && S.dragOrigin && S.dragCurrent) {
-        const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm);
+        const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm,S.selectedShot);
         if(proj) {
           const fC=court.toCanvas(S.shuttleNorm.x,S.shuttleNorm.y);
           const tC=court.toCanvas(proj.landNorm.x,proj.landNorm.y);
           const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
-          const h=arcH(proj.power,dPx), col=powerColor(proj.power);
+          const h=arcH(proj.power,dPx,proj.shotType), col=powerColor(proj.power);
           drawArc(fC,tC,h,col,0.65,true);
           drawLandingRing(proj.landNorm,col,0.9,true);
         }
@@ -499,7 +510,7 @@
       const fC=court.toCanvas(f.fromNorm.x,f.fromNorm.y);
       const tC=court.toCanvas(f.toNorm.x,f.toNorm.y);
       const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
-      const h=arcH(f.power,dPx);
+      const h=arcH(f.power,dPx,f.shotType);
 
       // Frozen arc (fades as shuttle travels)
       drawArc(fC,tC,h,f.col,0.45-S.flightT*0.30,true,2.5);
@@ -652,19 +663,17 @@
     canvas.addEventListener('pointerup', e => {
       if(!S.dragActive) return;
       e.preventDefault();
-      const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm);
+      const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm,S.selectedShot);
       S.dragActive=false;
 
       if(!proj) { S.dragOrigin=null; S.dragCurrent=null; return; }
 
-      const {landNorm,power}=proj;
+      const {landNorm,power,shotType}=proj;
       const col=powerColor(power);
-      const fC=court.toCanvas(S.shuttleNorm.x,S.shuttleNorm.y);
-      const tC=court.toCanvas(landNorm.x,landNorm.y);
-      const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
-      const flightDur=Math.round(320+(1-power)*530);
+      const def=SHOT_TYPES[shotType];
+      const flightDur=Math.round(def.flightSpeedBase+(1-power)*def.flightSpeedRange);
 
-      S.frozenArc={fromNorm:{...S.shuttleNorm},toNorm:{...landNorm},power,col};
+      S.frozenArc={fromNorm:{...S.shuttleNorm},toNorm:{...landNorm},power,shotType,col};
       S.flightDur=flightDur; S.flightT=0; S.flightStartMs=null;
       S.dragOrigin=null; S.dragCurrent=null;
 

@@ -21,10 +21,50 @@
       transition: opacity 0.4s;
       white-space: nowrap;
     }
+    #shot-selector {
+      position: fixed;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: all;
+      user-select: none;
+    }
+    .shot-btn {
+      padding: 9px 14px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.45);
+      font: 600 11px/1 system-ui, sans-serif;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.18s;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .shot-btn:hover {
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.80);
+    }
+    .shot-btn.selected {
+      background: rgba(255,255,255,0.16);
+      border-color: rgba(255,255,255,0.50);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div id="shot-selector">
+    <button class="shot-btn" data-shot="drop">Drop</button>
+    <button class="shot-btn selected" data-shot="drive">Drive</button>
+    <button class="shot-btn" data-shot="clear">Clear</button>
+    <button class="shot-btn" data-shot="smash">Smash</button>
+  </div>
   <div id="hint">Appuie sur le volant · tire en arrière pour viser · relâche pour frapper</div>
 
   <script>
@@ -124,12 +164,21 @@
     const ACTIVATION_R = 40;    // CSS px radius to activate drag
     const MAX_DRAG_PX  = 160;   // drag length = full power
 
+    // Shot type definitions — landing band, arc style, flight speed
+    const SHOT_TYPES = {
+      drop:  { label: 'Drop',  targetYMin: 0.35, targetYMax: 0.45, arcMult: 0.55, flightSpeedBase: 850, flightSpeedRange: 150 },
+      drive: { label: 'Drive', targetYMin: 0.20, targetYMax: 0.35, arcMult: 0.10, flightSpeedBase: 450, flightSpeedRange: 150 },
+      clear: { label: 'Clear', targetYMin: 0.05, targetYMax: 0.15, arcMult: 0.70, flightSpeedBase: 700, flightSpeedRange: 200 },
+      smash: { label: 'Smash', targetYMin: 0.08, targetYMax: 0.20, arcMult: 0.08, flightSpeedBase: 300, flightSpeedRange: 100 },
+    };
+
     // ─── Central state ────────────────────────────────────────────────────────
     const S = {
       phase:          'ready',
+      selectedShot:   'drive',
       dragOrigin:     null,   // {x,y} canvas px — shuttle position at press
       dragCurrent:    null,   // {x,y} canvas px — current pointer position
-      frozenArc:      null,   // {fromNorm, toNorm, power, colour}
+      frozenArc:      null,   // {fromNorm, toNorm, power, shotType, colour}
       flightT:        0,      // 0→1 flight progress
       flightDuration: 550,
       flightStartMs:  null,
@@ -139,6 +188,20 @@
 
     // ─── Math helpers ─────────────────────────────────────────────────────────
     const easeInOut = t => -(Math.cos(Math.PI * t) - 1) / 2;
+
+    // ─── Shot selector ────────────────────────────────────────────────────────
+    const shotBtns = document.querySelectorAll('.shot-btn');
+    function updateShotSelector() {
+      shotBtns.forEach(btn => {
+        btn.classList.toggle('selected', S.selectedShot === btn.dataset.shot);
+      });
+    }
+    shotBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        S.selectedShot = btn.dataset.shot;
+        updateShotSelector();
+      });
+    });
 
     function canvasPos(e) {
       const r = canvas.getBoundingClientRect();
@@ -165,7 +228,8 @@
     // ─── Landing projection (swing inversé) ──────────────────────────────────
     // The player drags AWAY from the target. Shot goes in the OPPOSITE direction.
     // dragOrigin = shuttle canvas pos, dragCurrent = pointer canvas pos.
-    function projectLanding(origin, current) {
+    // shotType controls the landing depth band; power refines within the band.
+    function projectLanding(origin, current, shotType) {
       const dx = current.x - origin.x;
       const dy = current.y - origin.y;   // positive = downward on screen (toward player)
 
@@ -174,20 +238,22 @@
       const power = Math.min(1, Math.hypot(dx, dy) / MAX_DRAG_PX);
       if (power < 0.05) return null;
 
-      // Target depth: smash (p=1) deep (y≈0.08), drop (p≈0.3) near net (y≈0.42)
-      const targetY = 0.08 + (1 - power) * 0.34;
+      // Landing depth within the type's band: low power = shallow end, high power = deep end
+      const def    = SHOT_TYPES[shotType];
+      const targetY = def.targetYMax - power * (def.targetYMax - def.targetYMin);
 
       // Lateral: drag right → shot goes left. ratio = dx/dy applied in normalized space.
       const sn    = S.shuttleNorm;
       const ratio = dx / dy;
       const landX = Math.max(0.03, Math.min(0.97, sn.x - ratio * (sn.y - targetY)));
 
-      return { landNorm: { x: landX, y: targetY }, power };
+      return { landNorm: { x: landX, y: targetY }, power, shotType };
     }
 
     // ─── Arc geometry ─────────────────────────────────────────────────────────
-    function arcH(power, distPx) {
-      return Math.max(14, distPx * (0.35 - power * 0.28));
+    function arcH(power, distPx, shotType) {
+      const def = SHOT_TYPES[shotType || 'drive'];
+      return Math.max(10, distPx * def.arcMult);
     }
 
     // Canvas position of the shuttle at normalised time t along the arc
@@ -342,7 +408,7 @@
       ctx.fillStyle = col;
       ctx.fill();
       // Shot type label
-      const label = power < 0.30 ? 'Drop' : power < 0.65 ? 'Drive' : 'Smash';
+      const label = SHOT_TYPES[S.selectedShot].label;
       const nx = -dy / len, ny = dx / len;
       ctx.font        = `bold 11px system-ui, sans-serif`;
       ctx.fillStyle   = col;
@@ -372,13 +438,13 @@
         const len = Math.hypot(dx, dy);
         const rawPower = Math.min(1, len / MAX_DRAG_PX);
 
-        const proj = projectLanding(S.dragOrigin, S.dragCurrent);
+        const proj = projectLanding(S.dragOrigin, S.dragCurrent, S.selectedShot);
         if (proj) {
-          const { landNorm, power } = proj;
+          const { landNorm, power, shotType } = proj;
           const fromC = court.toCanvas(S.shuttleNorm.x, S.shuttleNorm.y);
           const toC   = court.toCanvas(landNorm.x, landNorm.y);
           const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-          drawArc(fromC, toC, arcH(power, dist), powerColor(power), 0.65, true);
+          drawArc(fromC, toC, arcH(power, dist, shotType), powerColor(power), 0.65, true);
           drawLandingTarget(toC, powerColor(power), 0.9, true);
         }
 
@@ -390,11 +456,11 @@
         if (S.flightStartMs === null) S.flightStartMs = ts;
         S.flightT = Math.min(1, (ts - S.flightStartMs) / S.flightDuration);
 
-        const { fromNorm, toNorm, power, colour } = S.frozenArc;
+        const { fromNorm, toNorm, power, shotType, colour } = S.frozenArc;
         const fromC  = court.toCanvas(fromNorm.x, fromNorm.y);
         const toC    = court.toCanvas(toNorm.x, toNorm.y);
         const dist   = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-        const h      = arcH(power, dist);
+        const h      = arcH(power, dist, shotType);
 
         // Frozen arc (fades during flight: 0.45 → 0.15)
         const arcAlpha = 0.45 - S.flightT * 0.30;
@@ -426,11 +492,11 @@
         if (S.landingMs === null) S.landingMs = ts;
         const elapsed = ts - S.landingMs;
 
-        const { fromNorm, toNorm, power, colour } = S.frozenArc;
+        const { fromNorm, toNorm, power, shotType, colour } = S.frozenArc;
         const fromC = court.toCanvas(fromNorm.x, fromNorm.y);
         const toC   = court.toCanvas(toNorm.x, toNorm.y);
         const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-        const h     = arcH(power, dist);
+        const h     = arcH(power, dist, shotType);
 
         // Arc fades out in first 200ms of landing
         const arcFadeT = Math.min(1, elapsed / 200);
@@ -508,22 +574,23 @@
       if (S.phase !== 'dragging') return;
       S.dragCurrent = canvasPos(e);
 
-      const proj = projectLanding(S.dragOrigin, S.dragCurrent);
+      const proj = projectLanding(S.dragOrigin, S.dragCurrent, S.selectedShot);
       const len  = Math.hypot(
         S.dragCurrent.x - S.dragOrigin.x,
         S.dragCurrent.y - S.dragOrigin.y,
       );
 
       if (proj && len > 12) {
-        const { landNorm, power } = proj;
+        const { landNorm, power, shotType } = proj;
+        const def = SHOT_TYPES[shotType];
         S.frozenArc = {
           fromNorm: { ...S.shuttleNorm },
           toNorm:   landNorm,
           power,
+          shotType,
           colour:   powerColor(power),
         };
-        // Smash=320ms, drop=850ms, interpolated
-        S.flightDuration = 320 + (1 - power) * 530;
+        S.flightDuration = def.flightSpeedBase + (1 - power) * def.flightSpeedRange;
         S.flightT        = 0;
         S.flightStartMs  = null;
         S.phase          = 'flying';
