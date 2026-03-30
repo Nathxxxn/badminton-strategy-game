@@ -9,14 +9,13 @@
       "end": {"x": 0.2, "y": 0.1} 
     },
     "players": [
-      {"id": "P1_USER", "x": 0.2, "y": 0.1, "role": "RECEIVER"},
-      {"id": "P2_PARTNER", "x": 0.6, "y": 0.3, "role": "SUPPORT"},
-      {"id": "OPP_1", "x": 0.3, "y": 0.7, "role": "OPPONENT"},
-      {"id": "OPP_2", "x": 0.7, "y": 0.8, "role": "OPPONENT"}
+      {"id": "P1_USER", "x": 0.2, "y": 0.1},
+      {"id": "P2_PARTNER", "x": 0.6, "y": 0.3},
+      {"id": "OPP_1", "x": 0.3, "y": 0.7},
+      {"id": "OPP_2", "x": 0.7, "y": 0.8}
     ]
   },
   "objectives": {
-    "minScore": 70,
-    "timeLimit": 5000
+    "minScore": 70
   }
 }

@@ -24,7 +24,7 @@ TacticalEngine :
 Entrées :
 incoming = { type : 'SMASH'}
 user = {type : 'NET_DROP' , endPos = {x : 0.5, y : 0.5}}
-opponents = {opp1 : {x : 0.5, y : 0.5}, opp2 : {x : 0.5, y : 0.5}}
+opponents = {opp1 : {hand = 'right', x : 0.5, y : 0.5}, opp2 : {hand = 'left',x : 0.5, y : 0.5}}
 
 Sorties :
 {
