@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Move Test — Badminton Strategy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; overflow: hidden; }
+    #canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: none; }
+    #hint {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.4);
+      font: 13px/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 0.4s;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hint">Déplace ta souris sur ta moitié du terrain · clique pour te déplacer</div>
+
+  <script>
+    // ─── court.js inlined (avoids file:// CORS block on ES modules) ──────────
+
+    const COURT_LENGTH = 13.4;
+    const COURT_WIDTH  = 6.1;
+    const NET_Y        = 0.5;
+    const SHORT_SVC_DIST    = 1.98  / COURT_LENGTH;
+    const LONG_SVC_DBL_DIST = 0.76  / COURT_LENGTH;
+    const SINGLES_SIDE_DIST = 0.46  / COURT_WIDTH;
+    const SHORT_SVC_TOP  = NET_Y - SHORT_SVC_DIST;
+    const SHORT_SVC_BOT  = NET_Y + SHORT_SVC_DIST;
+    const LONG_SVC_TOP   = LONG_SVC_DBL_DIST;
+    const LONG_SVC_BOT   = 1 - LONG_SVC_DBL_DIST;
+    const SINGLES_LEFT   = SINGLES_SIDE_DIST;
+    const SINGLES_RIGHT  = 1 - SINGLES_SIDE_DIST;
+    const COLOUR = {
+      pageBg: '#1a1a2e', surfaceA: '#0d2b0d', surfaceB: '#0f3d0f',
+      lines: '#dde8dd', net: '#ffffff', netGlow: 'rgba(255,255,255,0.18)',
+    };
+    const LINE_W = 1.5, NET_W = 3;
+    const PAD = { top: 48, right: 32, bottom: 48, left: 32 };
+
+    class Court {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx    = canvas.getContext('2d');
+        this.courtX = 0; this.courtY = 0; this.courtW = 0; this.courtH = 0;
+        this._resize();
+        this._onResize = () => { this._resize(); this.draw(); };
+        window.addEventListener('resize', this._onResize);
+      }
+      destroy() { window.removeEventListener('resize', this._onResize); }
+      toCanvas(nx, ny) {
+        return { x: this.courtX + nx * this.courtW, y: this.courtY + ny * this.courtH };
+      }
+      toNormalized(px, py) {
+        return { x: (px - this.courtX) / this.courtW, y: (py - this.courtY) / this.courtH };
+      }
+      draw() {
+        const { ctx, canvas } = this;
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = canvas.width / dpr, cssH = canvas.height / dpr;
+        ctx.clearRect(0, 0, cssW, cssH);
+        ctx.fillStyle = COLOUR.pageBg; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = COLOUR.surfaceA; ctx.fillRect(this.courtX, this.courtY, this.courtW, this.courtH * 0.5);
+        ctx.fillStyle = COLOUR.surfaceB; ctx.fillRect(this.courtX, this.courtY + this.courtH * 0.5, this.courtW, this.courtH * 0.5);
+        ctx.strokeStyle = COLOUR.lines; ctx.lineWidth = LINE_W; ctx.lineCap = 'square';
+        this._hLine(0,1,0); this._hLine(0,1,1); this._vLine(0,0,1); this._vLine(1,0,1);
+        this._vLine(SINGLES_LEFT,0,1); this._vLine(SINGLES_RIGHT,0,1);
+        this._hLine(0,1,SHORT_SVC_TOP); this._hLine(0,1,SHORT_SVC_BOT);
+        this._hLine(0,1,LONG_SVC_TOP); this._hLine(0,1,LONG_SVC_BOT);
+        this._vLine(0.5,0,SHORT_SVC_TOP); this._vLine(0.5,SHORT_SVC_BOT,1);
+        const l = this.toCanvas(0, NET_Y), r = this.toCanvas(1, NET_Y);
+        ctx.save();
+        ctx.strokeStyle = COLOUR.netGlow; ctx.lineWidth = NET_W + 6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
+        ctx.strokeStyle = COLOUR.net; ctx.lineWidth = NET_W; ctx.lineCap = 'square';
+        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
+        ctx.restore();
+      }
+      _hLine(x0,x1,ny) { const a=this.toCanvas(x0,ny),b=this.toCanvas(x1,ny); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
+      _vLine(nx,y0,y1) { const a=this.toCanvas(nx,y0),b=this.toCanvas(nx,y1); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
+      _resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = this.canvas.clientWidth, cssH = this.canvas.clientHeight;
+        if (cssW === 0 || cssH === 0) return;
+        this.canvas.width  = Math.round(cssW * dpr);
+        this.canvas.height = Math.round(cssH * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this._updateLayout(cssW, cssH);
+      }
+      _updateLayout(cssW, cssH) {
+        const availW = cssW - PAD.left - PAD.right;
+        const availH = cssH - PAD.top  - PAD.bottom;
+        const courtAspect = COURT_WIDTH / COURT_LENGTH;
+        const availAspect = availW / availH;
+        let courtW, courtH;
+        if (availAspect > courtAspect) { courtH = availH; courtW = courtH * courtAspect; }
+        else { courtW = availW; courtH = courtW / courtAspect; }
+        this.courtX = PAD.left + (availW - courtW) / 2;
+        this.courtY = PAD.top  + (availH - courtH) / 2;
+        this.courtW = courtW;
+        this.courtH = courtH;
+      }
+    }
+
+    // ─── Setup ────────────────────────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+    const court  = new Court(canvas);
+    const hint   = document.getElementById('hint');
+
+    // ─── Constants ────────────────────────────────────────────────────────────
+    const PLAYER_START = { x: 0.5, y: 0.75 };
+    const MOVE_DUR_MIN = 280;
+    const MOVE_DUR_MAX = 560;
+    const TRAIL_COUNT  = 3;
+    const TRAIL_STEP   = 0.07;   // t offset per ghost copy
+
+    // ─── Central state ────────────────────────────────────────────────────────
+    const S = {
+      phase:       'idle',
+      playerNorm:  { ...PLAYER_START },
+      cursorNorm:  null,
+      frozenDest:  null,
+      moveT:       0,
+      moveDur:     350,
+      moveStartMs: null,
+      arrivingMs:  null,
+    };
+
+    // ─── Math helpers ─────────────────────────────────────────────────────────
+    const easeInOut = t => -(Math.cos(Math.PI * t) - 1) / 2;
+
+    function canvasPos(e) {
+      const r = canvas.getBoundingClientRect();
+      const touch = e.touches ? e.touches[0] : e;
+      return { x: touch.clientX - r.left, y: touch.clientY - r.top };
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function lerpNorm(from, to, t) {
+      return { x: lerp(from.x, to.x, t), y: lerp(from.y, to.y, t) };
+    }
+
+    // ─── Draw: player circle ──────────────────────────────────────────────────
+    function drawPlayer(normPos, alpha = 1, glow = false, dashed = false) {
+      const { x, y } = court.toCanvas(normPos.x, normPos.y);
+      const r  = court.courtW * 0.038;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      if (glow) {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(37,99,235,0.22)';
+        ctx.filter = 'blur(6px)';
+        ctx.fill();
+        ctx.filter = 'none';
+      }
+
+      // Outer ambient glow (always subtle)
+      const grad = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.4);
+      grad.addColorStop(0, 'rgba(37,99,235,0.28)');
+      grad.addColorStop(1, 'rgba(37,99,235,0)');
+      ctx.beginPath();
+      ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Player circle
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      if (dashed) {
+        ctx.fillStyle = 'rgba(37,99,235,0.18)';
+        ctx.fill();
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = '#2563eb';
+        ctx.fill();
+        ctx.strokeStyle = '#1d4ed8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Label
+      const labelAlpha = dashed ? 0.45 : 1;
+      ctx.globalAlpha = alpha * labelAlpha;
+      ctx.font = `bold ${Math.round(r * 0.68)}px system-ui, sans-serif`;
+      ctx.fillStyle = dashed ? '#93c5fd' : '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('YOU', x, y + 0.5);
+
+      ctx.restore();
+    }
+
+    // ─── Draw: path line from player to cursor ────────────────────────────────
+    function drawPathLine(from, to) {
+      const fc = court.toCanvas(from.x, from.y);
+      const tc = court.toCanvas(to.x, to.y);
+      ctx.save();
+      ctx.globalAlpha = 0.38;
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(fc.x, fc.y);
+      ctx.lineTo(tc.x, tc.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // ─── Draw: arrival flash ──────────────────────────────────────────────────
+    function drawArrivalFlash(pos, elapsed) {
+      const { x, y } = court.toCanvas(pos.x, pos.y);
+      const FLASH_DUR = 150;
+      const GLOW_DUR  = 300;
+
+      // Radial flash (first 150ms)
+      if (elapsed < FLASH_DUR) {
+        const t     = elapsed / FLASH_DUR;
+        const alpha = (1 - t) * 0.45;
+        const r     = t * 55;
+        const grad  = ctx.createRadialGradient(x, y, 0, x, y, r);
+        grad.addColorStop(0, `rgba(59,130,246,${alpha})`);
+        grad.addColorStop(1, 'rgba(59,130,246,0)');
+        ctx.save();
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.restore();
+      }
+
+      // Player glow pulse (0 → peak → fade over GLOW_DUR)
+      const gt      = Math.min(1, elapsed / GLOW_DUR);
+      const glowA   = gt < 0.3
+        ? gt / 0.3
+        : 1 - (gt - 0.3) / 0.7;
+      const playerR = court.courtW * 0.038;
+
+      ctx.save();
+      ctx.globalAlpha = glowA * 0.55;
+      ctx.beginPath();
+      ctx.arc(x, y, playerR * 2.8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(59,130,246,0.35)';
+      ctx.filter    = 'blur(8px)';
+      ctx.fill();
+      ctx.filter    = 'none';
+      ctx.restore();
+    }
+
+    // ─── Custom cursor (dot that follows mouse on ally half) ─────────────────
+    let _cursorCanvas = { x: null, y: null };
+
+    function drawCursor() {
+      if (!_cursorCanvas.x) return;
+      const norm = court.toNormalized(_cursorCanvas.x, _cursorCanvas.y);
+      if (norm.y <= 0.5 || norm.y > 1 || norm.x < 0 || norm.x > 1) return;
+      const { x, y } = _cursorCanvas;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle   = '#93c5fd';
+      ctx.globalAlpha = 0.8;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ─── Render loop ──────────────────────────────────────────────────────────
+    function render(ts) {
+      requestAnimationFrame(render);
+      court.draw();
+
+      // ── IDLE ───────────────────────────────────────────────────────────────
+      if (S.phase === 'idle') {
+        drawPlayer(S.playerNorm);
+        drawCursor();
+        hint.style.opacity = '1';
+
+      // ── HOVERING ───────────────────────────────────────────────────────────
+      } else if (S.phase === 'hovering') {
+        hint.style.opacity = '0';
+        if (S.cursorNorm) {
+          drawPathLine(S.playerNorm, S.cursorNorm);
+          drawPlayer(S.playerNorm);
+          drawPlayer(S.cursorNorm, 0.85, false, true);   // ghost at cursor
+        } else {
+          drawPlayer(S.playerNorm);
+        }
+        drawCursor();
+
+      // ── MOVING ─────────────────────────────────────────────────────────────
+      } else if (S.phase === 'moving') {
+        if (S.moveStartMs === null) S.moveStartMs = ts;
+        S.moveT = Math.min(1, (ts - S.moveStartMs) / S.moveDur);
+        const te = easeInOut(S.moveT);
+
+        const from = S.playerNorm;
+        const to   = S.frozenDest;
+
+        // Fading origin ghost
+        const originAlpha = (1 - te) * 0.28;
+        if (originAlpha > 0.02) drawPlayer(from, originAlpha);
+
+        // Trail ghosts (behind the moving player)
+        for (let i = TRAIL_COUNT; i >= 1; i--) {
+          const tTrail  = Math.max(0, te - i * TRAIL_STEP);
+          const pos     = lerpNorm(from, to, tTrail);
+          const alphas  = [0.40, 0.25, 0.12];
+          drawPlayer(pos, alphas[i - 1]);
+        }
+
+        // Moving player (with glow)
+        const currentPos = lerpNorm(from, to, te);
+        drawPlayer(currentPos, 1, true);
+
+        if (S.moveT >= 1) {
+          S.phase      = 'arriving';
+          S.playerNorm = { ...to };
+          S.arrivingMs = null;
+        }
+
+      // ── ARRIVING ──────────────────────────────────────────────────────────
+      } else if (S.phase === 'arriving') {
+        if (S.arrivingMs === null) S.arrivingMs = ts;
+        const elapsed = ts - S.arrivingMs;
+
+        drawArrivalFlash(S.playerNorm, elapsed);
+        drawPlayer(S.playerNorm, 1, elapsed < 300);
+
+        if (elapsed > 400) {
+          S.phase      = 'idle';
+          S.frozenDest = null;
+        }
+      }
+    }
+
+    // ─── Pointer events ───────────────────────────────────────────────────────
+    function getNorm(e) {
+      const p = canvasPos(e);
+      return court.toNormalized(p.x, p.y);
+    }
+
+    function isAllyHalf(norm) {
+      return norm.y > 0.5 && norm.y <= 1.0 && norm.x >= 0 && norm.x <= 1.0;
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      const pos  = canvasPos(e);
+      _cursorCanvas = pos;
+      const norm = court.toNormalized(pos.x, pos.y);
+
+      if (S.phase === 'idle' || S.phase === 'hovering') {
+        if (isAllyHalf(norm)) {
+          S.phase      = 'hovering';
+          S.cursorNorm = norm;
+        } else {
+          S.phase      = 'idle';
+          S.cursorNorm = null;
+        }
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      _cursorCanvas = { x: null, y: null };
+      if (S.phase === 'hovering') {
+        S.phase      = 'idle';
+        S.cursorNorm = null;
+      }
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (S.phase !== 'hovering') return;
+      const norm = getNorm(e);
+      if (!isAllyHalf(norm)) return;
+
+      const from = S.playerNorm;
+      const dist = Math.hypot(norm.x - from.x, norm.y - from.y);
+      if (dist < 0.01) return;   // too close, ignore
+
+      S.frozenDest = norm;
+      S.moveDur    = Math.round(Math.min(MOVE_DUR_MAX, Math.max(MOVE_DUR_MIN, MOVE_DUR_MIN + dist * 420)));
+      S.moveT      = 0;
+      S.moveStartMs = null;
+      S.phase      = 'moving';
+      S.cursorNorm = null;
+    });
+
+    // Touch support
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const pos  = canvasPos(e);
+      _cursorCanvas = pos;
+      const norm = court.toNormalized(pos.x, pos.y);
+      if (S.phase === 'idle' || S.phase === 'hovering') {
+        if (isAllyHalf(norm)) { S.phase = 'hovering'; S.cursorNorm = norm; }
+        else { S.phase = 'idle'; S.cursorNorm = null; }
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (S.phase !== 'hovering' || !S.cursorNorm) return;
+      const norm = S.cursorNorm;
+      const dist = Math.hypot(norm.x - S.playerNorm.x, norm.y - S.playerNorm.y);
+      if (dist < 0.01) return;
+      S.frozenDest  = norm;
+      S.moveDur     = Math.round(Math.min(MOVE_DUR_MAX, Math.max(MOVE_DUR_MIN, MOVE_DUR_MIN + dist * 420)));
+      S.moveT       = 0;
+      S.moveStartMs = null;
+      S.phase       = 'moving';
+      S.cursorNorm  = null;
+    }, { passive: false });
+
+    // ─── Boot ─────────────────────────────────────────────────────────────────
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
