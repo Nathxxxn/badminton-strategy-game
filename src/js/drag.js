@@ -316,13 +316,52 @@ export class DragShooter {
    *
    * Arc height adapts to power: tall arc for drop, flat arc for smash.
    */
+  /**
+   * Project the drag direction to a landing point in the opponent's half.
+   * Returns null if the player is dragging away from the net.
+   *
+   * When the pointer is already in the opponent's half, we use it directly.
+   * When the pointer is still in the ally half, we extend the direction vector
+   * to a realistic target depth (deep for smash, near-net for drop).
+   *
+   * @param {{ x: number, y: number }} aimPoint  Normalized pointer position
+   * @param {number} power
+   * @returns {{ x: number, y: number }|null}
+   */
+  _projectLanding(aimPoint, power) {
+    // Use raw canvas direction to avoid snap-grid dead zone:
+    // when pointer and shuttle share the same snap row, snapped dy=0 would
+    // wrongly suppress the preview even though the user is dragging upward.
+    if (!this._current || !this._origin ||
+        this._current.y >= this._origin.y) return null;
+
+    // Pointer already in opponent's half — use snapped aim directly
+    if (aimPoint.y < 0.5) return { x: aimPoint.x, y: aimPoint.y };
+
+    // Project using raw (unsnapped) normalized direction for accuracy
+    const raw = this.court.toNormalized(this._current.x, this._current.y);
+    const sx  = this._shuttleNorm.x;
+    const sy  = this._shuttleNorm.y;
+    const rdx = raw.x - sx;
+    const rdy = raw.y - sy;
+
+    if (rdy >= 0) return null;  // guard: should not happen given canvas check
+
+    // smash (power≈1): lands deep (y≈0.08) — drop (power≈0): lands close (y≈0.42)
+    const targetY = 0.08 + (1 - power) * 0.34;
+    const t       = (targetY - sy) / rdy;
+    const landX   = Math.max(0.02, Math.min(0.98, sx + t * rdx));
+
+    return snapToGrid(landX, targetY);
+  }
+
   _drawTrajectoryPreview(aimPoint, power) {
-    // Only show preview when aiming at opponent's half
-    if (aimPoint.y >= 0.5) return;
+    const landing = this._projectLanding(aimPoint, power);
+    if (!landing) return;  // dragging away from net
 
     const { ctx, court } = this;
     const from = court.toCanvas(this._shuttleNorm.x, this._shuttleNorm.y);
-    const to   = court.toCanvas(aimPoint.x, aimPoint.y);
+    const to   = court.toCanvas(landing.x, landing.y);
 
     // Arc height: inversely proportional to power (drop = tall, smash = flat)
     const arcFraction = 0.35 - power * 0.28;  // 0.35 (drop) → 0.07 (smash)
