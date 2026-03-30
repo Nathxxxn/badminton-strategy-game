@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Rally Test — Badminton Strategy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; overflow: hidden; font-family: system-ui, sans-serif; }
+    #canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: none; }
+
+    #round-hud {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 12px; align-items: center;
+    }
+    .rdot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: all 0.3s; }
+    .rdot.active { background: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
+    .rdot.done   { background: rgba(255,255,255,0.5); }
+
+    #hint {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.45); font: 13px/1 system-ui; letter-spacing: 0.08em;
+      text-transform: uppercase; pointer-events: none; transition: opacity 0.3s; white-space: nowrap;
+      opacity: 0;
+    }
+
+    #intro-screen {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      pointer-events: none; transition: opacity 0.5s;
+    }
+    #intro-title { font: bold 54px/1 system-ui; color: #fff; text-shadow: 0 0 50px rgba(59,130,246,0.6); letter-spacing: 0.04em; }
+    #intro-sub   { font: 14px/1 system-ui; color: rgba(255,255,255,0.35); letter-spacing: 0.16em; text-transform: uppercase; }
+
+    #overlay {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; pointer-events: none; gap: 28px;
+    }
+    #point-text {
+      font: bold 72px/1 system-ui; color: #fbbf24;
+      text-shadow: 0 0 50px rgba(251,191,36,0.8), 0 0 100px rgba(251,191,36,0.3);
+      opacity: 0; transition: opacity 0.5s; letter-spacing: 0.04em;
+    }
+    #replay-btn {
+      padding: 14px 44px; background: #2563eb; color: #fff; border: none;
+      border-radius: 8px; font: bold 14px/1 system-ui; letter-spacing: 0.1em;
+      text-transform: uppercase; cursor: pointer; pointer-events: all;
+      opacity: 0; transition: opacity 0.4s, transform 0.15s; display: none;
+    }
+    #replay-btn:hover  { background: #1d4ed8; transform: scale(1.03); }
+    #replay-btn.show   { opacity: 1; display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="round-hud">
+    <div class="rdot" id="rd0"></div>
+    <div class="rdot" id="rd1"></div>
+    <div class="rdot" id="rd2"></div>
+  </div>
+
+  <div id="hint"></div>
+
+  <div id="intro-screen">
+    <div id="intro-title">Mini Échange</div>
+    <div id="intro-sub">Déplacement · Tir · Réactivité</div>
+  </div>
+
+  <div id="overlay">
+    <div id="point-text">Point !</div>
+    <button id="replay-btn">Rejouer</button>
+  </div>
+
+  <script>
+    // ── COURT INLINE ──────────────────────────────────────────────────────────
+    const _CL=13.4,_CW=6.1,_NY=0.5;
+    const _SS=1.98/_CL,_LS=0.76/_CL,_SI=0.46/_CW;
+    const _SSTp=_NY-_SS,_SSBt=_NY+_SS,_LSTp=_LS,_LSBt=1-_LS,_SLt=_SI,_SRt=1-_SI;
+    const CC={bg:'#1a1a2e',sA:'#0d2b0d',sB:'#0f3d0f',ln:'#dde8dd',net:'#ffffff',ng:'rgba(255,255,255,0.18)'};
+    const PAD={top:48,right:32,bottom:48,left:32};
+    class Court {
+      constructor(c){this.canvas=c;this.ctx=c.getContext('2d');this.courtX=this.courtY=this.courtW=this.courtH=0;this._resize();this._fn=()=>{this._resize();this.draw();};window.addEventListener('resize',this._fn);}
+      destroy(){window.removeEventListener('resize',this._fn);}
+      toCanvas(nx,ny){return{x:this.courtX+nx*this.courtW,y:this.courtY+ny*this.courtH};}
+      toNormalized(px,py){return{x:(px-this.courtX)/this.courtW,y:(py-this.courtY)/this.courtH};}
+      draw(){
+        const{ctx:c,canvas:cv}=this,dpr=devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr;
+        c.clearRect(0,0,W,H);c.fillStyle=CC.bg;c.fillRect(0,0,W,H);
+        c.fillStyle=CC.sA;c.fillRect(this.courtX,this.courtY,this.courtW,this.courtH*.5);
+        c.fillStyle=CC.sB;c.fillRect(this.courtX,this.courtY+this.courtH*.5,this.courtW,this.courtH*.5);
+        c.strokeStyle=CC.ln;c.lineWidth=1.5;c.lineCap='square';
+        const h=(x0,x1,ny)=>{const a=this.toCanvas(x0,ny),b=this.toCanvas(x1,ny);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();};
+        const v=(nx,y0,y1)=>{const a=this.toCanvas(nx,y0),b=this.toCanvas(nx,y1);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();};
+        h(0,1,0);h(0,1,1);v(0,0,1);v(1,0,1);
+        v(_SLt,0,1);v(_SRt,0,1);
+        h(0,1,_SSTp);h(0,1,_SSBt);h(0,1,_LSTp);h(0,1,_LSBt);
+        v(.5,0,_SSTp);v(.5,_SSBt,1);
+        const l=this.toCanvas(0,_NY),r=this.toCanvas(1,_NY);
+        c.save();c.strokeStyle=CC.ng;c.lineWidth=9;c.lineCap='round';c.beginPath();c.moveTo(l.x,l.y);c.lineTo(r.x,r.y);c.stroke();
+        c.strokeStyle=CC.net;c.lineWidth=3;c.lineCap='square';c.beginPath();c.moveTo(l.x,l.y);c.lineTo(r.x,r.y);c.stroke();c.restore();
+      }
+      _resize(){const dpr=devicePixelRatio||1,W=this.canvas.clientWidth,H=this.canvas.clientHeight;if(!W||!H)return;this.canvas.width=Math.round(W*dpr);this.canvas.height=Math.round(H*dpr);this.ctx.setTransform(dpr,0,0,dpr,0,0);const aW=W-PAD.left-PAD.right,aH=H-PAD.top-PAD.bottom,asp=_CW/_CL;let cW,cH;if(aW/aH>asp){cH=aH;cW=cH*asp;}else{cW=aW;cH=cW/asp;}this.courtX=PAD.left+(aW-cW)/2;this.courtY=PAD.top+(aH-cH)/2;this.courtW=cW;this.courtH=cH;}
+    }
+
+    // ── SETUP ─────────────────────────────────────────────────────────────────
+    const canvas    = document.getElementById('canvas');
+    const ctx       = canvas.getContext('2d');
+    const court     = new Court(canvas);
+    const hintEl    = document.getElementById('hint');
+    const introEl   = document.getElementById('intro-screen');
+    const pointText = document.getElementById('point-text');
+    const replayBtn = document.getElementById('replay-btn');
+    const dots      = [0,1,2].map(i => document.getElementById(`rd${i}`));
+
+    // ── CONSTANTS ─────────────────────────────────────────────────────────────
+    const PLAYER_START  = { x:0.50, y:0.75 };
+    const OPP_START     = { x:0.50, y:0.20 };
+    const ACTIVATION_R  = 52;   // px radius to start drag
+    const MAX_DRAG_PX   = 160;
+    const SERVE_POWERS  = [0.44, 0.60, 0.80];
+    const R1_LANDING    = { x:0.68, y:0.70 };   // round 0 fixed landing
+
+    // ── MATH ──────────────────────────────────────────────────────────────────
+    const eio  = t => -(Math.cos(Math.PI*t)-1)/2;
+    const lerp = (a,b,t) => a+(b-a)*t;
+    const lN   = (a,b,t) => ({x:lerp(a.x,b.x,t), y:lerp(a.y,b.y,t)});
+    const dist = (a,b) => Math.hypot(b.x-a.x, b.y-a.y);
+
+    function cpx(e) {
+      const r=canvas.getBoundingClientRect(), s=e.touches?e.touches[0]:e;
+      return {x:s.clientX-r.left, y:s.clientY-r.top};
+    }
+
+    function powerColor(p) {
+      const st=[{t:0,r:74,g:222,b:128},{t:.4,r:74,g:222,b:128},{t:.65,r:250,g:204,b:21},{t:.85,r:249,g:115,b:22},{t:1,r:239,g:68,b:68}];
+      let lo=st[0],hi=st[st.length-1];
+      for(let i=0;i<st.length-1;i++){if(p>=st[i].t&&p<=st[i+1].t){lo=st[i];hi=st[i+1];break;}}
+      const f=lo.t===hi.t?0:(p-lo.t)/(hi.t-lo.t);
+      return `rgb(${Math.round(lo.r+(hi.r-lo.r)*f)},${Math.round(lo.g+(hi.g-lo.g)*f)},${Math.round(lo.b+(hi.b-lo.b)*f)})`;
+    }
+
+    // ── ARC DRAWING ───────────────────────────────────────────────────────────
+    function arcH(power, dPx) { return Math.max(14, dPx*(0.35-power*0.28)); }
+
+    function arcAt(fC, tC, h, t) {
+      const te=eio(t);
+      return {x:fC.x+(tC.x-fC.x)*te, y:fC.y+(tC.y-fC.y)*te - h*Math.sin(Math.PI*te)};
+    }
+
+    function tracePath(fC, tC, h) {
+      ctx.beginPath();
+      for(let i=0;i<=40;i++){
+        const t=i/40, px=fC.x+(tC.x-fC.x)*t, py=fC.y+(tC.y-fC.y)*t-h*Math.sin(Math.PI*t);
+        i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+      }
+    }
+
+    function drawArc(fC, tC, h, col, alpha, dashed, w=2.2) {
+      ctx.save(); ctx.lineCap='round';
+      if(dashed) ctx.setLineDash([6,5]);
+      ctx.globalAlpha=alpha*0.22; ctx.strokeStyle=col; ctx.lineWidth=w+5;
+      ctx.filter='blur(5px)'; tracePath(fC,tC,h); ctx.stroke();
+      ctx.filter='none'; ctx.globalAlpha=alpha; ctx.lineWidth=w;
+      tracePath(fC,tC,h); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+
+    // ── SHUTTLE ───────────────────────────────────────────────────────────────
+    function drawShuttle(norm, alpha=1) {
+      const {x,y}=court.toCanvas(norm.x,norm.y), r=court.courtW*0.022, cr=court.courtW*0.008;
+      ctx.save(); ctx.globalAlpha=alpha;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle='rgba(251,191,36,0.28)'; ctx.fill();
+      ctx.strokeStyle='#b45309'; ctx.lineWidth=1.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x,y,cr,0,Math.PI*2); ctx.fillStyle='#fbbf24'; ctx.fill();
+      ctx.strokeStyle='#b45309'; ctx.lineWidth=1; ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawShuttleInFlight(fC, tC, h, t) {
+      for(let i=5;i>=1;i--){
+        const tt=Math.max(0,t-i*0.042), p=arcAt(fC,tC,h,tt);
+        drawShuttle(court.toNormalized(p.x,p.y),(1-i/6)*0.5);
+      }
+      const p=arcAt(fC,tC,h,t);
+      drawShuttle(court.toNormalized(p.x,p.y));
+    }
+
+    // ── PLAYER CIRCLE ─────────────────────────────────────────────────────────
+    function drawPlayer(norm, alpha=1, {isOpp=false, glow=false, ghost=false}={}) {
+      const {x,y}=court.toCanvas(norm.x,norm.y), r=court.courtW*0.038;
+      const base=isOpp?'#dc2626':'#2563eb', dark=isOpp?'#b91c1c':'#1d4ed8';
+      const glR=isOpp?'rgba(220,38,38,':'rgba(37,99,235,';
+      ctx.save(); ctx.globalAlpha=alpha;
+      if(glow){ctx.beginPath();ctx.arc(x,y,r*2.2,0,Math.PI*2);ctx.fillStyle=glR+'0.22)';ctx.filter='blur(6px)';ctx.fill();ctx.filter='none';}
+      const g=ctx.createRadialGradient(x,y,r*.3,x,y,r*2.2);
+      g.addColorStop(0,glR+'0.28)');g.addColorStop(1,glR+'0)');
+      ctx.beginPath();ctx.arc(x,y,r*2.2,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+      if(ghost){
+        ctx.fillStyle=isOpp?'rgba(220,38,38,0.18)':'rgba(37,99,235,0.18)';ctx.fill();
+        ctx.setLineDash([4,3]);ctx.strokeStyle=isOpp?'#ef4444':'#3b82f6';ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle=base;ctx.fill();ctx.strokeStyle=dark;ctx.lineWidth=2;ctx.stroke();
+      }
+      ctx.globalAlpha=alpha*(ghost?.45:1);
+      ctx.font=`bold ${Math.round(r*.68)}px system-ui`;
+      ctx.fillStyle=ghost?(isOpp?'#fca5a5':'#93c5fd'):'#fff';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(isOpp?'ADV':'YOU',x,y+.5);
+      ctx.restore();
+    }
+
+    // ── PLAYER GHOST TRAIL ────────────────────────────────────────────────────
+    function drawPlayerTrail(from, to, te, isOpp=false) {
+      const alphas=[0.40,0.25,0.12];
+      for(let i=3;i>=1;i--){
+        const tt=Math.max(0,te-i*0.07);
+        drawPlayer(lN(from,to,tt), alphas[i-1], {isOpp});
+      }
+    }
+
+    // ── LANDING RING (pulsing indicator) ──────────────────────────────────────
+    function drawLandingRing(norm, col, alpha, pulse=false) {
+      const {x,y}=court.toCanvas(norm.x,norm.y);
+      const p=pulse ? 1+0.18*Math.sin(Date.now()/200) : 1;
+      ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle=col;
+      ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,19*p,0,Math.PI*2); ctx.stroke();
+      ctx.lineWidth=1.8; ctx.beginPath(); ctx.arc(x,y,10*p,0,Math.PI*2); ctx.stroke();
+      const s=7*p; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);ctx.moveTo(x,y-s);ctx.lineTo(x,y+s);ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── LANDING EFFECT (rings expanding) ─────────────────────────────────────
+    function drawLandingEffect(norm, elapsed, col, scale=1) {
+      const {x,y}=court.toCanvas(norm.x,norm.y);
+      if(elapsed<80){
+        const fa=(1-elapsed/80)*0.40*scale;
+        const gr=ctx.createRadialGradient(x,y,0,x,y,70*scale);
+        gr.addColorStop(0,`rgba(255,255,255,${fa})`);gr.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.save();ctx.fillStyle=gr;ctx.fillRect(x-80,y-80,160,160);ctx.restore();
+      }
+      [{maxR:18,dur:380,delay:0,oa:1},{maxR:30,dur:480,delay:50,oa:.6},{maxR:44,dur:580,delay:100,oa:.3}].forEach(({maxR,dur,delay,oa})=>{
+        const e=elapsed-delay; if(e<=0||e>=dur) return;
+        const t=e/dur;
+        ctx.save();ctx.globalAlpha=oa*(1-t);ctx.strokeStyle=col;ctx.lineWidth=1.8;
+        ctx.beginPath();ctx.arc(x,y,7*scale+(maxR*scale-7*scale)*t,0,Math.PI*2);ctx.stroke();ctx.restore();
+      });
+    }
+
+    // ── ARRIVAL FLASH ─────────────────────────────────────────────────────────
+    function drawArrivalFlash(norm, elapsed) {
+      const {x,y}=court.toCanvas(norm.x,norm.y);
+      if(elapsed<150){
+        const t=elapsed/150, gr=ctx.createRadialGradient(x,y,0,x,y,50*t+5);
+        gr.addColorStop(0,`rgba(59,130,246,${(1-t)*0.42})`);gr.addColorStop(1,'rgba(59,130,246,0)');
+        ctx.save();ctx.fillStyle=gr;ctx.fillRect(x-65,y-65,130,130);ctx.restore();
+      }
+      const gt=Math.min(1,elapsed/300), ga=gt<.3?gt/.3:1-(gt-.3)/.7;
+      const r=court.courtW*0.038;
+      ctx.save();ctx.globalAlpha=ga*.5;ctx.beginPath();ctx.arc(x,y,r*2.8,0,Math.PI*2);
+      ctx.fillStyle='rgba(59,130,246,0.35)';ctx.filter='blur(8px)';ctx.fill();ctx.filter='none';ctx.restore();
+    }
+
+    // ── POINT EFFECT ──────────────────────────────────────────────────────────
+    function drawPointEffect(norm, elapsed) {
+      const {x,y}=court.toCanvas(norm.x,norm.y);
+      if(elapsed<120){
+        const fa=(1-elapsed/120)*0.55;
+        const dpr=devicePixelRatio||1;
+        const gr=ctx.createRadialGradient(x,y,0,x,y,150);
+        gr.addColorStop(0,`rgba(251,191,36,${fa})`);gr.addColorStop(1,'rgba(251,191,36,0)');
+        ctx.save();ctx.fillStyle=gr;ctx.fillRect(0,0,canvas.width/dpr,canvas.height/dpr);ctx.restore();
+      }
+      [{maxR:28,dur:500,delay:0,oa:1},{maxR:50,dur:650,delay:60,oa:.6},{maxR:75,dur:800,delay:120,oa:.3}].forEach(({maxR,dur,delay,oa})=>{
+        const e=elapsed-delay; if(e<=0||e>=dur) return;
+        const t=e/dur;
+        ctx.save();ctx.globalAlpha=oa*(1-t);ctx.strokeStyle='#fbbf24';ctx.lineWidth=2.5;
+        ctx.beginPath();ctx.arc(x,y,8+(maxR-8)*t,0,Math.PI*2);ctx.stroke();ctx.restore();
+      });
+    }
+
+    // ── PROJECT PLAYER SHOT LANDING ───────────────────────────────────────────
+    function projectLanding(origin, current, shuttleNorm) {
+      const dx=current.x-origin.x, dy=current.y-origin.y;
+      if(dy<=0) return null;
+      const power=Math.min(1,Math.hypot(dx,dy)/MAX_DRAG_PX);
+      if(power<0.05) return null;
+      const targetY=0.08+(1-power)*0.34;
+      const ratio=dx/dy;
+      const landX=Math.max(0.03,Math.min(0.97, shuttleNorm.x-ratio*(shuttleNorm.y-targetY)));
+      return {landNorm:{x:landX, y:targetY}, power};
+    }
+
+    // ── COMPUTE OPP COUNTER LANDING ───────────────────────────────────────────
+    function oppCounterLanding(playerShotTo) {
+      const x=playerShotTo.x;
+      let tx;
+      if(x<0.38)      tx=0.60+Math.random()*0.10;
+      else if(x>0.62) tx=0.28+Math.random()*0.10;
+      else            tx=0.42+Math.random()*0.14;
+      return {x:Math.max(0.05,Math.min(0.95,tx)), y:0.64+Math.random()*0.14};
+    }
+
+    // ── GAME STATE ────────────────────────────────────────────────────────────
+    function mkState() {
+      return {
+        phase: 'intro', round: 0,
+        playerNorm:  {...PLAYER_START},
+        oppNorm:     {...OPP_START},
+        shuttleNorm: {...OPP_START},
+
+        oppFlight:    null,   // {fromNorm,toNorm,power,col,dur,startMs}
+        oppMove:      null,   // {from,to,dur,startMs} — reactive to player shot
+        playerMove:   null,   // {from,to,dur,startMs,arrivingMs}
+
+        dragOrigin:  null, dragCurrent: null, dragActive: false,
+        frozenArc:   null,   // {fromNorm,toNorm,power,col}
+        flightT:     0, flightDur: 550, flightStartMs: null,
+
+        landingEffect: null, // {norm,startMs,col}
+        pointEffect:   null, // {norm,startMs}
+
+        nextServeLanding: null,
+        cursorNorm:       null,
+        cursorCanvas:     {x:null,y:null},
+        phaseMs:          null,
+      };
+    }
+    let S = mkState();
+
+    // ── HUD / HINT HELPERS ────────────────────────────────────────────────────
+    function updateHUD() {
+      dots.forEach((d,i)=>{
+        d.className='rdot'+(i<S.round?' done':i===S.round?' active':'');
+      });
+    }
+    function setHint(t) { hintEl.textContent=t; hintEl.style.opacity=t?'1':'0'; }
+    function goPhase(p) { S.phase=p; S.phaseMs=null; }
+
+    // ── PHASE: INTRO ──────────────────────────────────────────────────────────
+    function doIntro(ts) {
+      if(!S.phaseMs) S.phaseMs=ts;
+      drawPlayer(S.playerNorm);
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      if(ts-S.phaseMs>1800) {
+        introEl.style.opacity='0';
+        setTimeout(()=>introEl.style.display='none',500);
+        updateHUD();
+        goPhase('opp_wind_up');
+      }
+    }
+
+    // ── PHASE: OPP WIND UP ────────────────────────────────────────────────────
+    function doOppWindUp(ts) {
+      if(!S.phaseMs) S.phaseMs=ts;
+      const el=ts-S.phaseMs;
+      drawShuttle(S.oppNorm);
+      drawPlayer(S.oppNorm,1,{isOpp:true,glow:el>150});
+      drawPlayer(S.playerNorm);
+      if(el>500) {
+        const landing = S.round===0 ? R1_LANDING : S.nextServeLanding;
+        const power   = SERVE_POWERS[S.round];
+        const fC=court.toCanvas(S.oppNorm.x,S.oppNorm.y);
+        const tC=court.toCanvas(landing.x,landing.y);
+        const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
+        const dur=320+(1-power)*530;
+        S.oppFlight={fromNorm:{...S.oppNorm},toNorm:{...landing},power,col:powerColor(power),dur,startMs:null};
+        S.shuttleNorm={...S.oppNorm};
+        goPhase('opp_flight');
+      }
+    }
+
+    // ── PHASE: OPP FLIGHT ─────────────────────────────────────────────────────
+    function doOppFlight(ts) {
+      const f=S.oppFlight;
+      if(!f.startMs) f.startMs=ts;
+      const t=Math.min(1,(ts-f.startMs)/f.dur);
+      const fC=court.toCanvas(f.fromNorm.x,f.fromNorm.y);
+      const tC=court.toCanvas(f.toNorm.x,f.toNorm.y);
+      const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
+      const h=arcH(f.power,dPx);
+
+      drawLandingRing(f.toNorm,f.col,0.7,true);
+      drawShuttleInFlight(fC,tC,h,t);
+      const pos=arcAt(fC,tC,h,t);
+      S.shuttleNorm=court.toNormalized(pos.x,pos.y);
+
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawPlayer(S.playerNorm);
+
+      if(t>=1) {
+        S.shuttleNorm={...f.toNorm};
+        S.landingEffect={norm:{...f.toNorm},startMs:null,col:f.col};
+        goPhase('opp_landing');
+      }
+    }
+
+    // ── PHASE: OPP LANDING ────────────────────────────────────────────────────
+    function doOppLanding(ts) {
+      const le=S.landingEffect;
+      if(!le.startMs) le.startMs=ts;
+      const el=ts-le.startMs;
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawPlayer(S.playerNorm);
+      drawShuttle(S.shuttleNorm);
+      drawLandingEffect(le.norm,el,le.col);
+      if(el>520) { S.landingEffect=null; setHint('Déplace-toi pour recevoir !'); goPhase('player_move'); }
+    }
+
+    // ── PHASE: PLAYER MOVE (click to move) ───────────────────────────────────
+    function doPlayerMove(ts) {
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawShuttle(S.shuttleNorm);
+      drawLandingRing(S.shuttleNorm,'#3b82f6',0.45,true);
+
+      const cn=S.cursorNorm;
+      if(cn && cn.y>0.5 && cn.y<=1) {
+        const fC=court.toCanvas(S.playerNorm.x,S.playerNorm.y);
+        const tC=court.toCanvas(cn.x,cn.y);
+        ctx.save();ctx.globalAlpha=0.35;ctx.strokeStyle='#3b82f6';ctx.lineWidth=1.5;
+        ctx.setLineDash([5,4]);ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(fC.x,fC.y);ctx.lineTo(tC.x,tC.y);ctx.stroke();
+        ctx.setLineDash([]);ctx.restore();
+        drawPlayer(S.playerNorm);
+        drawPlayer(cn,0.82,{ghost:true});
+      } else {
+        drawPlayer(S.playerNorm);
+      }
+      drawCursor();
+    }
+
+    // ── PHASE: PLAYER MOVING ─────────────────────────────────────────────────
+    function doPlayerMoving(ts) {
+      const m=S.playerMove;
+      if(!m.startMs) m.startMs=ts;
+      const t=Math.min(1,(ts-m.startMs)/m.dur);
+      const te=eio(t);
+
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawShuttle(S.shuttleNorm);
+
+      if((1-te)*0.28>0.02) drawPlayer(m.from,(1-te)*0.28);
+      drawPlayerTrail(m.from,m.to,te);
+      const cur=lN(m.from,m.to,te);
+      S.playerNorm={...cur};
+      drawPlayer(cur,1,{glow:true});
+
+      if(t>=1) {
+        S.playerNorm={...m.to};
+        if(!m.arrivingMs) m.arrivingMs=ts;
+        const ae=ts-m.arrivingMs;
+        drawArrivalFlash(S.playerNorm,ae);
+        if(ae>400) {
+          S.playerMove=null;
+          setHint('Tire !');
+          goPhase('player_shoot');
+        }
+      }
+    }
+
+    // ── PHASE: PLAYER SHOOT ───────────────────────────────────────────────────
+    function doPlayerShoot(ts) {
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+
+      if(S.dragActive && S.dragOrigin && S.dragCurrent) {
+        const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm);
+        if(proj) {
+          const fC=court.toCanvas(S.shuttleNorm.x,S.shuttleNorm.y);
+          const tC=court.toCanvas(proj.landNorm.x,proj.landNorm.y);
+          const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
+          const h=arcH(proj.power,dPx), col=powerColor(proj.power);
+          drawArc(fC,tC,h,col,0.65,true);
+          drawLandingRing(proj.landNorm,col,0.9,true);
+        }
+        const dx=S.dragCurrent.x-S.dragOrigin.x, dy=S.dragCurrent.y-S.dragOrigin.y;
+        const len=Math.hypot(dx,dy);
+        if(len>6) {
+          const col=powerColor(Math.min(1,len/MAX_DRAG_PX));
+          ctx.save();ctx.globalAlpha=0.85;ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.lineCap='round';
+          ctx.beginPath();ctx.arc(S.dragOrigin.x,S.dragOrigin.y,9,0,Math.PI*2);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(S.dragOrigin.x,S.dragOrigin.y);ctx.lineTo(S.dragCurrent.x,S.dragCurrent.y);ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      drawPlayer(S.playerNorm);
+      drawShuttle(S.shuttleNorm);
+      drawCursor();
+    }
+
+    // ── PHASE: PLAYER FLIGHT (+ opp reactive move) ────────────────────────────
+    function doPlayerFlight(ts) {
+      const f=S.frozenArc;
+      if(!S.flightStartMs) S.flightStartMs=ts;
+      S.flightT=Math.min(1,(ts-S.flightStartMs)/S.flightDur);
+
+      const fC=court.toCanvas(f.fromNorm.x,f.fromNorm.y);
+      const tC=court.toCanvas(f.toNorm.x,f.toNorm.y);
+      const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
+      const h=arcH(f.power,dPx);
+
+      // Frozen arc (fades as shuttle travels)
+      drawArc(fC,tC,h,f.col,0.45-S.flightT*0.30,true,2.5);
+      drawLandingRing(f.toNorm,f.col,0.5*(1-S.flightT*.7),false);
+
+      // Shuttle with trail
+      drawShuttleInFlight(fC,tC,h,S.flightT);
+
+      drawPlayer(S.playerNorm);
+
+      // ── OPPONENT REACTIVE MOVEMENT ────────────────────────────────────────
+      const om=S.oppMove;
+      if(om) {
+        if(!om.startMs) om.startMs=ts;
+        const ot=Math.min(1,(ts-om.startMs)/om.dur);
+        const ote=eio(ot);
+        if((1-ote)*0.28>0.02) drawPlayer(om.from,(1-ote)*0.28,{isOpp:true});
+        drawPlayerTrail(om.from,om.to,ote,true);
+        const oppCur=lN(om.from,om.to,ote);
+        S.oppNorm={...oppCur};
+        drawPlayer(oppCur,1,{isOpp:true,glow:true});
+      } else {
+        drawPlayer(S.oppNorm,1,{isOpp:true});
+      }
+
+      if(S.flightT>=1) {
+        S.shuttleNorm={...f.toNorm};
+        if(S.oppMove) { S.oppNorm={...S.oppMove.to}; S.oppMove=null; }
+        S.landingEffect={norm:{...f.toNorm},startMs:null,col:f.col};
+        S.frozenArc=null; S.flightT=0; S.flightStartMs=null;
+        goPhase('landing_at_opp');
+      }
+    }
+
+    // ── PHASE: LANDING AT OPP ─────────────────────────────────────────────────
+    function doLandingAtOpp(ts) {
+      const le=S.landingEffect;
+      if(!le.startMs) le.startMs=ts;
+      const el=ts-le.startMs;
+
+      drawPlayer(S.playerNorm);
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawShuttle(S.shuttleNorm);
+      drawLandingEffect(le.norm,el,le.col);
+
+      if(el>620) {
+        S.landingEffect=null;
+        if(S.round<2) {
+          S.round++; updateHUD(); setHint('');
+          goPhase('opp_wind_up');
+        } else {
+          S.pointEffect={norm:{...S.shuttleNorm},startMs:null};
+          goPhase('point');
+        }
+      }
+    }
+
+    // ── PHASE: POINT ──────────────────────────────────────────────────────────
+    function doPoint(ts) {
+      const pe=S.pointEffect;
+      if(!pe.startMs) {
+        pe.startMs=ts;
+        pointText.style.opacity='1';
+        setTimeout(()=>{
+          replayBtn.style.display='block';
+          setTimeout(()=>replayBtn.classList.add('show'),50);
+        },1000);
+      }
+      const el=ts-pe.startMs;
+      drawPlayer(S.playerNorm);
+      drawPlayer(S.oppNorm,1,{isOpp:true});
+      drawShuttle(S.shuttleNorm);
+      drawPointEffect(pe.norm,el);
+    }
+
+    // ── CUSTOM CURSOR ─────────────────────────────────────────────────────────
+    function drawCursor() {
+      const cc=S.cursorCanvas;
+      if(!cc.x) return;
+      const n=S.cursorNorm;
+      if(!n||n.y<=0.5||n.y>1||n.x<0||n.x>1) return;
+      ctx.save();ctx.beginPath();ctx.arc(cc.x,cc.y,4,0,Math.PI*2);
+      ctx.fillStyle='#93c5fd';ctx.globalAlpha=0.8;ctx.fill();ctx.restore();
+    }
+
+    // ── RENDER LOOP ───────────────────────────────────────────────────────────
+    function render(ts) {
+      requestAnimationFrame(render);
+      court.draw();
+      switch(S.phase) {
+        case 'intro':          doIntro(ts);         break;
+        case 'opp_wind_up':    doOppWindUp(ts);     break;
+        case 'opp_flight':     doOppFlight(ts);     break;
+        case 'opp_landing':    doOppLanding(ts);    break;
+        case 'player_move':    doPlayerMove(ts);    break;
+        case 'player_moving':  doPlayerMoving(ts);  break;
+        case 'player_shoot':   doPlayerShoot(ts);   break;
+        case 'player_flight':  doPlayerFlight(ts);  break;
+        case 'landing_at_opp': doLandingAtOpp(ts);  break;
+        case 'point':          doPoint(ts);         break;
+      }
+    }
+
+    // ── INPUT: MOUSE MOVE ─────────────────────────────────────────────────────
+    canvas.addEventListener('mousemove', e => {
+      const pos=cpx(e);
+      S.cursorCanvas={...pos};
+      S.cursorNorm=court.toNormalized(pos.x,pos.y);
+
+      if(S.dragActive && S.dragOrigin) S.dragCurrent=pos;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      S.cursorCanvas={x:null,y:null}; S.cursorNorm=null;
+      if(S.dragActive) { S.dragActive=false; S.dragOrigin=null; S.dragCurrent=null; }
+    });
+
+    // ── INPUT: CLICK → move player ────────────────────────────────────────────
+    canvas.addEventListener('click', e => {
+      if(S.phase!=='player_move') return;
+      const pos=cpx(e), n=court.toNormalized(pos.x,pos.y);
+      if(n.y<=0.5||n.y>1||n.x<0||n.x>1) return;
+      const d=dist(S.playerNorm,n);
+      if(d<0.01) return;
+      const moveDur=Math.round(Math.min(560,Math.max(280,280+d*420)));
+      S.playerMove={from:{...S.playerNorm},to:{...n},dur:moveDur,startMs:null,arrivingMs:null};
+      S.cursorNorm=null;
+      setHint('');
+      goPhase('player_moving');
+    });
+
+    // ── INPUT: POINTER DOWN → start drag ─────────────────────────────────────
+    canvas.addEventListener('pointerdown', e => {
+      if(S.phase!=='player_shoot') return;
+      const pos=cpx(e);
+      const sC=court.toCanvas(S.shuttleNorm.x,S.shuttleNorm.y);
+      const dPx=Math.hypot(pos.x-sC.x,pos.y-sC.y);
+      if(dPx>ACTIVATION_R) return;
+      e.preventDefault();
+      S.dragActive=true; S.dragOrigin={...pos}; S.dragCurrent={...pos};
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      if(!S.dragActive) return;
+      e.preventDefault();
+      S.dragCurrent=cpx(e);
+    });
+
+    canvas.addEventListener('pointerup', e => {
+      if(!S.dragActive) return;
+      e.preventDefault();
+      const proj=projectLanding(S.dragOrigin,S.dragCurrent,S.shuttleNorm);
+      S.dragActive=false;
+
+      if(!proj) { S.dragOrigin=null; S.dragCurrent=null; return; }
+
+      const {landNorm,power}=proj;
+      const col=powerColor(power);
+      const fC=court.toCanvas(S.shuttleNorm.x,S.shuttleNorm.y);
+      const tC=court.toCanvas(landNorm.x,landNorm.y);
+      const dPx=Math.hypot(tC.x-fC.x,tC.y-fC.y);
+      const flightDur=Math.round(320+(1-power)*530);
+
+      S.frozenArc={fromNorm:{...S.shuttleNorm},toNorm:{...landNorm},power,col};
+      S.flightDur=flightDur; S.flightT=0; S.flightStartMs=null;
+      S.dragOrigin=null; S.dragCurrent=null;
+
+      // ── OPP REACTS: moves to where player shot ────────────────────────────
+      S.oppMove={
+        from:{...S.oppNorm},
+        to:{...landNorm},         // opponent goes exactly where the shuttle lands
+        dur:Math.round(flightDur*0.82),  // arrives slightly before shuttle
+        startMs:null,
+      };
+
+      // Compute next opp counter (for round 1 and 2)
+      S.nextServeLanding=oppCounterLanding(landNorm);
+
+      setHint('');
+      goPhase('player_flight');
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      S.dragActive=false; S.dragOrigin=null; S.dragCurrent=null;
+    });
+
+    // ── TOUCH: move (prevents scroll) ─────────────────────────────────────────
+    canvas.addEventListener('touchmove', e=>{ e.preventDefault(); }, {passive:false});
+
+    // ── REPLAY ────────────────────────────────────────────────────────────────
+    replayBtn.addEventListener('click', () => {
+      pointText.style.opacity='0';
+      replayBtn.classList.remove('show');
+      setTimeout(()=>replayBtn.style.display='none',400);
+      S=mkState();
+      introEl.style.display='flex'; introEl.style.opacity='1';
+      setHint('');
+      dots.forEach(d=>d.className='rdot');
+    });
+
+    // ── BOOT ─────────────────────────────────────────────────────────────────
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>

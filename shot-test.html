@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Shot Test — Badminton Strategy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; overflow: hidden; }
+    #canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #hint {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.4);
+      font: 13px/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 0.4s;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hint">Appuie sur le volant · tire en arrière pour viser · relâche pour frapper</div>
+
+  <script>
+    // ─── court.js inlined (avoids file:// CORS block on ES modules) ──────────
+
+    const COURT_LENGTH = 13.4;
+    const COURT_WIDTH  = 6.1;
+    const NET_Y        = 0.5;
+    const SHORT_SVC_DIST    = 1.98  / COURT_LENGTH;
+    const LONG_SVC_DBL_DIST = 0.76  / COURT_LENGTH;
+    const SINGLES_SIDE_DIST = 0.46  / COURT_WIDTH;
+    const SHORT_SVC_TOP  = NET_Y - SHORT_SVC_DIST;
+    const SHORT_SVC_BOT  = NET_Y + SHORT_SVC_DIST;
+    const LONG_SVC_TOP   = LONG_SVC_DBL_DIST;
+    const LONG_SVC_BOT   = 1 - LONG_SVC_DBL_DIST;
+    const SINGLES_LEFT   = SINGLES_SIDE_DIST;
+    const SINGLES_RIGHT  = 1 - SINGLES_SIDE_DIST;
+    const COLOUR = {
+      pageBg: '#1a1a2e', surfaceA: '#0d2b0d', surfaceB: '#0f3d0f',
+      lines: '#dde8dd', net: '#ffffff', netGlow: 'rgba(255,255,255,0.18)',
+    };
+    const LINE_W = 1.5, NET_W = 3;
+    const PAD = { top: 48, right: 32, bottom: 48, left: 32 };
+
+    class Court {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx    = canvas.getContext('2d');
+        this.courtX = 0; this.courtY = 0; this.courtW = 0; this.courtH = 0;
+        this._resize();
+        this._onResize = () => { this._resize(); this.draw(); };
+        window.addEventListener('resize', this._onResize);
+      }
+      destroy() { window.removeEventListener('resize', this._onResize); }
+      toCanvas(nx, ny) {
+        return { x: this.courtX + nx * this.courtW, y: this.courtY + ny * this.courtH };
+      }
+      toNormalized(px, py) {
+        return { x: (px - this.courtX) / this.courtW, y: (py - this.courtY) / this.courtH };
+      }
+      draw() {
+        const { ctx, canvas } = this;
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = canvas.width / dpr, cssH = canvas.height / dpr;
+        ctx.clearRect(0, 0, cssW, cssH);
+        ctx.fillStyle = COLOUR.pageBg; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = COLOUR.surfaceA; ctx.fillRect(this.courtX, this.courtY, this.courtW, this.courtH * 0.5);
+        ctx.fillStyle = COLOUR.surfaceB; ctx.fillRect(this.courtX, this.courtY + this.courtH * 0.5, this.courtW, this.courtH * 0.5);
+        ctx.strokeStyle = COLOUR.lines; ctx.lineWidth = LINE_W; ctx.lineCap = 'square';
+        this._hLine(0,1,0); this._hLine(0,1,1); this._vLine(0,0,1); this._vLine(1,0,1);
+        this._vLine(SINGLES_LEFT,0,1); this._vLine(SINGLES_RIGHT,0,1);
+        this._hLine(0,1,SHORT_SVC_TOP); this._hLine(0,1,SHORT_SVC_BOT);
+        this._hLine(0,1,LONG_SVC_TOP); this._hLine(0,1,LONG_SVC_BOT);
+        this._vLine(0.5,0,SHORT_SVC_TOP); this._vLine(0.5,SHORT_SVC_BOT,1);
+        const l = this.toCanvas(0, NET_Y), r = this.toCanvas(1, NET_Y);
+        ctx.save();
+        ctx.strokeStyle = COLOUR.netGlow; ctx.lineWidth = NET_W + 6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
+        ctx.strokeStyle = COLOUR.net; ctx.lineWidth = NET_W; ctx.lineCap = 'square';
+        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
+        ctx.restore();
+      }
+      _hLine(x0,x1,ny) { const a=this.toCanvas(x0,ny),b=this.toCanvas(x1,ny); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
+      _vLine(nx,y0,y1) { const a=this.toCanvas(nx,y0),b=this.toCanvas(nx,y1); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
+      _resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = this.canvas.clientWidth, cssH = this.canvas.clientHeight;
+        if (cssW === 0 || cssH === 0) return;
+        this.canvas.width  = Math.round(cssW * dpr);
+        this.canvas.height = Math.round(cssH * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this._updateLayout(cssW, cssH);
+      }
+      _updateLayout(cssW, cssH) {
+        const availW = cssW - PAD.left - PAD.right;
+        const availH = cssH - PAD.top  - PAD.bottom;
+        const courtAspect = COURT_WIDTH / COURT_LENGTH;
+        const availAspect = availW / availH;
+        let courtW, courtH;
+        if (availAspect > courtAspect) { courtH = availH; courtW = courtH * courtAspect; }
+        else { courtW = availW; courtH = courtW / courtAspect; }
+        this.courtX = PAD.left + (availW - courtW) / 2;
+        this.courtY = PAD.top  + (availH - courtH) / 2;
+        this.courtW = courtW;
+        this.courtH = courtH;
+      }
+    }
+
+    // ─── Setup ────────────────────────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+    const court  = new Court(canvas);
+    const hint   = document.getElementById('hint');
+
+    // ─── Constants ────────────────────────────────────────────────────────────
+    const PLAYER_NORM  = { x: 0.50, y: 0.70 };
+    const ACTIVATION_R = 40;    // CSS px radius to activate drag
+    const MAX_DRAG_PX  = 160;   // drag length = full power
+
+    // ─── Central state ────────────────────────────────────────────────────────
+    const S = {
+      phase:          'ready',
+      dragOrigin:     null,   // {x,y} canvas px — shuttle position at press
+      dragCurrent:    null,   // {x,y} canvas px — current pointer position
+      frozenArc:      null,   // {fromNorm, toNorm, power, colour}
+      flightT:        0,      // 0→1 flight progress
+      flightDuration: 550,
+      flightStartMs:  null,
+      landingMs:      null,
+      shuttleNorm:    { ...PLAYER_NORM },
+    };
+
+    // ─── Math helpers ─────────────────────────────────────────────────────────
+    const easeInOut = t => -(Math.cos(Math.PI * t) - 1) / 2;
+
+    function canvasPos(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    // Power → interpolated rgb colour
+    function powerColor(p) {
+      const stops = [
+        { t: 0.00, r: 74,  g: 222, b: 128 },
+        { t: 0.40, r: 74,  g: 222, b: 128 },
+        { t: 0.65, r: 250, g: 204, b: 21  },
+        { t: 0.85, r: 249, g: 115, b: 22  },
+        { t: 1.00, r: 239, g: 68,  b: 68  },
+      ];
+      let lo = stops[0], hi = stops[stops.length - 1];
+      for (let i = 0; i < stops.length - 1; i++) {
+        if (p >= stops[i].t && p <= stops[i + 1].t) { lo = stops[i]; hi = stops[i + 1]; break; }
+      }
+      const f = lo.t === hi.t ? 0 : (p - lo.t) / (hi.t - lo.t);
+      return `rgb(${Math.round(lo.r+(hi.r-lo.r)*f)},${Math.round(lo.g+(hi.g-lo.g)*f)},${Math.round(lo.b+(hi.b-lo.b)*f)})`;
+    }
+
+    // ─── Landing projection (swing inversé) ──────────────────────────────────
+    // The player drags AWAY from the target. Shot goes in the OPPOSITE direction.
+    // dragOrigin = shuttle canvas pos, dragCurrent = pointer canvas pos.
+    function projectLanding(origin, current) {
+      const dx = current.x - origin.x;
+      const dy = current.y - origin.y;   // positive = downward on screen (toward player)
+
+      if (dy <= 0) return null;            // must drag downward (away from net)
+
+      const power = Math.min(1, Math.hypot(dx, dy) / MAX_DRAG_PX);
+      if (power < 0.05) return null;
+
+      // Target depth: smash (p=1) deep (y≈0.08), drop (p≈0.3) near net (y≈0.42)
+      const targetY = 0.08 + (1 - power) * 0.34;
+
+      // Lateral: drag right → shot goes left. ratio = dx/dy applied in normalized space.
+      const sn    = S.shuttleNorm;
+      const ratio = dx / dy;
+      const landX = Math.max(0.03, Math.min(0.97, sn.x - ratio * (sn.y - targetY)));
+
+      return { landNorm: { x: landX, y: targetY }, power };
+    }
+
+    // ─── Arc geometry ─────────────────────────────────────────────────────────
+    function arcH(power, distPx) {
+      return Math.max(14, distPx * (0.35 - power * 0.28));
+    }
+
+    // Canvas position of the shuttle at normalised time t along the arc
+    function arcAt(fromC, toC, h, t) {
+      const te = easeInOut(t);
+      return {
+        x: fromC.x + (toC.x - fromC.x) * te,
+        y: fromC.y + (toC.y - fromC.y) * te - h * Math.sin(Math.PI * te),
+      };
+    }
+
+    // ─── Draw: parabolic arc (with glow) ──────────────────────────────────────
+    function tracePath(fromC, toC, h) {
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const t  = i / 40;
+        const px = fromC.x + (toC.x - fromC.x) * t;
+        const py = fromC.y + (toC.y - fromC.y) * t - h * Math.sin(Math.PI * t);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+    }
+
+    function drawArc(fromC, toC, h, colour, alpha, dashed, width = 2.2) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      if (dashed) ctx.setLineDash([6, 5]);
+
+      // Glow pass
+      ctx.globalAlpha = alpha * 0.22;
+      ctx.strokeStyle = colour;
+      ctx.lineWidth   = width + 5;
+      ctx.filter      = 'blur(5px)';
+      tracePath(fromC, toC, h);
+      ctx.stroke();
+
+      // Sharp pass
+      ctx.filter      = 'none';
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth   = width;
+      tracePath(fromC, toC, h);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // ─── Draw: landing indicator ──────────────────────────────────────────────
+    function drawLandingTarget(toC, colour, alpha, pulsing) {
+      const pulse = pulsing ? 1 + 0.2 * Math.sin(Date.now() / 200) : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = colour;
+
+      // Radar ring (large, faint)
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(toC.x, toC.y, 19 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Main ring
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(toC.x, toC.y, 10 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Crosshair
+      const s = 7 * pulse;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(toC.x - s, toC.y); ctx.lineTo(toC.x + s, toC.y);
+      ctx.moveTo(toC.x, toC.y - s); ctx.lineTo(toC.x, toC.y + s);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // ─── Draw: shuttlecock ────────────────────────────────────────────────────
+    function drawShuttle(normPos, alpha = 1) {
+      const { x, y } = court.toCanvas(normPos.x, normPos.y);
+      const r  = court.courtW * 0.022;
+      const cr = court.courtW * 0.008;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle   = 'rgba(251,191,36,0.28)';
+      ctx.fill();
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth   = 1.2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, cr, 0, Math.PI * 2);
+      ctx.fillStyle   = '#fbbf24';
+      ctx.fill();
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth   = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ─── Draw: player ─────────────────────────────────────────────────────────
+    function drawPlayer() {
+      const { x, y } = court.toCanvas(PLAYER_NORM.x, PLAYER_NORM.y);
+      const r = court.courtW * 0.038;
+      ctx.save();
+      const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.4);
+      g.addColorStop(0, 'rgba(37,99,235,0.3)');
+      g.addColorStop(1, 'rgba(37,99,235,0)');
+      ctx.beginPath();
+      ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle   = '#2563eb';
+      ctx.fill();
+      ctx.strokeStyle = '#1d4ed8';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+      ctx.font         = `bold ${Math.round(r * 0.68)}px system-ui, sans-serif`;
+      ctx.fillStyle    = '#fff';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('YOU', x, y + 0.5);
+      ctx.restore();
+    }
+
+    // ─── Draw: aim line (pull-back indicator) ─────────────────────────────────
+    function drawAimLine(fromC, toC, power) {
+      const dx  = toC.x - fromC.x;
+      const dy  = toC.y - fromC.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 6) return;
+      const col = powerColor(power);
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 2.5;
+      ctx.lineCap     = 'round';
+      // Start ring at shuttle
+      ctx.beginPath();
+      ctx.arc(fromC.x, fromC.y, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      // Drag line
+      ctx.beginPath();
+      ctx.moveTo(fromC.x, fromC.y);
+      ctx.lineTo(toC.x, toC.y);
+      ctx.stroke();
+      // End dot
+      ctx.beginPath();
+      ctx.arc(toC.x, toC.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      // Shot type label
+      const label = power < 0.30 ? 'Drop' : power < 0.65 ? 'Drive' : 'Smash';
+      const nx = -dy / len, ny = dx / len;
+      ctx.font        = `bold 11px system-ui, sans-serif`;
+      ctx.fillStyle   = col;
+      ctx.textAlign   = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, toC.x + nx * 18, toC.y + ny * 18);
+      ctx.restore();
+    }
+
+    // ─── Render loop ──────────────────────────────────────────────────────────
+    function render(ts) {
+      requestAnimationFrame(render);
+      court.draw();
+      drawPlayer();
+
+      // ── READY ──────────────────────────────────────────────────────────────
+      if (S.phase === 'ready') {
+        drawShuttle(S.shuttleNorm);
+        hint.style.opacity = '1';
+
+      // ── DRAGGING ───────────────────────────────────────────────────────────
+      } else if (S.phase === 'dragging') {
+        hint.style.opacity = '0';
+
+        const dx  = S.dragCurrent.x - S.dragOrigin.x;
+        const dy  = S.dragCurrent.y - S.dragOrigin.y;
+        const len = Math.hypot(dx, dy);
+        const rawPower = Math.min(1, len / MAX_DRAG_PX);
+
+        const proj = projectLanding(S.dragOrigin, S.dragCurrent);
+        if (proj) {
+          const { landNorm, power } = proj;
+          const fromC = court.toCanvas(S.shuttleNorm.x, S.shuttleNorm.y);
+          const toC   = court.toCanvas(landNorm.x, landNorm.y);
+          const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
+          drawArc(fromC, toC, arcH(power, dist), powerColor(power), 0.65, true);
+          drawLandingTarget(toC, powerColor(power), 0.9, true);
+        }
+
+        drawShuttle(S.shuttleNorm);
+        drawAimLine(S.dragOrigin, S.dragCurrent, rawPower);
+
+      // ── FLYING ─────────────────────────────────────────────────────────────
+      } else if (S.phase === 'flying') {
+        if (S.flightStartMs === null) S.flightStartMs = ts;
+        S.flightT = Math.min(1, (ts - S.flightStartMs) / S.flightDuration);
+
+        const { fromNorm, toNorm, power, colour } = S.frozenArc;
+        const fromC  = court.toCanvas(fromNorm.x, fromNorm.y);
+        const toC    = court.toCanvas(toNorm.x, toNorm.y);
+        const dist   = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
+        const h      = arcH(power, dist);
+
+        // Frozen arc (fades during flight: 0.45 → 0.15)
+        const arcAlpha = 0.45 - S.flightT * 0.30;
+        drawArc(fromC, toC, h, colour, arcAlpha, true, 2.5);
+        drawLandingTarget(toC, colour, 0.5 * (1 - S.flightT * 0.7), false);
+
+        // Trail dots
+        const TRAIL = 5;
+        for (let i = TRAIL; i >= 1; i--) {
+          const tTrail  = Math.max(0, S.flightT - i * 0.042);
+          const tp      = arcAt(fromC, toC, h, tTrail);
+          const tnorm   = court.toNormalized(tp.x, tp.y);
+          const tAlpha  = (1 - i / (TRAIL + 1)) * 0.5;
+          drawShuttle(tnorm, tAlpha);
+        }
+
+        // Flying shuttle
+        const pos  = arcAt(fromC, toC, h, S.flightT);
+        drawShuttle(court.toNormalized(pos.x, pos.y));
+
+        if (S.flightT >= 1) {
+          S.phase       = 'landing';
+          S.landingMs   = null;
+          S.shuttleNorm = { ...toNorm };
+        }
+
+      // ── LANDING ────────────────────────────────────────────────────────────
+      } else if (S.phase === 'landing') {
+        if (S.landingMs === null) S.landingMs = ts;
+        const elapsed = ts - S.landingMs;
+
+        const { fromNorm, toNorm, power, colour } = S.frozenArc;
+        const fromC = court.toCanvas(fromNorm.x, fromNorm.y);
+        const toC   = court.toCanvas(toNorm.x, toNorm.y);
+        const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
+        const h     = arcH(power, dist);
+
+        // Arc fades out in first 200ms of landing
+        const arcFadeT = Math.min(1, elapsed / 200);
+        if (arcFadeT < 1) {
+          drawArc(fromC, toC, h, colour, 0.15 * (1 - arcFadeT), true, 2.5);
+        }
+
+        // Shuttle stays at landing point
+        drawShuttle(S.shuttleNorm);
+
+        // Flash (radial gradient, 0–80ms)
+        if (elapsed < 80) {
+          const fa  = (1 - elapsed / 80) * 0.4;
+          const dpr = window.devicePixelRatio || 1;
+          const cW  = canvas.width / dpr;
+          const cH  = canvas.height / dpr;
+          const grad = ctx.createRadialGradient(toC.x, toC.y, 0, toC.x, toC.y, 65);
+          grad.addColorStop(0, `rgba(255,255,255,${fa})`);
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.save();
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, cW, cH);
+          ctx.restore();
+        }
+
+        // 3 expanding rings
+        [
+          { maxR: 20, dur: 400, delay:   0, maxAlpha: 1.0 },
+          { maxR: 32, dur: 500, delay:  50, maxAlpha: 0.6 },
+          { maxR: 48, dur: 600, delay: 100, maxAlpha: 0.3 },
+        ].forEach(({ maxR, dur, delay, maxAlpha }) => {
+          const e = elapsed - delay;
+          if (e <= 0 || e >= dur) return;
+          const t = e / dur;
+          ctx.save();
+          ctx.globalAlpha = maxAlpha * (1 - t);
+          ctx.strokeStyle = colour;
+          ctx.lineWidth   = 2;
+          ctx.beginPath();
+          ctx.arc(toC.x, toC.y, 8 + (maxR - 8) * t, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        });
+
+        // Reset after last ring finishes
+        if (elapsed > 720) {
+          S.phase       = 'ready';
+          S.shuttleNorm = { ...PLAYER_NORM };
+          S.frozenArc   = null;
+        }
+      }
+    }
+
+    // ─── Pointer events ───────────────────────────────────────────────────────
+    canvas.addEventListener('pointerdown', (e) => {
+      if (S.phase !== 'ready') return;
+      const pos  = canvasPos(e);
+      const sc   = court.toCanvas(S.shuttleNorm.x, S.shuttleNorm.y);
+      if (Math.hypot(pos.x - sc.x, pos.y - sc.y) > ACTIVATION_R) return;
+
+      S.phase       = 'dragging';
+      S.dragOrigin  = { x: sc.x, y: sc.y };
+      S.dragCurrent = { ...pos };
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (S.phase !== 'dragging') return;
+      S.dragCurrent = canvasPos(e);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (S.phase !== 'dragging') return;
+      S.dragCurrent = canvasPos(e);
+
+      const proj = projectLanding(S.dragOrigin, S.dragCurrent);
+      const len  = Math.hypot(
+        S.dragCurrent.x - S.dragOrigin.x,
+        S.dragCurrent.y - S.dragOrigin.y,
+      );
+
+      if (proj && len > 12) {
+        const { landNorm, power } = proj;
+        S.frozenArc = {
+          fromNorm: { ...S.shuttleNorm },
+          toNorm:   landNorm,
+          power,
+          colour:   powerColor(power),
+        };
+        // Smash=320ms, drop=850ms, interpolated
+        S.flightDuration = 320 + (1 - power) * 530;
+        S.flightT        = 0;
+        S.flightStartMs  = null;
+        S.phase          = 'flying';
+      } else {
+        S.phase = 'ready';
+      }
+
+      S.dragOrigin = S.dragCurrent = null;
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      if (S.phase === 'dragging') S.phase = 'ready';
+      S.dragOrigin = S.dragCurrent = null;
+    });
+
+    // ─── Boot ─────────────────────────────────────────────────────────────────
+    canvas.style.touchAction = 'none';
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
