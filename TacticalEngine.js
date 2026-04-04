@@ -63,6 +63,8 @@ class TacticalEngine {
         const isRightSide = user.endPos.x > targetOpponent.x;
         const isRevers = (targetOpponent.hand === 'right' && !isRightSide) || 
                          (targetOpponent.hand === 'left' && isRightSide);
+        const tooClose = false;
+        const tooShort = false;
 
         if (user.type === 'SMASH') {
             const dxMeters = (user.endPos.x - targetOpponent.x) * this.WIDTH;
@@ -76,8 +78,14 @@ class TacticalEngine {
 
         if (user.type === 'CLEAR') {
             if (isRevers) totalScore += 5;
-            if (minDistanceMeters < 2.0) totalScore -= 20;
-            if (user.endPos.y < (5.0 / 6.70)) totalScore -= 20;
+            if (minDistanceMeters < 2.0) {
+                totalScore -= 20;
+                tooClose = true;
+            }
+            if (user.endPos.y < (5.0 / 6.70)) {
+                totalScore -= 20;
+                tooShort = true;
+            }
         }
 
         // 5. SEUIL
@@ -90,6 +98,8 @@ class TacticalEngine {
             score: Math.min(100, Math.max(0, Math.round(totalScore))),
             isReversTargeted: isRevers,
             isBodyHit: hittingBody,
+            isTooClose : tooClose,
+            isTooShort : tooShort,
             reachMeters: rules.reach,
             details: { 
                 placement: distanceScore, 

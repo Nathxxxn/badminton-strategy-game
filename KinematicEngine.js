@@ -40,8 +40,8 @@ class KinematicEngine {
     }
 
     shotPossibility (shotType){
-        const allowedReach = this.SHOT_PARAM[shotType].reach;
-        const allowedShots = this.SHOT_PARAM[shotType].allowed;
+        const allowedReach = this.SHOT_PARAMS[shotType].reach;
+        const allowedShots = this.SHOT_PARAMS[shotType].allowed;
 
         return {allowedReach : allowedReach,
                 allowedShots : allowedShots
