@@ -1,0 +1,326 @@
+[
+  {
+    "id": "SHOT_ATK_001",
+    "type": "shot",
+    "workshop": "attack",
+    "label": "Tir",
+    "text": "Le volant flotte haut devant toi au filet. B1 et B2 sont en défense côte à côte. Frappe dans le trou !",
+    "passingScore": 70,
+    "explanation": "Le trou central entre B1 et B2 est la cible optimale — ni l'un ni l'autre ne sait qui prend le volant.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.5,
+        "y": 0.10000000000000009,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.5,
+        "y": 0.6399999999999999
+      },
+      "opp1": {
+        "x": 0.3,
+        "y": 0.5
+      },
+      "opp2": {
+        "x": 0.7,
+        "y": 0.5
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.30000000000000004
+      },
+      "endPos": {
+        "x": 0.5,
+        "y": 0.040000000000000036
+      },
+      "type": "NET_DROP"
+    },
+    "playerReach": 2
+  },
+  {
+    "id": "SHOT_ATK_002",
+    "type": "shot",
+    "workshop": "attack",
+    "label": "Tir",
+    "text": "B1 a renvoyé un drive en ligne. Le volant arrive vite sur ta droite. Contre-attaque en fond de court !",
+    "passingScore": 55,
+    "explanation": "Contre en fond de court à gauche pour forcer B1 à reculer et briser leur position offensive.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.7,
+        "y": 0.19999999999999996,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.3,
+        "y": 0.5
+      },
+      "opp1": {
+        "x": 0.25,
+        "y": 0.5
+      },
+      "opp2": {
+        "x": 0.65,
+        "y": 0.4
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.65,
+        "y": 0.4
+      },
+      "endPos": {
+        "x": 0.68,
+        "y": 0.15999999999999992
+      },
+      "type": "DRIVE"
+    },
+    "playerReach": 2.5
+  },
+  {
+    "id": "SHOT_ATK_003",
+    "type": "shot",
+    "workshop": "attack",
+    "label": "Tir",
+    "text": "Tu es en fond de court gauche avec le volant haut. B2 est seul côté droit. Smash vers le coin libre !",
+    "passingScore": 70,
+    "explanation": "Smash croisé vers le fond droit — B2 est trop centré et B1 est à l'opposé, le coin droit est ouvert.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.2,
+        "y": 0.6399999999999999,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.55,
+        "y": 0.19999999999999996
+      },
+      "opp1": {
+        "x": 0.35,
+        "y": 0.64
+      },
+      "opp2": {
+        "x": 0.65,
+        "y": 0.30000000000000004
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.35,
+        "y": 0.64
+      },
+      "endPos": {
+        "x": 0.2,
+        "y": 0.6399999999999999
+      },
+      "type": "CLEAR"
+    },
+    "playerReach": 5
+  },
+  {
+    "id": "SHOT_DEF_001",
+    "type": "shot",
+    "workshop": "defense",
+    "label": "Tir",
+    "text": "B1 smash fort sur toi. Tu es en défense côte à côte. Dégage en fond de court pour reprendre le temps !",
+    "passingScore": 70,
+    "explanation": "Dégage haut et profond dans le fond adverse pour sortir de la pression et te repositionner.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.65,
+        "y": 0.5,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.3,
+        "y": 0.5
+      },
+      "opp1": {
+        "x": 0.3,
+        "y": 0.7
+      },
+      "opp2": {
+        "x": 0.65,
+        "y": 0.36
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.3,
+        "y": 0.7
+      },
+      "endPos": {
+        "x": 0.62,
+        "y": 0.43999999999999995
+      },
+      "type": "SMASH"
+    },
+    "playerReach": 2
+  },
+  {
+    "id": "SHOT_DEF_002",
+    "type": "shot",
+    "workshop": "defense",
+    "label": "Tir",
+    "text": "B2 attaque depuis le mi-terrain. Le volant arrive sur ta gauche. Drive en ligne pour contre-attaquer !",
+    "passingScore": 60,
+    "explanation": "Drive en ligne vers B1 pour le forcer à reculer et rééquilibrer la formation adverse.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.25,
+        "y": 0.3999999999999999,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.7,
+        "y": 0.3999999999999999
+      },
+      "opp1": {
+        "x": 0.25,
+        "y": 0.43999999999999995
+      },
+      "opp2": {
+        "x": 0.65,
+        "y": 0.24
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.65,
+        "y": 0.24
+      },
+      "endPos": {
+        "x": 0.28,
+        "y": 0.3600000000000001
+      },
+      "type": "DRIVE"
+    },
+    "playerReach": 2.5
+  },
+  {
+    "id": "SHOT_DEF_003",
+    "type": "shot",
+    "workshop": "defense",
+    "label": "Tir",
+    "text": "B1 est au filet à bout portant. Bloque au filet en cross pour contourner sa pression !",
+    "passingScore": 70,
+    "explanation": "Bloc doux en cross au filet : le volant tombe côté B2 qui est loin, B1 ne peut pas intercepter.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.45,
+        "y": 0.15999999999999992,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.6,
+        "y": 0.6000000000000001
+      },
+      "opp1": {
+        "x": 0.55,
+        "y": 0.16000000000000003
+      },
+      "opp2": {
+        "x": 0.3,
+        "y": 0.4
+      }
+    },
+    "incomingShuttle": {
+      "startPos": {
+        "x": 0.55,
+        "y": 0.16000000000000003
+      },
+      "endPos": {
+        "x": 0.47,
+        "y": 0.10000000000000009
+      },
+      "type": "KILL"
+    },
+    "playerReach": 0.5
+  }
+]

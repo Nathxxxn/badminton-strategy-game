@@ -2,14 +2,9 @@
  * mock-data.js — Hardcoded exercise data for prototype demo
  * Developer A · Rendering & UI
  *
- * Provides mock exercises imitating the JSON format that Developer B will
- * eventually load from data/positioning.json and data/shots.json.
- *
- * ── INTEGRATION POINT ────────────────────────────────────────────────────────
- * When Developer B's exercises.js is ready, replace the imports in main.js:
- *   import { MOCK_RALLIES } from './mock-data.js';
- * with the real exercise loader.
- * ─────────────────────────────────────────────────────────────────────────────
+ * Provides local fallback exercises matching the runtime loader contract.
+ * The main app now prefers data/*.json via exercises.js and only falls back
+ * to these in-memory scenarios if the JSON catalog is unavailable.
  */
 
 // ─── Attack — Positioning ─────────────────────────────────────────────────────
@@ -18,6 +13,7 @@ const POS_ATK_001 = {
   id: 'POS_ATK_001',
   type: 'positioning',
   workshop: 'attack',
+  scenario: { playedShotType: 'NET_DROP', isHitter: true },
   label: 'Placement',
   text: 'Ton partenaire (A2) vient de smasher en cross depuis le fond droit. Où dois-tu te positionner pour couvrir le retour ?',
   players: {
@@ -40,6 +36,7 @@ const POS_ATK_002 = {
   id: 'POS_ATK_002',
   type: 'positioning',
   workshop: 'attack',
+  scenario: { playedShotType: 'SMASH', isHitter: false },
   label: 'Placement',
   text: "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper depuis le fond. Où te places-tu ?",
   players: {
@@ -62,6 +59,7 @@ const POS_ATK_003 = {
   id: 'POS_ATK_003',
   type: 'positioning',
   workshop: 'attack',
+  scenario: { playedShotType: 'NET_DROP', isHitter: true },
   label: 'Placement',
   text: "Ton partenaire vient de driver en cross. Tu es au milieu du terrain. Monte vers le filet pour attaquer !",
   players: {
@@ -84,6 +82,7 @@ const POS_ATK_004 = {
   id: 'POS_ATK_004',
   type: 'positioning',
   workshop: 'attack',
+  scenario: { playedShotType: 'DROP', isHitter: false },
   label: 'Placement',
   text: "Ton partenaire a joué un amorti au filet. B1 est en difficulté. Positionne-toi pour finir le point !",
   players: {
@@ -108,6 +107,7 @@ const SHOT_ATK_001 = {
   id: 'SHOT_ATK_001',
   type: 'shot',
   workshop: 'attack',
+  scenario: { incomingShotType: 'NET_DROP' },
   label: 'Tir',
   text: 'Le volant flotte haut devant toi au filet. B1 et B2 sont en défense côte à côte. Frappe dans le trou !',
   players: {
@@ -130,6 +130,8 @@ const SHOT_ATK_002 = {
   id: 'SHOT_ATK_002',
   type: 'shot',
   workshop: 'attack',
+  scenario: { incomingShotType: 'DRIVE' },
+  passingScore: 55,
   label: 'Tir',
   text: "B1 a renvoyé un drive en ligne. Le volant arrive vite sur ta droite. Contre-attaque en fond de court !",
   players: {
@@ -152,6 +154,7 @@ const SHOT_ATK_003 = {
   id: 'SHOT_ATK_003',
   type: 'shot',
   workshop: 'attack',
+  scenario: { incomingShotType: 'CLEAR' },
   label: 'Tir',
   text: "Tu es en fond de court gauche avec le volant haut. B2 est seul côté droit. Smash vers le coin libre !",
   players: {
@@ -176,6 +179,7 @@ const POS_DEF_001 = {
   id: 'POS_DEF_001',
   type: 'positioning',
   workshop: 'defense',
+  scenario: { playedShotType: 'SMASH', isHitter: false },
   label: 'Placement',
   text: "B1 smash depuis le fond gauche adverse. Tu es au mi-terrain. Adopte la formation défensive côte à côte !",
   players: {
@@ -198,6 +202,7 @@ const POS_DEF_002 = {
   id: 'POS_DEF_002',
   type: 'positioning',
   workshop: 'defense',
+  scenario: { playedShotType: 'CLEAR', isHitter: false },
   label: 'Placement',
   text: "Après ton lift défensif en fond gauche, B1 va attaquer. Repositionne-toi pour défendre ta moitié !",
   players: {
@@ -220,6 +225,7 @@ const POS_DEF_003 = {
   id: 'POS_DEF_003',
   type: 'positioning',
   workshop: 'defense',
+  scenario: { playedShotType: 'KILL', isHitter: true },
   label: 'Placement',
   text: "B2 est au filet et joue un amorti. Tu es trop loin. Recule pour te repositionner défensivement !",
   players: {
@@ -244,6 +250,7 @@ const SHOT_DEF_001 = {
   id: 'SHOT_DEF_001',
   type: 'shot',
   workshop: 'defense',
+  scenario: { incomingShotType: 'SMASH' },
   label: 'Tir',
   text: "B1 smash fort sur toi. Tu es en défense côte à côte. Dégage en fond de court pour reprendre le temps !",
   players: {
@@ -266,6 +273,8 @@ const SHOT_DEF_002 = {
   id: 'SHOT_DEF_002',
   type: 'shot',
   workshop: 'defense',
+  scenario: { incomingShotType: 'DRIVE' },
+  passingScore: 60,
   label: 'Tir',
   text: "B2 attaque depuis le mi-terrain. Le volant arrive sur ta gauche. Drive en ligne pour contre-attaquer !",
   players: {
@@ -288,6 +297,7 @@ const SHOT_DEF_003 = {
   id: 'SHOT_DEF_003',
   type: 'shot',
   workshop: 'defense',
+  scenario: { incomingShotType: 'KILL' },
   label: 'Tir',
   text: "B1 est au filet à bout portant. Bloque au filet en cross pour contourner sa pression !",
   players: {

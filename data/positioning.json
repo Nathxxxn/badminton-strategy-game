@@ -1,0 +1,549 @@
+[
+  {
+    "id": "POS_ATK_001",
+    "type": "positioning",
+    "workshop": "attack",
+    "label": "Placement",
+    "text": "Ton partenaire (A2) vient de smasher en cross depuis le fond droit. Où dois-tu te positionner pour couvrir le retour ?",
+    "passingScore": 70,
+    "explanation": "Avance vers le filet pour intercepter le retour faible de B1. Ton partenaire glisse vers le centre-arrière.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.5,
+        "y": 0.30000000000000004,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.7,
+        "y": 0.7,
+        "movingTo": {
+          "x": 0.6,
+          "y": 0.56
+        }
+      },
+      "opp1": {
+        "x": 0.25,
+        "y": 0.6,
+        "movingTo": {
+          "x": 0.3,
+          "y": 0.36
+        }
+      },
+      "opp2": {
+        "x": 0.7,
+        "y": 0.4,
+        "movingTo": {
+          "x": 0.65,
+          "y": 0.43999999999999995
+        }
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.30000000000000004
+      },
+      "endPos": {
+        "x": 0.25,
+        "y": 0.7
+      },
+      "type": "NET_DROP"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.7,
+        "y": 0.7
+      },
+      "to": {
+        "x": 0.6,
+        "y": 0.56
+      }
+    },
+    "isHitter": true,
+    "moveRadius": 2.5,
+    "idealPosition": {
+      "x": 0.4,
+      "y": 0.1200000000000001
+    }
+  },
+  {
+    "id": "POS_ATK_002",
+    "type": "positioning",
+    "workshop": "attack",
+    "label": "Placement",
+    "text": "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper depuis le fond. Où te places-tu ?",
+    "passingScore": 70,
+    "explanation": "Reste en mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque depuis le fond.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.45,
+        "y": 0.10000000000000009,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.5,
+        "y": 0.76,
+        "movingTo": {
+          "x": 0.5,
+          "y": 0.6399999999999999
+        }
+      },
+      "opp1": {
+        "x": 0.35,
+        "y": 0.5,
+        "movingTo": {
+          "x": 0.3,
+          "y": 0.4
+        }
+      },
+      "opp2": {
+        "x": 0.65,
+        "y": 0.8,
+        "movingTo": {
+          "x": 0.6,
+          "y": 0.64
+        }
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.76
+      },
+      "endPos": {
+        "x": 0.55,
+        "y": 0.8
+      },
+      "type": "SMASH"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.5,
+        "y": 0.76
+      },
+      "to": {
+        "x": 0.5,
+        "y": 0.6399999999999999
+      }
+    },
+    "isHitter": false,
+    "moveRadius": 1.5,
+    "idealPosition": {
+      "x": 0.5,
+      "y": 0.3999999999999999
+    }
+  },
+  {
+    "id": "POS_ATK_003",
+    "type": "positioning",
+    "workshop": "attack",
+    "label": "Placement",
+    "text": "Ton partenaire vient de driver en cross. Tu es au milieu du terrain. Monte vers le filet pour attaquer !",
+    "passingScore": 70,
+    "explanation": "Monte vers le filet côté droit pour intercepter la contre-attaque de B1 en cross.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.5,
+        "y": 0.43999999999999995,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.3,
+        "y": 0.6000000000000001,
+        "movingTo": {
+          "x": 0.35,
+          "y": 0.5
+        }
+      },
+      "opp1": {
+        "x": 0.7,
+        "y": 0.4
+      },
+      "opp2": {
+        "x": 0.3,
+        "y": 0.56,
+        "movingTo": {
+          "x": 0.4,
+          "y": 0.43999999999999995
+        }
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.43999999999999995
+      },
+      "endPos": {
+        "x": 0.7,
+        "y": 0.4
+      },
+      "type": "NET_DROP"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.3,
+        "y": 0.6000000000000001
+      },
+      "to": {
+        "x": 0.35,
+        "y": 0.5
+      }
+    },
+    "isHitter": true,
+    "moveRadius": 2.5,
+    "idealPosition": {
+      "x": 0.65,
+      "y": 0.15999999999999992
+    }
+  },
+  {
+    "id": "POS_ATK_004",
+    "type": "positioning",
+    "workshop": "attack",
+    "label": "Placement",
+    "text": "Ton partenaire a joué un amorti au filet. B1 est en difficulté. Positionne-toi pour finir le point !",
+    "passingScore": 70,
+    "explanation": "Reste en mi-terrain légèrement décalé, prêt à smasher le retour lift de B1. Ton partenaire garde le filet.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.5,
+        "y": 0.3600000000000001,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.5,
+        "y": 0.10000000000000009,
+        "movingTo": {
+          "x": 0.45,
+          "y": 0.040000000000000036
+        }
+      },
+      "opp1": {
+        "x": 0.45,
+        "y": 0.16000000000000003,
+        "movingTo": {
+          "x": 0.45,
+          "y": 0.28
+        }
+      },
+      "opp2": {
+        "x": 0.55,
+        "y": 0.43999999999999995
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.10000000000000009
+      },
+      "endPos": {
+        "x": 0.45,
+        "y": 0.16000000000000003
+      },
+      "type": "DROP"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.5,
+        "y": 0.10000000000000009
+      },
+      "to": {
+        "x": 0.45,
+        "y": 0.040000000000000036
+      }
+    },
+    "isHitter": false,
+    "moveRadius": 3.5,
+    "idealPosition": {
+      "x": 0.55,
+      "y": 0.3600000000000001
+    }
+  },
+  {
+    "id": "POS_DEF_001",
+    "type": "positioning",
+    "workshop": "defense",
+    "label": "Placement",
+    "text": "B1 smash depuis le fond gauche adverse. Tu es au mi-terrain. Adopte la formation défensive côte à côte !",
+    "passingScore": 70,
+    "explanation": "Formation côte à côte : recule vers le fond et couvre ta moitié droite. Ton partenaire prend la gauche.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.6,
+        "y": 0.3600000000000001,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.4,
+        "y": 0.30000000000000004,
+        "movingTo": {
+          "x": 0.3,
+          "y": 0.43999999999999995
+        }
+      },
+      "opp1": {
+        "x": 0.25,
+        "y": 0.76,
+        "movingTo": {
+          "x": 0.3,
+          "y": 0.64
+        }
+      },
+      "opp2": {
+        "x": 0.6,
+        "y": 0.4
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.4,
+        "y": 0.30000000000000004
+      },
+      "endPos": {
+        "x": 0.6,
+        "y": -0.30000000000000004
+      },
+      "type": "SMASH"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.4,
+        "y": 0.30000000000000004
+      },
+      "to": {
+        "x": 0.3,
+        "y": 0.43999999999999995
+      }
+    },
+    "isHitter": false,
+    "moveRadius": 1.5,
+    "idealPosition": {
+      "x": 0.65,
+      "y": 0.43999999999999995
+    }
+  },
+  {
+    "id": "POS_DEF_002",
+    "type": "positioning",
+    "workshop": "defense",
+    "label": "Placement",
+    "text": "Après ton lift défensif en fond gauche, B1 va attaquer. Repositionne-toi pour défendre ta moitié !",
+    "passingScore": 70,
+    "explanation": "Glisse vers le mi-terrain gauche pour intercepter le smash croisé de B1. Ton partenaire couvre la droite.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.2,
+        "y": 0.76,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.7,
+        "y": 0.43999999999999995,
+        "movingTo": {
+          "x": 0.65,
+          "y": 0.56
+        }
+      },
+      "opp1": {
+        "x": 0.4,
+        "y": 0.6,
+        "movingTo": {
+          "x": 0.35,
+          "y": 0.7
+        }
+      },
+      "opp2": {
+        "x": 0.7,
+        "y": 0.36
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.7,
+        "y": 0.43999999999999995
+      },
+      "endPos": {
+        "x": 0.4,
+        "y": 0.6
+      },
+      "type": "CLEAR"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.7,
+        "y": 0.43999999999999995
+      },
+      "to": {
+        "x": 0.65,
+        "y": 0.56
+      }
+    },
+    "isHitter": false,
+    "moveRadius": 3,
+    "idealPosition": {
+      "x": 0.3,
+      "y": 0.5
+    }
+  },
+  {
+    "id": "POS_DEF_003",
+    "type": "positioning",
+    "workshop": "defense",
+    "label": "Placement",
+    "text": "B2 est au filet et joue un amorti. Tu es trop loin. Recule pour te repositionner défensivement !",
+    "passingScore": 70,
+    "explanation": "Recule vers le mi-terrain pour avoir le temps de voir le lift adverse et défendre correctement.",
+    "equipment": {
+      "player": {
+        "hand": "right"
+      },
+      "partner": {
+        "hand": "right"
+      },
+      "opp1": {
+        "hand": "right"
+      },
+      "opp2": {
+        "hand": "left"
+      }
+    },
+    "positions": {
+      "player": {
+        "x": 0.5,
+        "y": 0.10000000000000009,
+        "label": "YOU"
+      },
+      "partner": {
+        "x": 0.5,
+        "y": 0.6000000000000001,
+        "movingTo": {
+          "x": 0.45,
+          "y": 0.56
+        }
+      },
+      "opp1": {
+        "x": 0.4,
+        "y": 0.24
+      },
+      "opp2": {
+        "x": 0.55,
+        "y": 0.040000000000000036,
+        "movingTo": {
+          "x": 0.5,
+          "y": 0.16000000000000003
+        }
+      }
+    },
+    "playedShuttle": {
+      "startPos": {
+        "x": 0.5,
+        "y": 0.10000000000000009
+      },
+      "endPos": {
+        "x": 0.55,
+        "y": -0.040000000000000036
+      },
+      "type": "KILL"
+    },
+    "partnerMovement": {
+      "from": {
+        "x": 0.5,
+        "y": 0.6000000000000001
+      },
+      "to": {
+        "x": 0.45,
+        "y": 0.56
+      }
+    },
+    "isHitter": true,
+    "moveRadius": 0.8,
+    "idealPosition": {
+      "x": 0.5,
+      "y": 0.3600000000000001
+    }
+  }
+]

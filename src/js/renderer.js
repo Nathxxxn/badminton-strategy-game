@@ -79,7 +79,7 @@ export class Renderer {
     if (shuttlecock) this._drawShuttlecock(shuttlecock);
   }
 
-  drawReachCircle(playerPos, reachMetres) {
+  drawReachCircle(playerPos, reachMetres, strokeStyle = 'rgba(255,255,255,0.4)') {
     const { ctx, court } = this;
     const reachPx = reachMetres / 6.1 * court.courtW;
     const { x, y } = court.toCanvas(playerPos.x, playerPos.y);
@@ -87,7 +87,7 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(x, y, reachPx, 0, Math.PI * 2);
     ctx.setLineDash([6, 5]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeStyle = strokeStyle;
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -155,7 +155,7 @@ export class Renderer {
       const isAlly   = id.startsWith('ally');
       const isActive = id === activePlayerId;
       const label    = data.label ?? this._defaultLabel(id);
-      const hand     = equipment?.[id]?.hand ?? null;
+      const hand     = this._resolveHand(equipment, id);
 
       if (data.movingTo) {
         this._drawMovementArrow(data, data.movingTo, isAlly);
@@ -217,6 +217,18 @@ export class Renderer {
     }
 
     ctx.restore();
+  }
+
+  _resolveHand(equipment, id) {
+    if (!equipment) return null;
+    const direct = equipment[id]?.hand ?? null;
+    if (direct) return direct;
+
+    if (id === 'ally1') return equipment.player?.hand ?? null;
+    if (id === 'ally2') return equipment.partner?.hand ?? null;
+    if (id === 'opponent1') return equipment.opp1?.hand ?? null;
+    if (id === 'opponent2') return equipment.opp2?.hand ?? null;
+    return null;
   }
 
   _drawGhostPlayer(pos, isAlly) {

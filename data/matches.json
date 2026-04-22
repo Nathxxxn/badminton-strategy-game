@@ -1,0 +1,64 @@
+[
+  {
+    "id": "MATCH_ATTACK_001",
+    "workshop": "attack",
+    "title": "Atelier Attaque",
+    "rally": [
+      {
+        "turn": 1,
+        "type": "positioning",
+        "exerciseRef": "POS_ATK_001"
+      },
+      {
+        "turn": 2,
+        "type": "shot",
+        "exerciseRef": "SHOT_ATK_001"
+      },
+      {
+        "turn": 3,
+        "type": "positioning",
+        "exerciseRef": "POS_ATK_002"
+      },
+      {
+        "turn": 4,
+        "type": "shot",
+        "exerciseRef": "SHOT_ATK_002"
+      }
+    ],
+    "timePressure": {
+      "enabled": false,
+      "secondsPerTurn": null
+    }
+  },
+  {
+    "id": "MATCH_DEFENSE_001",
+    "workshop": "defense",
+    "title": "Atelier Defense",
+    "rally": [
+      {
+        "turn": 1,
+        "type": "positioning",
+        "exerciseRef": "POS_DEF_001"
+      },
+      {
+        "turn": 2,
+        "type": "shot",
+        "exerciseRef": "SHOT_DEF_001"
+      },
+      {
+        "turn": 3,
+        "type": "positioning",
+        "exerciseRef": "POS_DEF_002"
+      },
+      {
+        "turn": 4,
+        "type": "shot",
+        "exerciseRef": "SHOT_DEF_002"
+      }
+    ],
+    "timePressure": {
+      "enabled": false,
+      "secondsPerTurn": null
+    }
+  }
+]

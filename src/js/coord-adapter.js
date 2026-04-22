@@ -99,6 +99,19 @@ export function payloadToLogic(uiPayload) {
   if (uiPayload.impactPoint)     result.impactPoint     = toLogicPos(uiPayload.impactPoint,     'ally');
   if (uiPayload.playerFinalPos)  result.playerFinalPos  = toLogicPos(uiPayload.playerFinalPos,  'ally');
   if (uiPayload.partnerFinalPos) result.partnerFinalPos = toLogicPos(uiPayload.partnerFinalPos, 'ally');
+  if (uiPayload.opponentsPos) {
+    result.opponentsPos = {
+      opp1: uiPayload.opponentsPos.opp1 ? toLogicPos(uiPayload.opponentsPos.opp1, 'opponent') : null,
+      opp2: uiPayload.opponentsPos.opp2 ? toLogicPos(uiPayload.opponentsPos.opp2, 'opponent') : null,
+    };
+  }
+  if (uiPayload.playedShuttle) {
+    result.playedShuttle = {
+      startPos: uiPayload.playedShuttle.startPos ? toLogicPos(uiPayload.playedShuttle.startPos, 'ally') : null,
+      endPos: uiPayload.playedShuttle.endPos ? toLogicPos(uiPayload.playedShuttle.endPos, 'opponent') : null,
+      type: uiPayload.playedShuttle.type ?? null,
+    };
+  }
   return result;
 }
 
@@ -198,10 +211,46 @@ function _adaptPlayerPos(entry, convertFn) {
  * @param {object} logicExercise  Raw exercise from Developer B's Logic engine
  * @returns {object}              Render-ready exercise object
  */
-export function adaptExercise(logicExercise) {
-  const { type, positions, incomingShuttle, playedShuttle, partnerMovement, idealPosition, correction, ...rest } = logicExercise;
+function _mergeOpponentMovement(adaptedPlayers, opponentsMovement) {
+  if (!adaptedPlayers || !opponentsMovement) return adaptedPlayers;
 
-  const adaptedPlayers = positions ? adaptPositions(positions) : undefined;
+  const merged = { ...adaptedPlayers };
+  const opp1Move = opponentsMovement.opp1 ?? opponentsMovement.opponent1 ?? null;
+  const opp2Move = opponentsMovement.opp2 ?? opponentsMovement.opponent2 ?? null;
+
+  if (merged.opponent1 && opp1Move) {
+    merged.opponent1 = {
+      ...merged.opponent1,
+      movingTo: toFullCourtOpp(opp1Move.to ?? opp1Move),
+    };
+  }
+
+  if (merged.opponent2 && opp2Move) {
+    merged.opponent2 = {
+      ...merged.opponent2,
+      movingTo: toFullCourtOpp(opp2Move.to ?? opp2Move),
+    };
+  }
+
+  return merged;
+}
+
+export function adaptExercise(logicExercise) {
+  const {
+    type,
+    positions,
+    incomingShuttle,
+    playedShuttle,
+    partnerMovement,
+    opponentsMovement,
+    idealPosition,
+    correction,
+    ...rest
+  } = logicExercise;
+
+  const adaptedPlayers = positions
+    ? _mergeOpponentMovement(adaptPositions(positions), opponentsMovement)
+    : undefined;
 
   let adaptedShuttlecock;
   if (type === 'shot' && incomingShuttle) {
@@ -233,6 +282,10 @@ export function adaptExercise(logicExercise) {
 
   return {
     type,
+    ...(positions               !== undefined && { positions }),
+    ...(incomingShuttle         !== undefined && { incomingShuttle }),
+    ...(playedShuttle           !== undefined && { playedShuttle }),
+    ...(opponentsMovement       !== undefined && { opponentsMovement }),
     ...(adaptedPlayers         !== undefined && { players:         adaptedPlayers }),
     ...(adaptedShuttlecock     !== undefined && { shuttlecock:     adaptedShuttlecock }),
     ...(adaptedPartnerMovement !== undefined && { partnerMovement: adaptedPartnerMovement }),

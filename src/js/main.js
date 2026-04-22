@@ -24,7 +24,14 @@ import { Animator }               from './animations.js';
 import { snapToGrid }             from './snap.js';
 import { HUD }                    from './hud.js';
 import { ScreenManager }          from './screens.js';
-import { MOCK_RALLIES }           from './mock-data.js';  // INTEGRATION POINT 1
+import { payloadToLogic }         from './coord-adapter.js';
+import { buildPlacementPayload, buildTacticalPayload } from './payload-builder.js';
+import { loadWorkshopRally, warmScenarioCatalog } from './exercises.js';
+import { evaluatePlacementTurn, evaluateTacticalTurn, prepareTurnForRuntime } from './evaluate.js';
+
+const COURT_WIDTH_M = 6.10;
+const FULL_COURT_LENGTH_M = 13.40;
+const MOVE_RADIUS_STROKE = 'rgba(94, 234, 212, 0.42)';
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -69,6 +76,7 @@ let hoverZone = null;
 
 /** Tracks whether a turn is currently active (prevents input during animations) */
 let turnActive = false;
+let startRequestId = 0;
 
 // ─── Rendering helpers ─────────────────────────────────────────────────────
 
@@ -80,8 +88,26 @@ function renderBase(turn, { showShuttle = true, hoverZoneId = null } = {}) {
   court.draw();
   if (hoverZoneId) zones.drawHoverZone(hoverZoneId);
   renderer.drawScene(turn.players, showShuttle ? turn.shuttlecock : null, 'ally1', turn.equipment ?? null);
+  if (turn?.type === 'positioning' && turn?.moveRadius && turn?.players?.ally1) {
+    renderer.drawReachCircle(turn.players.ally1, turn.moveRadius, MOVE_RADIUS_STROKE);
+  }
   if (turn?.playerReach && turn?.players?.ally1) {
     renderer.drawReachCircle(turn.players.ally1, turn.playerReach);
+  }
+}
+
+function renderFeedbackFrame(
+  turn,
+  {
+    showShuttle = true,
+    hoverZoneId = null,
+    correctionFrom = null,
+    correctionTo = null,
+  } = {},
+) {
+  renderBase(turn, { showShuttle, hoverZoneId });
+  if (correctionFrom && correctionTo) {
+    renderer.drawCorrectionIndicator(correctionFrom, correctionTo);
   }
 }
 
@@ -131,6 +157,49 @@ function cleanupTurnListeners() {
   drag.deactivate();
 }
 
+function clampToRadius(origin, target, radiusMetres) {
+  if (!origin || !radiusMetres) return target;
+
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const distM = Math.hypot(dx * COURT_WIDTH_M, dy * FULL_COURT_LENGTH_M);
+
+  if (distM <= radiusMetres || distM === 0) return target;
+
+  const scale = radiusMetres / distM;
+  return snapToGrid(origin.x + dx * scale, origin.y + dy * scale);
+}
+
+function constrainPlacementPos(turn, pos) {
+  if (!turn?.moveRadius || !turn?.players?.ally1) return pos;
+  return clampToRadius(turn.players.ally1, pos, turn.moveRadius);
+}
+
+function buildScoreLines(totalScore, messages = []) {
+  const list = [`Score : ${totalScore}/100`];
+  if (Array.isArray(messages)) return list.concat(messages.filter(Boolean));
+  if (messages) list.push(messages);
+  return list;
+}
+
+function recordTacticalFeedback(feedback) {
+  const bonus = feedback.details?.breakdown?.bonus;
+  if (typeof bonus === 'number') {
+    if (bonus > 0) recordBonus(bonus);
+    if (bonus < 0) recordMalus(Math.abs(bonus));
+  }
+
+  if (feedback.flags?.isBackhandTargeted) recordBackhandHit();
+  if (feedback.flags?.isBodyHit) recordBodyHit();
+}
+
+function recordPlacementFeedback(feedback) {
+  const dist = feedback.details?.realDistance;
+  if (typeof dist === 'number') {
+    recordPartnerDistance(dist);
+  }
+}
+
 // ─── Positioning turn ──────────────────────────────────────────────────────
 
 function startPositioningTurn(turn) {
@@ -148,7 +217,8 @@ function onPositionHover(e) {
   const turn = currentRally[turnIndex];
   const rect = canvas.getBoundingClientRect();
   const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
-  const pos  = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
+  const snapped = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
+  const pos = constrainPlacementPos(turn, snapped);
   const newHover = (pos.y >= 0.5) ? getZoneAt(pos.x, pos.y) : null;
   if (newHover !== hoverZone) {
     hoverZone = newHover;
@@ -165,21 +235,19 @@ async function onPositionClick(e) {
   const turn = currentRally[turnIndex];
   const rect = canvas.getBoundingClientRect();
   const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
-  const pos  = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
+  const snapped = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
 
   // Reject clicks on opponent half
-  if (pos.y < 0.5) {
+  if (snapped.y < 0.5) {
     renderBase(turn);
-    zones.drawWrongZones([getZoneAt(pos.x, pos.y)].filter(Boolean));
+    zones.drawWrongZones([getZoneAt(snapped.x, snapped.y)].filter(Boolean));
     await hud.showExplanation('⚠ Clique sur ta moitié du terrain !', '#f97316', 1200);
     canvas.addEventListener('pointermove', onPositionHover);
     canvas.addEventListener('pointerup', onPositionClick, { once: true });
     canvas.style.cursor = 'crosshair';
     return;
   }
-
-  const clickedZone = getZoneAt(pos.x, pos.y);
-  const isCorrect   = turn.correctZones.includes(clickedZone);
+  const pos = constrainPlacementPos(turn, snapped);
 
   // Move all players simultaneously
   const movementStarters = [];
@@ -191,23 +259,36 @@ async function onPositionClick(e) {
   }
   await runAnims(movementStarters, () => renderBase(turn));
 
+  const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
+  const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
+  recordPlacementFeedback(feedback);
+
   // Freeze result frame
-  renderBase(turn);
-  turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+  renderFeedbackFrame(turn, {
+    correctionFrom: pos,
+    correctionTo: feedback.idealPositionRender,
+  });
   if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
   else            zones.drawCheckmark(pos.x, pos.y);
 
   await runAnims(
     [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
-    () => { renderBase(turn); turn.correctZones.forEach(z => zones.drawCorrectZones([z])); },
+    () => {
+      renderFeedbackFrame(turn, {
+        correctionFrom: pos,
+        correctionTo: feedback.idealPositionRender,
+      });
+      if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
+      else            zones.drawCheckmark(pos.x, pos.y);
+    },
   );
 
-  await hud.showExplanation(
-    isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
+  await hud.showMessages(
+    buildScoreLines(feedback.totalScore, feedback.message ? [feedback.message] : []),
     isCorrect ? '#34d399' : '#f87171',
   );
 
-  applyScore(calcPoints(isCorrect), isCorrect);
+  applyScore(feedback.totalScore, isCorrect);
   nextTurn();
 }
 
@@ -236,9 +317,6 @@ async function onShotFired(shot) {
   drag.deactivate();
   const turn = currentRally[turnIndex];
 
-  const aimZone   = getZoneAt(shot.aimPoint.x, shot.aimPoint.y);
-  const isCorrect = turn.correctZones.includes(aimZone);
-
   const flightSpeed = shot.power < 0.3 ? 'slow' : shot.power < 0.6 ? 'medium' : 'fast';
 
   // Opponents react toward landing zone simultaneously with the shot flight
@@ -257,35 +335,43 @@ async function onShotFired(shot) {
     () => renderBase(turn, { showShuttle: false }),
   );
 
+  const feedback = evaluateTacticalTurn(turn, payloadToLogic(buildTacticalPayload(shot, turn)));
+  const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
+  recordTacticalFeedback(feedback);
+
   // Freeze result frame
-  renderBase(turn, { showShuttle: false });
-  turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+  renderFeedbackFrame(turn, {
+    showShuttle: false,
+    correctionFrom: turn.shuttlecock.position,
+    correctionTo: feedback.correctionRenderPos,
+  });
   if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
   else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
 
   await runAnims(
     [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
     () => {
-      renderBase(turn, { showShuttle: false });
-      turn.correctZones.forEach(z => zones.drawCorrectZones([z]));
+      renderFeedbackFrame(turn, {
+        showShuttle: false,
+        correctionFrom: turn.shuttlecock.position,
+        correctionTo: feedback.correctionRenderPos,
+      });
+      if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
+      else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
     },
   );
 
-  await hud.showExplanation(
-    isCorrect ? `✓ ${turn.explanation}` : `✗ ${turn.explanation}`,
+  if (feedback.flags?.isBackhandTargeted) await hud.showPopup('backhand', 900);
+  if (feedback.flags?.isBodyHit) await hud.showPopup('body', 900);
+
+  await hud.showMessages(
+    buildScoreLines(feedback.totalScore, feedback.messages),
     isCorrect ? '#34d399' : '#f87171',
+    2200,
   );
 
-  applyScore(calcPoints(isCorrect), isCorrect);
+  applyScore(feedback.totalScore, isCorrect);
   nextTurn();
-}
-
-// ─── Scoring ───────────────────────────────────────────────────────────────
-
-// INTEGRATION POINT 2: replace with evaluate.js scoring when available
-function calcPoints(isCorrect) {
-  if (!isCorrect) return 0;
-  return Math.round(100 * (1 + Math.max(0, combo - 1) * 0.5));
 }
 
 function applyScore(pts, isCorrect) {
@@ -408,9 +494,10 @@ function showEndScreen() {
 
 // ─── Screen routing ─────────────────────────────────────────────────────────
 
-function startGame(workshop) {
+async function startGame(workshop) {
+  const requestId = ++startRequestId;
   currentWorkshop = workshop;
-  currentRally    = MOCK_RALLIES[workshop];
+  currentRally = null;
   turnIndex = 0; score = 0; combo = 0; correct = 0;
   scoreTacticalSum = 0; scorePlacementSum = 0;
   countTactical = 0; countPlacement = 0;
@@ -424,11 +511,28 @@ function startGame(workshop) {
 
   screens.show('exercise');
   hud.show();
+  hud.setInstruction({ type: 'positioning', label: 'Chargement', text: 'Chargement des scenarios...' });
+  hud.update(score, 0, 1, 0);
+  court.draw();
+
+  try {
+    const rally = await loadWorkshopRally(workshop);
+    if (requestId !== startRequestId) return;
+    currentRally = rally.map(prepareTurnForRuntime);
+  } catch (error) {
+    console.error('Impossible de charger le rally', error);
+    if (requestId !== startRequestId) return;
+    await hud.showExplanation('Erreur de chargement des scenarios.', '#f87171', 1800);
+    resetAndShowMenu();
+    return;
+  }
+
   hud.update(score, 0, currentRally.length, 0);
   runTurn(0);
 }
 
 function resetAndShowMenu() {
+  startRequestId++;
   cleanupTurnListeners();
   turnActive = false;
   currentRally = null;
@@ -440,8 +544,8 @@ function resetAndShowMenu() {
 
 // Wire screen events
 screens.on('menu:start',       ()             => screens.show('workshop-select'));
-screens.on('workshop:select',  ({ workshop }) => startGame(workshop));
-screens.on('end:replay',       ()             => startGame(currentWorkshop));
+screens.on('workshop:select',  ({ workshop }) => { void startGame(workshop); });
+screens.on('end:replay',       ()             => { if (currentWorkshop) void startGame(currentWorkshop); });
 screens.on('end:menu',         ()             => resetAndShowMenu());
 
 // ─── Startup ────────────────────────────────────────────────────────────────
@@ -451,6 +555,7 @@ court.draw();
 
 hud.hide();
 screens.show('menu');
+void warmScenarioCatalog();
 
 window.addEventListener('resize', () => {
   court._resize();

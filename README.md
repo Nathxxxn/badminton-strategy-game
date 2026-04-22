@@ -21,6 +21,7 @@ Puis ouvre `http://localhost:4173`.
 
 ## Structure utile
 
+- `data/*.json` : scenarios au format API charges par le loader runtime.
 - `src/js/*` : version modulaire de l'app a faire evoluer.
 - `src/css/style.css` : theme global, HUD et overlays.
 - `CLAUDE.md` : spec projet et contexte produit.

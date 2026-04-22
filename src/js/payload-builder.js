@@ -2,12 +2,23 @@
 export function deriveShuttleType(shot) {
   const { power, aimPoint } = shot;
   if (aimPoint.y >= 0.5) return 'NET_DROP';
-  if (power < 0.25) return aimPoint.y < 0.15 ? 'NET_DROP' : 'DROP';
-  if (power < 0.45) return 'DROP';
-  if (power < 0.60) return 'DRIVE';
-  if (power < 0.75) return 'KILL';
-  if (power < 0.90) return 'SMASH';
-  return 'CLEAR';
+
+  // Opponent half runs from y=0.0 (back court) to y=0.5 (net).
+  // Depth therefore matters as much as raw drag power.
+  if (aimPoint.y >= 0.34) {
+    if (power >= 0.55) return 'KILL';
+    if (power >= 0.30) return 'DROP';
+    return 'NET_DROP';
+  }
+
+  if (aimPoint.y >= 0.17) {
+    if (power >= 0.72) return 'SMASH';
+    if (power >= 0.30) return 'DRIVE';
+    return 'DROP';
+  }
+
+  if (power >= 0.90) return 'CLEAR';
+  return 'DRIVE';
 }
 
 export function buildTacticalPayload(shot, turn) {
@@ -15,6 +26,8 @@ export function buildTacticalPayload(shot, turn) {
   const opp2      = turn.players?.opponent2 ?? null;
   const equipment = turn.equipment ?? {};
   const impact    = turn.shuttlecock?.position ?? null;
+  const opp1Hand  = equipment.opp1?.hand ?? equipment.opponent1?.hand ?? null;
+  const opp2Hand  = equipment.opp2?.hand ?? equipment.opponent2?.hand ?? null;
 
   return {
     shuttleType:  deriveShuttleType(shot),
@@ -26,8 +39,8 @@ export function buildTacticalPayload(shot, turn) {
     },
     oppShotType: turn.shuttlecock?.type ?? turn.incomingShuttle?.type ?? null,
     oppHands: {
-      opp1: equipment.opp1?.hand ?? null,
-      opp2: equipment.opp2?.hand ?? null,
+      opp1: opp1Hand,
+      opp2: opp2Hand,
     },
   };
 }
@@ -46,7 +59,7 @@ export function buildPlacementPayload(chosenPos, turn) {
     playedShuttle: {
       startPos: origin   ? { x: origin.x,   y: origin.y   } : null,
       endPos:   endpoint ? { x: endpoint.x, y: endpoint.y } : null,
-      type: shuttle.type,
+      type: turn.playedShuttle?.type ?? shuttle.type ?? turn.scenario?.playedShotType ?? null,
     },
     isHitter: turn.isHitter ?? false,
   };
