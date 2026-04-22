@@ -1,41 +1,35 @@
 # Git Architecture — Badminton Doubles Strategy Game
 
+## Current Baseline
+
+Etat reel apres remise a plat du 2026-04-22 :
+
+- branches locales actives : `develop`, `main`
+- branche de travail par defaut : `develop`
+- point d'entree produit : `index.html`
+- prototypes de reference : `move-test.html`, `shot-test.html`, `rally-test.html`
+
+Les anciennes branches locales de prototypage ont ete nettoyees. A partir d'ici, toute nouvelle branche doit repartir de `develop` et rester jetable apres merge.
+
 ## Branch Structure
 
 ```
-main                                ← Production-ready releases only
+main                                ← Releases only
 │
-├── develop                         ← Integration branch, always functional
+├── develop                         ← Main integration branch
 │   │
-│   ├── feature/court-rendering     ← Dev A: Canvas court drawing
-│   ├── feature/player-renderer     ← Dev A: Player circles, labels, ghosts
-│   ├── feature/shuttlecock         ← Dev A: Shuttlecock + trajectory trail
-│   ├── feature/zone-highlight      ← Dev A: Zone overlay + click markers
-│   ├── feature/drag-mechanic       ← Dev A: Drag-to-shoot (aim, power, spin)
-│   ├── feature/animations          ← Dev A: Flight paths, movement arrows
-│   ├── feature/hud                 ← Dev A: XP bar, score, combo, level
-│   ├── feature/screens             ← Dev A: Menu, exercise select, rewards, boss intro
-│   ├── feature/responsive          ← Dev A: Canvas scaling, touch support
+│   ├── feature/ui-home-hub         ← Example: hub, menu, navigation
+│   ├── feature/shot-evaluation     ← Example: drag + scoring integration
+│   ├── feature/match-engine        ← Example: rally chaining
+│   ├── feature/content-data        ← Example: JSON exercises and balancing
 │   │
-│   ├── feature/exercise-engine     ← Dev B: Load, filter, serve exercises
-│   ├── feature/evaluate-position   ← Dev B: Positioning exercise scoring
-│   ├── feature/evaluate-shot       ← Dev B: Shot exercise scoring (zone + power + spin)
-│   ├── feature/match-engine        ← Dev B: Rally chaining, turn sequencing
-│   ├── feature/xp-levels           ← Dev B: XP system, level thresholds, stat points
-│   ├── feature/combo-rewards       ← Dev B: Combo multiplier, badges, stars
-│   ├── feature/difficulty          ← Dev B: Difficulty scaling, time pressure
-│   ├── feature/bosses              ← Dev B: Boss encounters, patterns
-│   ├── feature/data-positioning    ← Dev B: Write positioning.json exercises
-│   ├── feature/data-shots          ← Dev B: Write shots.json exercises
-│   ├── feature/data-matches        ← Dev B: Write matches.json + bosses.json
+│   ├── fix/click-detection         ← Bug fix
+│   ├── fix/drag-sensitivity        ← Bug fix
 │   │
-│   ├── fix/click-detection         ← Bug fixes (either dev)
-│   ├── fix/drag-sensitivity
-│   │
-│   ├── docs/readme                 ← Documentation updates
+│   ├── docs/repo-baseline          ← Documentation update
 │   └── style/css-cleanup           ← Visual polish
 │
-└── release/v1.0                    ← Release preparation branch
+└── release/v1.0.0                  ← Release preparation branch
 ```
 
 ---
@@ -43,14 +37,15 @@ main                                ← Production-ready releases only
 ## Branch Rules
 
 ### main
-- **Never push directly.** Always merge from `release/*` via Pull Request.
-- Protected: requires 1 approval + all checks passing.
+- Prefer merges from `release/*` via Pull Request.
+- If protections are enabled, require 1 approval + all checks passing.
 - Each merge to main = a tagged version (v0.1, v0.2, v1.0...).
 - Should always be deployable and playable.
 
 ### develop
-- **Never push directly.** Always merge from `feature/*`, `fix/*`, etc. via Pull Request.
-- Protected: requires 1 approval.
+- Preferred flow: merge `feature/*`, `fix/*`, etc. via Pull Request.
+- Short maintenance commits directly on `develop` are acceptable when cleaning the baseline solo, but should stay exceptional.
+- If protections are enabled, require 1 approval.
 - Must always compile and run (no broken builds).
 - This is your daily integration point.
 
@@ -58,7 +53,7 @@ main                                ← Production-ready releases only
 - Created from `develop`, merged back into `develop`.
 - One feature = one branch. Keep it focused.
 - Name format: `feature/{short-description}` (kebab-case).
-- Delete after merge.
+- Delete after merge. No long-lived local museum of old branches.
 
 ### fix/* branches
 - Same as feature but for bug fixes.
@@ -128,27 +123,27 @@ chore: add .gitignore entry for .vscode folder
 
 ```bash
 # 1. Always start from a fresh develop
-git checkout develop
+git switch develop
 git pull origin develop
 
 # 2. Create your feature branch
-git checkout -b feature/court-rendering
+git switch -c feature/ui-home-hub
 
 # 3. Work, commit often with clear messages
-git add src/js/court.js
-git commit -m "feat(court): draw court background and outer boundary"
+git add index.html src/js/screens.js src/css/style.css
+git commit -m "feat(ui): add project hub landing screen"
 
-git add src/js/court.js
-git commit -m "feat(court): add net, service lines, and center line"
+git add src/js/main.js src/js/mock-data.js
+git commit -m "feat(match): wire workshop flow to updated hub"
 
-git add src/js/court.js src/css/style.css
-git commit -m "feat(court): implement responsive canvas scaling with DPR"
+git add README.md
+git commit -m "docs: document local run flow"
 
 # 4. Push your branch
-git push -u origin feature/court-rendering
+git push -u origin feature/ui-home-hub
 
-# 5. Open a Pull Request on GitHub: feature/court-rendering → develop
-# Title: "feat(court): Court rendering with all regulation lines"
+# 5. Open a Pull Request on GitHub: feature/ui-home-hub → develop
+# Title: "feat(ui): add project hub landing screen"
 # Description: what you did, screenshots if visual
 ```
 
@@ -158,7 +153,7 @@ git push -u origin feature/court-rendering
 1. Read the PR description and diff
 2. Pull the branch locally if needed:
    git fetch origin
-   git checkout feature/exercise-engine
+   git switch feature/shot-evaluation
 3. Test it runs without breaking
 4. Leave comments or approve
 5. Squash merge on GitHub (keeps develop history clean)
@@ -168,17 +163,17 @@ git push -u origin feature/court-rendering
 
 ```bash
 # Clean up
-git checkout develop
+git switch develop
 git pull origin develop
-git branch -d feature/court-rendering
-git push origin --delete feature/court-rendering
+git branch -d feature/ui-home-hub
+git push origin --delete feature/ui-home-hub
 ```
 
 ### Handling conflicts
 
 ```bash
 # On your feature branch, pull latest develop
-git checkout feature/your-feature
+git switch feature/your-feature
 git fetch origin
 git merge origin/develop
 
@@ -194,9 +189,9 @@ git push
 
 ```bash
 # 1. Create release branch from develop
-git checkout develop
+git switch develop
 git pull origin develop
-git checkout -b release/v0.1.0
+git switch -c release/v0.1.0
 
 # 2. Only fix bugs here, no new features
 git commit -m "fix(hud): correct XP bar overflow at level 10"
@@ -204,13 +199,13 @@ git commit -m "fix(hud): correct XP bar overflow at level 10"
 # 3. Merge into main
 # → Pull Request: release/v0.1.0 → main
 # After merge:
-git checkout main
+git switch main
 git pull origin main
 git tag -a v0.1.0 -m "v0.1.0 — Core exercises + court rendering"
 git push origin v0.1.0
 
 # 4. Merge back into develop
-git checkout develop
+git switch develop
 git merge main
 git push origin develop
 
@@ -238,6 +233,11 @@ git push origin --delete release/v0.1.0
 ### Merge Strategy
 - Use **Squash and merge** for feature/fix → develop (cleaner history)
 - Use **Create a merge commit** for release → main (preserve context)
+
+### Local Hygiene
+- Keep only `develop` and `main` locally unless a branch is actively in use.
+- Remove stale worktrees once a branch is merged or abandoned.
+- Ignore local assistant/tooling artifacts in `.gitignore` instead of committing them.
 
 ---
 

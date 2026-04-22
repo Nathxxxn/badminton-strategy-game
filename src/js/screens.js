@@ -69,11 +69,44 @@ export class ScreenManager {
   _buildScreens() {
     // Menu screen
     const menu = this._createElement('screen-menu', `
-      <div class="screen-content" style="display:flex;flex-direction:column;align-items:center;gap:20px;">
+      <div class="screen-content screen-home">
         <div class="screen-logo">${SVG_LOGO}</div>
-        <h1>Badminton <span>Strategy</span></h1>
-        <p class="screen-subtitle">Apprends le double en te positionnant et en frappant comme un pro.</p>
-        <button id="btn-start" class="btn-primary">Commencer</button>
+        <p class="screen-kicker">Base unifiee</p>
+        <h1>Badminton <span>Strategy Lab</span></h1>
+        <p class="screen-subtitle">Le point d'entree principal regroupe le parcours modulaire et les prototypes de validation pour repartir d'une base nette.</p>
+
+        <div class="home-grid" aria-label="Modes disponibles">
+          <article class="home-card home-card--guided">
+            <span class="home-card-tag">Experience principale</span>
+            <h2>Parcours guide</h2>
+            <p>Menu, ateliers attaque et defense, HUD, score et orchestration modulaire dans <code>src/js/*</code>.</p>
+            <div class="home-card-footer">
+              <button id="btn-start" class="btn-primary">Choisir un atelier</button>
+              <span class="home-card-meta">C'est la base a faire evoluer.</span>
+            </div>
+          </article>
+
+          <article class="home-card">
+            <span class="home-card-tag">Prototype</span>
+            <h2>Move Test</h2>
+            <p>Sandbox de deplacement pour valider le snap, le rayon d'action et le ressenti du placement.</p>
+            <a class="btn-secondary" href="move-test.html">Ouvrir le test</a>
+          </article>
+
+          <article class="home-card">
+            <span class="home-card-tag">Prototype</span>
+            <h2>Shot Test</h2>
+            <p>Sandbox de tir pour calibrer la projection, la puissance et la lecture des differentes frappes.</p>
+            <a class="btn-secondary" href="shot-test.html">Ouvrir le test</a>
+          </article>
+
+          <article class="home-card">
+            <span class="home-card-tag">Prototype</span>
+            <h2>Rally Test</h2>
+            <p>Mini echange autonome qui combine mouvement, tir et reactivite dans une boucle courte.</p>
+            <a class="btn-secondary" href="rally-test.html">Ouvrir le test</a>
+          </article>
+        </div>
       </div>
     `);
     menu.querySelector('#btn-start').addEventListener('click', () => {
