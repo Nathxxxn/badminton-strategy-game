@@ -18,6 +18,7 @@ export class HUD {
     this._scoreEl   = document.getElementById('hud-score');
     this._turnEl    = document.getElementById('hud-turn');
     this._comboEl   = document.getElementById('hud-combo');
+    this._timerEl   = document.getElementById('hud-timer');
     this._instrEl   = document.getElementById('instruction');
     this._labelEl   = document.getElementById('instr-label');
     this._textEl    = document.getElementById('instr-text');
@@ -38,6 +39,11 @@ export class HUD {
   /** Hide the entire HUD bar (e.g., during menu screens). */
   hide() {
     this._scoreEl.closest('#hud').style.display = 'none';
+  }
+
+  /** @returns {HTMLElement|null} Timer display element used by ExerciseTimer. */
+  getTimerElement() {
+    return this._timerEl;
   }
 
   // ─── Score / turn / combo ─────────────────────────────────────────────────

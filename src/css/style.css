@@ -232,8 +232,36 @@ body::after {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
-  min-width: 70px;
+  gap: 4px;
+  min-width: 108px;
+}
+
+#hud-timer-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 16px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#hud-timer-label {
+  color: var(--color-text-dim);
+}
+
+#hud-timer {
+  min-width: 2.8ch;
+  text-align: right;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  color: var(--color-secondary);
+  transition: color var(--transition-fast), text-shadow var(--transition-fast);
+}
+
+#hud-timer.timer-urgent {
+  color: var(--color-warn);
+  text-shadow: 0 0 12px rgba(249, 115, 22, 0.28);
 }
 
 #hud-score {

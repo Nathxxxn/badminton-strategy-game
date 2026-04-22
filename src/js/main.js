@@ -28,10 +28,16 @@ import { payloadToLogic }         from './coord-adapter.js';
 import { buildPlacementPayload, buildTacticalPayload } from './payload-builder.js';
 import { loadWorkshopRally, warmScenarioCatalog } from './exercises.js';
 import { evaluatePlacementTurn, evaluateTacticalTurn, prepareTurnForRuntime } from './evaluate.js';
+import { ExerciseTimer }          from './timer.js';
 
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
 const MOVE_RADIUS_STROKE = 'rgba(94, 234, 212, 0.42)';
+const DEFAULT_PLAYER_PROFILE = Object.freeze({
+  rank: 'P12',
+  points: 0,
+  level: 1,
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -42,6 +48,16 @@ const zones    = new ZoneOverlay(canvas, court);
 const anim     = new Animator(canvas, court);
 const hud      = new HUD();
 const screens  = new ScreenManager();
+const timer    = new ExerciseTimer(
+  DEFAULT_PLAYER_PROFILE.rank,
+  () => {},
+  () => {
+    const context = timedTurnContext;
+    if (!context) return;
+    void handleTurnTimeout(context);
+  },
+  hud.getTimerElement(),
+);
 
 // DragShooter references onShotFired which is declared below (hoisted)
 const drag = new DragShooter(canvas, court, onShotFired);
@@ -77,6 +93,7 @@ let hoverZone = null;
 /** Tracks whether a turn is currently active (prevents input during animations) */
 let turnActive = false;
 let startRequestId = 0;
+let timedTurnContext = null;
 
 // ─── Rendering helpers ─────────────────────────────────────────────────────
 
@@ -144,6 +161,12 @@ function stopDragLoop() {
   if (dragRafId !== null) { cancelAnimationFrame(dragRafId); dragRafId = null; }
 }
 
+function onShotPointerDown() {
+  const turn = currentRally?.[turnIndex];
+  if (!turn || !turnActive) return;
+  startDragLoop(turn);
+}
+
 // ─── Input cleanup ─────────────────────────────────────────────────────────
 
 /**
@@ -152,6 +175,8 @@ function stopDragLoop() {
  */
 function cleanupTurnListeners() {
   canvas.removeEventListener('pointermove', onPositionHover);
+  canvas.removeEventListener('pointerup', onPositionClick);
+  canvas.removeEventListener('pointerdown', onShotPointerDown);
   canvas.style.cursor = 'default';
   stopDragLoop();
   drag.deactivate();
@@ -182,6 +207,46 @@ function buildScoreLines(totalScore, messages = []) {
   return list;
 }
 
+function getTimePressure(turn) {
+  const enabled = turn?.timePressure?.enabled !== false;
+  const secondsPerTurn = Number.isFinite(turn?.timePressure?.secondsPerTurn)
+    ? turn.timePressure.secondsPerTurn
+    : null;
+
+  return { enabled, secondsPerTurn };
+}
+
+function startTurnTimer(turn) {
+  stopTurnTimer();
+
+  const { enabled, secondsPerTurn } = getTimePressure(turn);
+  if (!enabled) return;
+
+  timedTurnContext = {
+    requestId: startRequestId,
+    turnIndex,
+    turnType: turn.type,
+  };
+  timer.start(turn.type, secondsPerTurn);
+}
+
+function stopTurnTimer() {
+  timedTurnContext = null;
+  timer.stop();
+}
+
+async function animatePlacementResolution(turn, pos) {
+  const movementStarters = [() => anim.movePlayer(turn.players.ally1, pos, true)];
+
+  for (const [id, data] of Object.entries(turn.players)) {
+    if (id !== 'ally1' && data.movingTo) {
+      movementStarters.push(() => anim.movePlayer(data, data.movingTo, id.startsWith('ally')));
+    }
+  }
+
+  await runAnims(movementStarters, () => renderBase(turn));
+}
+
 function recordTacticalFeedback(feedback) {
   const bonus = feedback.details?.breakdown?.bonus;
   if (typeof bonus === 'number') {
@@ -200,6 +265,85 @@ function recordPlacementFeedback(feedback) {
   }
 }
 
+async function resolvePositioningTimeout(turn) {
+  const fallbackPos = { ...turn.players.ally1 };
+  await animatePlacementResolution(turn, fallbackPos);
+
+  const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(fallbackPos, turn)));
+  const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
+  recordPlacementFeedback(feedback);
+
+  renderFeedbackFrame(turn, {
+    correctionFrom: fallbackPos,
+    correctionTo: feedback.idealPositionRender,
+  });
+  if (!isCorrect) zones.drawClickMarker(fallbackPos.x, fallbackPos.y);
+  else            zones.drawCheckmark(fallbackPos.x, fallbackPos.y);
+
+  await runAnims(
+    [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
+    () => {
+      renderFeedbackFrame(turn, {
+        correctionFrom: fallbackPos,
+        correctionTo: feedback.idealPositionRender,
+      });
+      if (!isCorrect) zones.drawClickMarker(fallbackPos.x, fallbackPos.y);
+      else            zones.drawCheckmark(fallbackPos.x, fallbackPos.y);
+    },
+  );
+
+  const timeoutLines = ['Temps ecoule : ta position initiale a ete conservee.'];
+  if (feedback.message) timeoutLines.push(feedback.message);
+
+  await hud.showMessages(
+    buildScoreLines(feedback.totalScore, timeoutLines),
+    isCorrect ? '#34d399' : '#f87171',
+    2200,
+  );
+
+  applyScore(feedback.totalScore, isCorrect);
+  nextTurn();
+}
+
+async function resolveShotTimeout(turn) {
+  const shuttlePos = turn.shuttlecock?.position ?? null;
+  const winner = shuttlePos && shuttlePos.y < 0.5 ? 'player' : 'opp';
+
+  renderBase(turn);
+  if (shuttlePos) zones.drawClickMarker(shuttlePos.x, shuttlePos.y);
+
+  await runAnims(
+    [() => anim.flashFeedback('wrong')],
+    () => {
+      renderBase(turn);
+      if (shuttlePos) zones.drawClickMarker(shuttlePos.x, shuttlePos.y);
+    },
+  );
+
+  await showPointResult({ winner, reason: 'TIME' });
+  await hud.showMessages(
+    buildScoreLines(0, ['Temps ecoule : le volant tombe au sol avant ta frappe.']),
+    '#f87171',
+    2200,
+  );
+
+  applyScore(0, false);
+  nextTurn();
+}
+
+async function handleTurnTimeout(context) {
+  const turn = currentRally?.[context.turnIndex];
+  if (!turn || !turnActive) return;
+  if (context.requestId !== startRequestId || context.turnIndex !== turnIndex) return;
+
+  stopTurnTimer();
+  cleanupTurnListeners();
+  turnActive = false;
+
+  if (turn.type === 'positioning') await resolvePositioningTimeout(turn);
+  else                             await resolveShotTimeout(turn);
+}
+
 // ─── Positioning turn ──────────────────────────────────────────────────────
 
 function startPositioningTurn(turn) {
@@ -211,6 +355,7 @@ function startPositioningTurn(turn) {
   canvas.style.cursor = 'crosshair';
   canvas.addEventListener('pointermove', onPositionHover);
   canvas.addEventListener('pointerup', onPositionClick, { once: true });
+  startTurnTimer(turn);
 }
 
 function onPositionHover(e) {
@@ -247,17 +392,11 @@ async function onPositionClick(e) {
     canvas.style.cursor = 'crosshair';
     return;
   }
+
+  stopTurnTimer();
   const pos = constrainPlacementPos(turn, snapped);
 
-  // Move all players simultaneously
-  const movementStarters = [];
-  movementStarters.push(() => anim.movePlayer(turn.players.ally1, pos, true));
-  for (const [id, data] of Object.entries(turn.players)) {
-    if (id !== 'ally1' && data.movingTo) {
-      movementStarters.push(() => anim.movePlayer(data, data.movingTo, id.startsWith('ally')));
-    }
-  }
-  await runAnims(movementStarters, () => renderBase(turn));
+  await animatePlacementResolution(turn, pos);
 
   const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
@@ -305,14 +444,16 @@ async function startShotTurn(turn) {
     () => renderBase(turn, { showShuttle: false }),
   );
   renderBase(turn);
-  canvas.addEventListener('pointerdown', () => startDragLoop(turn), { once: true, passive: true });
+  canvas.addEventListener('pointerdown', onShotPointerDown, { once: true, passive: true });
   drag.activate(turn.shuttlecock.position);
+  startTurnTimer(turn);
 }
 
 // NOTE: declared as function declaration for hoisting (DragShooter constructor
 // receives this as a callback before the function expressions below are reached)
 async function onShotFired(shot) {
   if (!turnActive) return;
+  stopTurnTimer();
   stopDragLoop();
   drag.deactivate();
   const turn = currentRally[turnIndex];
@@ -417,11 +558,13 @@ function showPointResult(signal) {
 
   let text, bg;
   if (signal.winner === 'player') {
-    text = '✓ Point gagné !'; bg = '#16a34a';
+    text = signal.reason === 'TIME' ? '✓ Temps ecoule, point gagne' : '✓ Point gagne !';
+    bg = '#16a34a';
   } else {
     bg = '#dc2626';
     text = signal.reason === 'NET'   ? '✗ Filet'
          : signal.reason === 'OUT'   ? '✗ Dehors'
+         : signal.reason === 'TIME'  ? '✗ Temps ecoule'
          : '✗ Faute';
   }
   el.textContent = text;
@@ -439,6 +582,7 @@ function showPointResult(signal) {
 
 export async function handleStopSignal(signal) {
   if (!turnActive) return;
+  stopTurnTimer();
   cleanupTurnListeners();
   turnActive = false;
   await showPointResult(signal);
@@ -451,6 +595,7 @@ export async function handleStopSignal(signal) {
 // ─── Turn sequencing ────────────────────────────────────────────────────────
 
 function nextTurn() {
+  stopTurnTimer();
   turnActive = false;
   hud.hideInstruction();  // clear immediately, new turn will set its own
   turnIndex++;
@@ -498,6 +643,8 @@ async function startGame(workshop) {
   const requestId = ++startRequestId;
   currentWorkshop = workshop;
   currentRally = null;
+  stopTurnTimer();
+  cleanupTurnListeners();
   turnIndex = 0; score = 0; combo = 0; correct = 0;
   scoreTacticalSum = 0; scorePlacementSum = 0;
   countTactical = 0; countPlacement = 0;
@@ -511,6 +658,8 @@ async function startGame(workshop) {
 
   screens.show('exercise');
   hud.show();
+  hud.setLevel(DEFAULT_PLAYER_PROFILE.level);
+  hud.setXP(DEFAULT_PLAYER_PROFILE.points, 100);
   hud.setInstruction({ type: 'positioning', label: 'Chargement', text: 'Chargement des scenarios...' });
   hud.update(score, 0, 1, 0);
   court.draw();
@@ -522,7 +671,8 @@ async function startGame(workshop) {
   } catch (error) {
     console.error('Impossible de charger le rally', error);
     if (requestId !== startRequestId) return;
-    await hud.showExplanation('Erreur de chargement des scenarios.', '#f87171', 1800);
+    const message = error instanceof Error ? error.message : 'Erreur de chargement des scenarios.';
+    await hud.showExplanation(message, '#f87171', 2200);
     resetAndShowMenu();
     return;
   }
@@ -533,6 +683,7 @@ async function startGame(workshop) {
 
 function resetAndShowMenu() {
   startRequestId++;
+  stopTurnTimer();
   cleanupTurnListeners();
   turnActive = false;
   currentRally = null;
@@ -555,7 +706,9 @@ court.draw();
 
 hud.hide();
 screens.show('menu');
-void warmScenarioCatalog();
+void warmScenarioCatalog().catch(error => {
+  console.error('Prechargement des scenarios impossible', error);
+});
 
 window.addEventListener('resize', () => {
   court._resize();

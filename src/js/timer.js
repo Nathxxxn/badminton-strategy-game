@@ -53,15 +53,20 @@ export class ExerciseTimer {
    * Cancels any timer that is already running.
    *
    * @param {'shot'|'positioning'} exerciseType
+   * @param {number|null} [secondsOverride=null]
    * @returns {number} Total seconds allocated for this turn
    */
-  start(exerciseType) {
+  start(exerciseType, secondsOverride = null) {
     this.stop();
 
     const base = RANK_BASE_SECONDS[this._rank];
-    const total = exerciseType === 'positioning'
+    const computedTotal = exerciseType === 'positioning'
       ? Math.floor(base * POSITIONING_MULTIPLIER)
       : base;
+    const override = Number.isFinite(secondsOverride) && secondsOverride > 0
+      ? Math.floor(secondsOverride)
+      : null;
+    const total = override ?? computedTotal;
 
     this._total = total;
     this._remaining = total;
