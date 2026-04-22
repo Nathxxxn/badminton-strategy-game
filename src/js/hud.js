@@ -25,6 +25,7 @@ export class HUD {
     this._xpWrapEl  = document.getElementById('hud-xp-wrap');
     this._levelNumEl = document.getElementById('hud-level-num');
     this._prevScore = 0;
+    this._popupEl = null;
   }
 
   // ─── Visibility ──────────────────────────────────────────────────────────────
@@ -112,6 +113,50 @@ export class HUD {
         this._textEl.style.color = '';
         resolve();
       }, durationMs);
+    });
+  }
+
+  showMessages(messages, color, durationMs = 1800) {
+    return new Promise(resolve => {
+      const text = Array.isArray(messages)
+        ? messages.map((m, i) => `${i + 1}. ${m}`).join('\n')
+        : messages;
+      this._textEl.style.whiteSpace = 'pre-line';
+      this._textEl.textContent = text;
+      this._textEl.style.color = color;
+      this._instrEl.classList.remove('hidden');
+      setTimeout(() => {
+        this._textEl.style.whiteSpace = '';
+        this._textEl.style.color = '';
+        resolve();
+      }, durationMs);
+    });
+  }
+
+  showPopup(type, durationMs = 1400) {
+    return new Promise(resolve => {
+      if (!this._popupEl) {
+        this._popupEl = document.createElement('div');
+        Object.assign(this._popupEl.style, {
+          position: 'fixed', top: '30%', left: '50%',
+          transform: 'translateX(-50%)', padding: '10px 22px',
+          borderRadius: '8px', font: 'bold 20px system-ui',
+          color: 'white', zIndex: '100', pointerEvents: 'none',
+          transition: 'opacity 150ms ease', display: 'none',
+        });
+        document.body.appendChild(this._popupEl);
+      }
+      this._popupEl.textContent = type === 'backhand' ? '⬅ REVERS' : '⚠ AU CORPS';
+      this._popupEl.style.background = type === 'backhand' ? '#7c3aed' : '#dc2626';
+      this._popupEl.style.display = 'block';
+      this._popupEl.style.opacity = '1';
+      setTimeout(() => {
+        this._popupEl.style.opacity = '0';
+        setTimeout(() => {
+          this._popupEl.style.display = 'none';
+          resolve();
+        }, 150);
+      }, durationMs - 150);
     });
   }
 

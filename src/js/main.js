@@ -49,6 +49,18 @@ let score           = 0;
 let combo           = 0;
 let correct         = 0;
 
+// Extended stats (per-turn accumulation for end-screen)
+let scoreTacticalSum  = 0;
+let scorePlacementSum = 0;
+let countTactical     = 0;
+let countPlacement    = 0;
+let totalBonus        = 0;
+let totalMalus        = 0;
+let countBackhand     = 0;
+let countBody         = 0;
+let countTooClose     = 0;
+let countTooFar       = 0;
+
 /** rAF id for the drag render loop */
 let dragRafId = null;
 
@@ -67,7 +79,10 @@ let turnActive = false;
 function renderBase(turn, { showShuttle = true, hoverZoneId = null } = {}) {
   court.draw();
   if (hoverZoneId) zones.drawHoverZone(hoverZoneId);
-  renderer.drawScene(turn.players, showShuttle ? turn.shuttlecock : null, 'ally1');
+  renderer.drawScene(turn.players, showShuttle ? turn.shuttlecock : null, 'ally1', turn.equipment ?? null);
+  if (turn?.playerReach && turn?.players?.ally1) {
+    renderer.drawReachCircle(turn.players.ally1, turn.playerReach);
+  }
 }
 
 const nextFrame = () => new Promise(r => requestAnimationFrame(r));
@@ -277,7 +292,75 @@ function applyScore(pts, isCorrect) {
   score += pts;
   if (isCorrect) { combo++; correct++; } else { combo = 0; }
   hud.update(score, turnIndex, currentRally.length, combo);
+
+  const turn = currentRally?.[turnIndex];
+  if (turn?.type === 'shot') {
+    scoreTacticalSum += pts; countTactical++;
+  } else if (turn?.type === 'positioning') {
+    scorePlacementSum += pts; countPlacement++;
+  }
 }
+
+// ─── Extended stat recorders (called by Logic engine integration) ──────────
+
+export function recordBonus(pts) { totalBonus += pts; }
+export function recordMalus(pts) { totalMalus += pts; }
+export function recordBackhandHit() { countBackhand++; }
+export function recordBodyHit() { countBody++; }
+export function recordPartnerDistance(dist) {
+  if (dist < 2.5) countTooClose++;
+  else if (dist > 3.5) countTooFar++;
+}
+
+// ─── STOP signal handler ──────────────────────────────────────────────────
+
+function showPointResult(signal) {
+  let el = document.getElementById('point-result');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'point-result';
+    Object.assign(el.style, {
+      position: 'fixed', top: '50%', left: '50%',
+      transform: 'translate(-50%,-50%)', padding: '16px 32px',
+      borderRadius: '10px', font: 'bold 24px system-ui',
+      color: 'white', zIndex: '200', pointerEvents: 'none',
+      transition: 'opacity 0.3s ease', display: 'none',
+    });
+    document.body.appendChild(el);
+  }
+
+  let text, bg;
+  if (signal.winner === 'player') {
+    text = '✓ Point gagné !'; bg = '#16a34a';
+  } else {
+    bg = '#dc2626';
+    text = signal.reason === 'NET'   ? '✗ Filet'
+         : signal.reason === 'OUT'   ? '✗ Dehors'
+         : '✗ Faute';
+  }
+  el.textContent = text;
+  el.style.background = bg;
+  el.style.opacity = '1';
+  el.style.display = 'block';
+
+  return new Promise(resolve => {
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => { el.style.display = 'none'; resolve(); }, 300);
+    }, 1500);
+  });
+}
+
+export async function handleStopSignal(signal) {
+  if (!turnActive) return;
+  cleanupTurnListeners();
+  turnActive = false;
+  await showPointResult(signal);
+  applyScore(0, false);
+  nextTurn();
+}
+
+// INTEGRATION POINT: Call handleStopSignal(signal) from match.js when Logic engine sends STOP
 
 // ─── Turn sequencing ────────────────────────────────────────────────────────
 
@@ -302,9 +385,24 @@ function showEndScreen() {
   hud.hideInstruction();
   const pct   = Math.round((correct / currentRally.length) * 100);
   const stars = pct >= 90 ? '★★★' : pct >= 60 ? '★★☆' : '★☆☆';
+  const avgTactical   = countTactical   > 0 ? Math.round(scoreTacticalSum  / countTactical)   : '—';
+  const avgPlacement  = countPlacement  > 0 ? Math.round(scorePlacementSum / countPlacement)  : '—';
+
   document.getElementById('end-title').textContent  = `${stars}  Fin du rally !`;
   document.getElementById('end-score').textContent  = `Score : ${score} pts`;
-  document.getElementById('end-detail').textContent = `${correct} / ${currentRally.length} bonnes réponses`;
+
+  const details = [
+    `${correct} / ${currentRally.length} bonnes réponses`,
+    `Tir : ${avgTactical !== '—' ? avgTactical + ' pts' : '—'}  |  Placement : ${avgPlacement !== '—' ? avgPlacement + ' pts' : '—'}`,
+    ...(totalBonus  > 0 ? [`Bonus : +${totalBonus}`]    : []),
+    ...(totalMalus  > 0 ? [`Malus : -${totalMalus}`]    : []),
+    ...(countBackhand > 0 ? [`Revers visés : ${countBackhand}`] : []),
+    ...(countBody     > 0 ? [`Au corps : ${countBody}`]          : []),
+    ...(countTooClose > 0 ? [`Trop près du partenaire : ${countTooClose}`] : []),
+    ...(countTooFar   > 0 ? [`Trop loin du partenaire : ${countTooFar}`]   : []),
+  ];
+  document.getElementById('end-detail').style.whiteSpace = 'pre-line';
+  document.getElementById('end-detail').textContent = details.join('\n');
   document.getElementById('end-screen').style.display = 'flex';
 }
 
@@ -314,6 +412,11 @@ function startGame(workshop) {
   currentWorkshop = workshop;
   currentRally    = MOCK_RALLIES[workshop];
   turnIndex = 0; score = 0; combo = 0; correct = 0;
+  scoreTacticalSum = 0; scorePlacementSum = 0;
+  countTactical = 0; countPlacement = 0;
+  totalBonus = 0; totalMalus = 0;
+  countBackhand = 0; countBody = 0;
+  countTooClose = 0; countTooFar = 0;
   turnActive = false;
 
   // Hide end screen if visible

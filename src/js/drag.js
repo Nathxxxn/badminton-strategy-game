@@ -24,7 +24,8 @@
  * All canvas drawing is in CSS pixels via court.toCanvas().
  */
 
-import { snapToGrid } from './snap.js';
+import { snapToGrid }        from './snap.js';
+import { deriveShuttleType } from './payload-builder.js';
 
 // ─── Tuning constants ─────────────────────────────────────────────────────────
 
@@ -261,7 +262,7 @@ export class DragShooter {
       );
     }
 
-    return { aimPoint: aimNorm, power, spin };
+    return { aimPoint: aimNorm, power, spin, shuttleType: deriveShuttleType({ power, aimPoint: aimNorm }) };
   }
 
   /** Emit the shot to the consumer and reset state. */

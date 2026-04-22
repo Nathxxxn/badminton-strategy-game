@@ -73,31 +73,100 @@ export class Renderer {
    * @param {Object|null} shuttlecock — { position, trajectory, speed?, height? }
    * @param {string|null} activePlayerId — role id of the player whose turn it is
    */
-  drawScene(players, shuttlecock, activePlayerId = null) {
+  drawScene(players, shuttlecock, activePlayerId = null, equipment = null) {
     if (shuttlecock) this._drawTrajectory(shuttlecock);
-    this._drawPlayers(players, activePlayerId);
+    this._drawPlayers(players, activePlayerId, equipment);
     if (shuttlecock) this._drawShuttlecock(shuttlecock);
+  }
+
+  drawReachCircle(playerPos, reachMetres) {
+    const { ctx, court } = this;
+    const reachPx = reachMetres / 6.1 * court.courtW;
+    const { x, y } = court.toCanvas(playerPos.x, playerPos.y);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, reachPx, 0, Math.PI * 2);
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  drawCorrectionIndicator(from, to) {
+    const { ctx, court } = this;
+    const f = court.toCanvas(from.x, from.y);
+    const t = court.toCanvas(to.x, to.y);
+    const cpx = (f.x + t.x) / 2;
+    const cpy = (f.y + t.y) / 2 - 0.15 * court.courtH;
+
+    ctx.save();
+
+    ctx.setLineDash([8, 5]);
+    ctx.strokeStyle = 'rgba(251,146,60,0.8)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.quadraticCurveTo(cpx, cpy, t.x, t.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow head at to using direction from control point
+    const ax = t.x - cpx;
+    const ay = t.y - cpy;
+    const len = Math.hypot(ax, ay);
+    if (len > 0) {
+      const ux = ax / len;
+      const uy = ay / len;
+      const headLen = 10;
+      const spread = 0.4;
+      ctx.fillStyle = 'rgba(251,146,60,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(t.x, t.y);
+      ctx.lineTo(t.x - headLen * (ux - spread * uy), t.y - headLen * (uy + spread * ux));
+      ctx.lineTo(t.x - headLen * (ux + spread * uy), t.y - headLen * (uy - spread * ux));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Landing ring
+    const ringR = court.courtW * 0.022 * 0.5;
+    ctx.strokeStyle = 'rgba(251,146,60,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = 'rgba(251,146,60,0.9)';
+    ctx.font = `bold ${Math.round(court.courtW * 0.022)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Optimal', t.x, t.y - ringR - 4);
+
+    ctx.restore();
   }
 
   // ─── Players ───────────────────────────────────────────────────────────────
 
-  _drawPlayers(players, activePlayerId) {
+  _drawPlayers(players, activePlayerId, equipment = null) {
     for (const [id, data] of Object.entries(players)) {
       const isAlly   = id.startsWith('ally');
       const isActive = id === activePlayerId;
       const label    = data.label ?? this._defaultLabel(id);
+      const hand     = equipment?.[id]?.hand ?? null;
 
-      // Ghost + arrow for players currently transitioning
       if (data.movingTo) {
         this._drawMovementArrow(data, data.movingTo, isAlly);
         this._drawGhostPlayer(data.movingTo, isAlly);
       }
 
-      this._drawPlayer(data, isAlly, label, isActive);
+      this._drawPlayer(data, isAlly, label, isActive, hand);
     }
   }
 
-  _drawPlayer(pos, isAlly, label, isActive) {
+  _drawPlayer(pos, isAlly, label, isActive, hand = null) {
     const { ctx, court } = this;
     const snapped       = snapToGrid(pos.x, pos.y);
     const { x, y }      = court.toCanvas(snapped.x, snapped.y);
@@ -131,6 +200,21 @@ export class Renderer {
     ctx.textAlign   = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, x, y);
+
+    if (hand === 'left' || hand === 'right') {
+      const badgeR = r * 0.32;
+      const bx = x + r * 0.7;
+      const by = y - r * 0.7;
+      ctx.beginPath();
+      ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.font = `bold ${Math.round(r * 0.3)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(hand === 'left' ? 'L' : 'R', bx, by);
+    }
 
     ctx.restore();
   }
