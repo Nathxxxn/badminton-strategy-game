@@ -1115,8 +1115,7 @@ body::after {
   padding: 16px 18px 18px;
 }
 
-.drill-card-head,
-.drill-card-top {
+.drill-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1152,8 +1151,7 @@ body::after {
   font: 700 12px/1 var(--font-rally-mono);
 }
 
-.best-score,
-.drill-progress {
+.best-score {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1164,14 +1162,12 @@ body::after {
   background: var(--rally-cream-2);
 }
 
-.best-score span,
-.drill-progress small {
+.best-score span {
   font: 700 10px/1 var(--font-rally-mono);
   letter-spacing: 1px;
 }
 
-.best-score strong,
-.drill-progress strong {
+.best-score strong {
   display: block;
   margin-top: 3px;
   font-size: 14px;
@@ -1308,17 +1304,9 @@ body::after {
   font-size: 12px;
 }
 
-.standings-wrap,
-.standings-card {
+.standings-wrap {
   margin: 0 36px 20px;
   overflow: hidden;
-}
-
-.standings-card {
-  border: 3px solid var(--rally-ink);
-  border-radius: 16px;
-  background: var(--rally-cream);
-  box-shadow: 5px 5px 0 0 var(--rally-ink);
 }
 
 .standings-row {
@@ -1345,21 +1333,18 @@ body::after {
   letter-spacing: 1.5px;
 }
 
-.rank-cell,
-.standings-rank {
+.rank-cell {
   font-size: 16px;
   font-weight: 800;
 }
 
-.player-cell,
-.standings-player {
+.player-cell {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.player-cell > b,
-.standings-row > .player-avatar {
+.standings-row .player-avatar {
   width: 34px;
   height: 34px;
   display: grid;
@@ -1370,8 +1355,7 @@ body::after {
   font-size: 13px;
 }
 
-.player-cell span,
-.standings-player {
+.player-cell > span:last-child {
   display: grid;
   gap: 4px;
 }
@@ -1382,7 +1366,7 @@ body::after {
   background: var(--rally-accent);
 }
 
-.standings-row.player-standing .player-cell > b {
+.standings-row.player-standing .player-avatar {
   color: var(--rally-accent);
 }
 
@@ -1410,8 +1394,7 @@ body::after {
   padding: 0 36px 40px;
 }
 
-.settings-card,
-.settings-panel {
+.settings-card {
   padding: 28px;
   border: 3px solid var(--rally-ink);
   border-radius: 16px;
@@ -1436,8 +1419,7 @@ body::after {
 .settings-accent.blue { background: #2e6fc5; }
 .settings-accent.red { background: var(--rally-danger); }
 
-.settings-card h2,
-.settings-panel h2 {
+.settings-card h2 {
   font-size: 26px;
   font-weight: 800;
 }
@@ -1569,8 +1551,7 @@ body::after {
   grid-column: 1 / -1;
 }
 
-.keybind-grid,
-.keybind-list {
+.keybind-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1773,13 +1754,11 @@ body::after {
   .podium-player.rank-1,
   .podium-player.rank-2,
   .podium-player.rank-3 { min-height: 0; }
-  .standings-wrap,
-  .standings-card { margin: 0 18px 20px; overflow-x: auto; }
+  .standings-wrap { margin: 0 18px 20px; overflow-x: auto; }
   .standings-row { min-width: 760px; }
   .season-note { margin-left: 18px; margin-right: 18px; }
   .settings-grid { grid-template-columns: 1fr; padding: 0 18px 32px; }
-  .keybind-grid,
-  .keybind-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .keybind-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workshop-cards { grid-template-columns: 1fr; }
 }
 
@@ -1802,8 +1781,7 @@ body::after {
   .account-list div { flex-direction: column; }
   .account-list strong { text-align: left; }
   .account-actions { flex-direction: column; }
-  .keybind-grid,
-  .keybind-list { grid-template-columns: 1fr; }
+  .keybind-grid { grid-template-columns: 1fr; }
 }
 
 /* ─── Reduced motion ──────────────────────────────────────────────────────────── */

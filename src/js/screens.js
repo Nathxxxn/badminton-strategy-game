@@ -257,7 +257,8 @@ function renderLeaderboardPage() {
       title: 'Leaderboard',
       right: `
       <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
-        ${['Week', 'Month', 'All-time'].map((period, index) => `<button class="period-tab ${index === 0 ? 'active' : ''}" type="button">${period}</button>`).join('')}
+        <button class="btn period-tab active" type="button" data-period="weekly">Weekly</button>
+        <button class="btn period-tab" type="button" data-period="all-time">All-time</button>
       </div>
     `})}
     <div class="podium-grid">
@@ -280,33 +281,36 @@ function renderLeaderboardPage() {
     </div>
     <div class="standings-wrap card">
       <div class="standings-row standings-head">
-        <span class="rank-cell">Rank</span>
-        <span class="player-cell">Player</span>
-        <span>Wins</span>
-        <span>WR</span>
-        <span>XP</span>
+        <span class="rank-cell">RANK</span>
+        <span class="player-cell">PLAYER</span>
+        <span class="tier">TIER</span>
+        <span class="wins">WINS</span>
+        <span class="wr">WR</span>
+        <span class="xp">XP</span>
       </div>
       ${standings.map(player => `
         <article class="standings-row">
           <span class="rank-cell">#${player.rank}</span>
           <span class="player-cell">
             <span class="player-avatar">${player.initials}</span>
-            <span><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
+            <span><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.country}</small></span>
           </span>
-          <span><strong>${player.wins}</strong><small>Wins</small></span>
-          <span><strong>${player.wr}%</strong><small>WR</small></span>
-          <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
+          <span class="tier">${player.rankName}</span>
+          <span class="wins"><strong>${player.wins}</strong><small>Wins</small></span>
+          <span class="wr"><strong>${player.wr}%</strong><small>WR</small></span>
+          <span class="xp"><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
         </article>
       `).join('')}
       <article class="standings-row player-standing">
         <span class="rank-cell">#287</span>
         <span class="player-cell">
           <span class="player-avatar">${PLAYER.initials}</span>
-          <span><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
+          <span><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.country}</small></span>
         </span>
-        <span><strong>${PLAYER.wins}</strong><small>Wins</small></span>
-        <span><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
-        <span><strong>${PLAYER.xp.toLocaleString()}</strong><small>XP</small></span>
+        <span class="tier">${PLAYER.rank}</span>
+        <span class="wins"><strong>${PLAYER.wins}</strong><small>Wins</small></span>
+        <span class="wr"><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
+        <span class="xp"><strong>${PLAYER.xp.toLocaleString()}</strong><small>XP</small></span>
       </article>
       <p class="season-note">Season ranking updates after completed training sets and ranked matches.</p>
     </div>`;
