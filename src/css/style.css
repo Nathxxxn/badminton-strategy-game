@@ -1376,18 +1376,17 @@ body::after {
   gap: 4px;
 }
 
-.player-standing,
-.standings-row.current-player {
+.standings-row.player-standing {
   border-top: 3px solid var(--rally-ink);
   border-bottom: 0;
   background: var(--rally-accent);
 }
 
-.player-standing .player-cell > b {
+.standings-row.player-standing .player-cell > b {
   color: var(--rally-accent);
 }
 
-.player-standing em {
+.standings-row.player-standing em {
   margin-left: 4px;
   padding: 2px 6px;
   border-radius: 4px;

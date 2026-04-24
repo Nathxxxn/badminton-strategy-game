@@ -291,18 +291,18 @@ function renderLeaderboardPage() {
           <span class="rank-cell">#${player.rank}</span>
           <span class="player-cell">
             <span class="player-avatar">${player.initials}</span>
-            <span class="player-standing"><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
+            <span><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
           </span>
           <span><strong>${player.wins}</strong><small>Wins</small></span>
           <span><strong>${player.wr}%</strong><small>WR</small></span>
           <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
         </article>
       `).join('')}
-      <article class="standings-row">
+      <article class="standings-row player-standing">
         <span class="rank-cell">#287</span>
         <span class="player-cell">
           <span class="player-avatar">${PLAYER.initials}</span>
-          <span class="player-standing"><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
+          <span><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
         </span>
         <span><strong>${PLAYER.wins}</strong><small>Wins</small></span>
         <span><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
@@ -345,6 +345,7 @@ function renderSettingsPage() {
               <span>Rank</span>
               <input class="settings-input" type="text" value="${PLAYER.rank}" readonly>
             </label>
+            <button class="btn primary save-profile" type="button" disabled>Save profile</button>
           </div>
         </div>
       </section>
@@ -354,13 +355,15 @@ function renderSettingsPage() {
           <h2>Account</h2>
         </div>
         <div class="account-list">
-          <span><strong>Level ${PLAYER.level}</strong><small>${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()} XP</small></span>
-          <span><strong>${PLAYER.trained}</strong><small>Training this month</small></span>
-          <span><strong>${PLAYER.streak} days</strong><small>Current streak</small></span>
+          <div><span>Email</span><strong>alex.kim@example.com</strong></div>
+          <div><span>Level</span><strong>Level ${PLAYER.level}</strong></div>
+          <div><span>XP</span><strong>${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()}</strong></div>
+          <div><span>Training</span><strong>${PLAYER.trained} this month</strong></div>
+          <div><span>Streak</span><strong>${PLAYER.streak} days</strong></div>
         </div>
         <div class="account-actions">
-          <button class="btn block" type="button" disabled>Export</button>
-          <button class="btn block" type="button" disabled>Reset</button>
+          <button class="btn block" type="button" disabled>Change password</button>
+          <button class="btn danger block" type="button" disabled>Sign out</button>
         </div>
       </section>
       <section class="settings-card card keybind-card">
@@ -376,6 +379,7 @@ function renderSettingsPage() {
             </div>
           `).join('')}
         </div>
+        <button class="btn reset-controls" type="button" disabled>Reset to defaults</button>
       </section>
     </div>`;
 }
