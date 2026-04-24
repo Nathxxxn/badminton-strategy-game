@@ -1066,8 +1066,7 @@ body::after {
   white-space: nowrap;
 }
 
-.drill-grid,
-.drills-grid {
+.drill-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
@@ -1110,8 +1109,7 @@ body::after {
   border-bottom: 3px solid var(--rally-ink);
 }
 
-.drill-body,
-.drill-card:not(:has(.drill-body)) {
+.drill-body {
   padding: 16px 18px 18px;
 }
 
@@ -1184,11 +1182,6 @@ body::after {
   color: var(--rally-ink-soft);
 }
 
-.drill-action {
-  width: 100%;
-  margin-top: 14px;
-}
-
 .flag-badge {
   display: inline-flex;
   align-items: center;
@@ -1241,20 +1234,17 @@ body::after {
   box-shadow: 6px 6px 0 0 var(--rally-ink);
 }
 
-.place-1 .podium-block,
-.podium-player.rank-1 {
+.place-1 .podium-block {
   min-height: 240px;
   background: var(--rally-accent);
 }
 
-.place-2 .podium-block,
-.podium-player.rank-2 {
+.place-2 .podium-block {
   min-height: 200px;
   background: #d4d4d4;
 }
 
-.place-3 .podium-block,
-.podium-player.rank-3 {
+.place-3 .podium-block {
   min-height: 180px;
   background: #cd7f32;
 }
@@ -1270,8 +1260,7 @@ body::after {
   opacity: 0.2;
 }
 
-.podium-avatar,
-.podium-player > .player-avatar {
+.podium-avatar {
   width: 56px;
   height: 56px;
   display: grid;
@@ -1368,16 +1357,6 @@ body::after {
 
 .standings-row.player-standing .player-avatar {
   color: var(--rally-accent);
-}
-
-.standings-row.player-standing em {
-  margin-left: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--rally-ink);
-  color: var(--rally-accent);
-  font: 700 10px/1 var(--font-rally-mono);
-  font-style: normal;
 }
 
 .season-note {
@@ -1742,18 +1721,14 @@ body::after {
   .mode-grid { grid-template-columns: 1fr; padding: 0 18px 28px; }
   .daily-drill { margin: 0 18px 20px; flex-direction: column; align-items: flex-start; }
   .daily-start { width: 100%; }
-  .drill-grid,
-  .drills-grid { padding: 0 18px 32px; }
+  .drill-grid { padding: 0 18px 32px; }
   .podium-grid { grid-template-columns: 1fr; padding: 0 18px 24px; }
   .podium-player { align-items: stretch; }
   .podium-block,
   .podium-player:not(:has(.podium-block)),
   .place-1 .podium-block,
   .place-2 .podium-block,
-  .place-3 .podium-block,
-  .podium-player.rank-1,
-  .podium-player.rank-2,
-  .podium-player.rank-3 { min-height: 0; }
+  .place-3 .podium-block { min-height: 0; }
   .standings-wrap { margin: 0 18px 20px; overflow-x: auto; }
   .standings-row { min-width: 760px; }
   .season-note { margin-left: 18px; margin-right: 18px; }
@@ -1775,8 +1750,7 @@ body::after {
   .filter-tab,
   .period-tab { flex: 1; }
   .daily-drill h2 { font-size: 28px; }
-  .drill-grid,
-  .drills-grid { grid-template-columns: 1fr; }
+  .drill-grid { grid-template-columns: 1fr; }
   .profile-layout { flex-direction: column; }
   .account-list div { flex-direction: column; }
   .account-list strong { text-align: left; }

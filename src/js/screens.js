@@ -614,7 +614,7 @@ export class ScreenManager {
 
     const endScreen = document.getElementById('end-screen');
     if (endScreen) {
-      endScreen.classList.add('screen-overlay', 'screen-overlay--end');
+      endScreen.classList.add('screen-overlay--end');
       const actions = endScreen.querySelector('.end-actions') ?? endScreen;
       if (!endScreen.querySelector('#end-menu-btn')) {
         const menuBtn = document.createElement('button');
