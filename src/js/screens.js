@@ -11,30 +11,49 @@
  * workshop starts, the existing canvas, HUD, and instruction UI keep control.
  */
 
+import {
+  DEFAULT_APP_STATE,
+  loadAppState,
+  recordDrillStart,
+  resetControls,
+  saveAppState,
+} from './app-state.js';
+import { showToast } from './ui-feedback.js';
+
 const INK = '#0f1a14';
 
-const PLAYER = Object.freeze({
-  name: 'Alex Kim',
-  initials: 'AK',
-  country: 'KR',
-  level: 12,
-  xp: 1240,
-  xpMax: 2000,
-  rank: 'Silver III',
-  wins: 47,
-  winRate: 61,
-  streak: 5,
-  bestStreak: 9,
-  trained: '18h 22m',
-});
+const PLAYER = DEFAULT_APP_STATE.profile;
 
-const HOME_STATS = Object.freeze([
-  { label: 'LEVEL', value: String(PLAYER.level), hint: `${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()} XP`, bar: PLAYER.xp / PLAYER.xpMax },
-  { label: 'RANK', value: PLAYER.rank, hint: '+42 pts this week' },
-  { label: 'WINS', value: String(PLAYER.wins), hint: `${PLAYER.winRate}% win rate` },
-  { label: 'STREAK', value: String(PLAYER.streak), hint: `personal best: ${PLAYER.bestStreak}` },
-  { label: 'TRAINED', value: PLAYER.trained, hint: 'this month' },
-]);
+function playerInitials(name) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('') || PLAYER.initials;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function getProfile(state) {
+  return state?.profile ?? PLAYER;
+}
+
+function homeStats(profile) {
+  return [
+    { label: 'LEVEL', value: String(profile.level), hint: `${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP`, bar: profile.xp / profile.xpMax },
+    { label: 'RANK', value: profile.rank, hint: '+42 pts this week' },
+    { label: 'WINS', value: String(profile.wins), hint: `${profile.winRate}% win rate` },
+    { label: 'STREAK', value: String(profile.streak), hint: `personal best: ${profile.bestStreak}` },
+    { label: 'TRAINED', value: profile.trained, hint: 'this month' },
+  ];
+}
 
 const MODES = Object.freeze([
   {
@@ -107,10 +126,20 @@ const LEADERBOARD = Object.freeze([
   { rank: 10, name: 'Aisha Khan', initials: 'AK', rankName: 'Platinum III', wins: 231, wr: 61, xp: 24700, country: 'PK' },
 ]);
 
-const SETTINGS_AVATAR_COLORS = Object.freeze(['#ffd23f', '#e85d3c', '#1f8a4c', '#2e6fc5', '#0f1a14']);
-const SETTINGS_KEYBINDS = Object.freeze([
-  { action: 'Select Smash', key: '1' }, { action: 'Select Drop', key: '2' }, { action: 'Select Clear', key: '3' }, { action: 'Select Drive', key: '4' }, { action: 'Target Left', key: 'A / ←' }, { action: 'Target Center', key: 'S / ↓' }, { action: 'Target Right', key: 'D / →' }, { action: 'Confirm Shot', key: 'Space' }, { action: 'Pause', key: 'Esc' },
+const ALL_TIME_LEADERBOARD = Object.freeze([
+  { rank: 1, name: 'Taro Sakai', initials: 'TS', rankName: 'Legend', wins: 1842, wr: 81, xp: 221400, country: 'JP' },
+  { rank: 2, name: 'Chen Wei', initials: 'CW', rankName: 'Legend', wins: 1730, wr: 79, xp: 207900, country: 'CN' },
+  { rank: 3, name: 'Priya Shetty', initials: 'PS', rankName: 'Master I', wins: 1698, wr: 77, xp: 198200, country: 'IN' },
+  { rank: 4, name: 'Jonas Berg', initials: 'JB', rankName: 'Master I', wins: 1512, wr: 74, xp: 176500, country: 'SE' },
+  { rank: 5, name: 'Amara Okafor', initials: 'AO', rankName: 'Master II', wins: 1450, wr: 72, xp: 168100, country: 'NG' },
+  { rank: 6, name: 'Sofia Rossi', initials: 'SR', rankName: 'Master II', wins: 1394, wr: 71, xp: 160400, country: 'IT' },
+  { rank: 7, name: 'Diego Marquez', initials: 'DM', rankName: 'Diamond I', wins: 1320, wr: 69, xp: 151900, country: 'MX' },
+  { rank: 8, name: 'Hana Park', initials: 'HP', rankName: 'Diamond I', wins: 1268, wr: 68, xp: 145700, country: 'KR' },
+  { rank: 9, name: 'Leo Dubois', initials: 'LD', rankName: 'Diamond II', wins: 1190, wr: 66, xp: 137200, country: 'FR' },
+  { rank: 10, name: 'Aisha Khan', initials: 'AK', rankName: 'Diamond II', wins: 1134, wr: 65, xp: 129800, country: 'PK' },
 ]);
+
+const SETTINGS_AVATAR_COLORS = Object.freeze(['#ffd23f', '#e85d3c', '#1f8a4c', '#2e6fc5', '#0f1a14']);
 
 const SVG_SHUTTLE = `
 <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -217,9 +246,10 @@ function drillCardMarkup(drill) {
     </article>`;
 }
 
-function renderDrillsPage() {
+function renderDrillsPage(state) {
   const dailyDrill = DRILLS_LIST[0];
   const categories = ['All', 'Attack', 'Defense', 'Strategy'];
+  const activeFilter = state.preferences.drillFilter;
 
   return `
     ${pageTitleMarkup({
@@ -228,7 +258,7 @@ function renderDrillsPage() {
       right: `
         <div class="filter-tabs" role="tablist" aria-label="Drill filters">
           ${categories.map(category => `
-            <button class="filter-tab ${category === 'All' ? 'active' : ''}" type="button" data-drill-filter="${category}">${category}</button>
+            <button class="filter-tab ${category === activeFilter ? 'active' : ''}" type="button" data-drill-filter="${category}">${category}</button>
           `).join('')}
         </div>`,
     })}
@@ -240,16 +270,30 @@ function renderDrillsPage() {
         <span class="daily-chip">${dailyDrill.category}</span>
         <p class="daily-meta">${dailyDrill.duration} · +${dailyDrill.xp} XP · Best ${dailyDrill.best}%</p>
       </div>
-      <button class="btn primary daily-start" type="button" disabled>Start ▸</button>
+      <button class="btn primary daily-start" type="button" data-drill="${dailyDrill.id}" data-workshop="${dailyDrill.workshop}">Start ▸</button>
     </section>
     <div class="drill-grid">
       ${DRILLS_LIST.map(drillCardMarkup).join('')}
     </div>`;
 }
 
-function renderLeaderboardPage() {
-  const podium = LEADERBOARD.slice(0, 3);
-  const standings = LEADERBOARD.slice(3);
+function renderLeaderboardPage(state) {
+  const period = state.preferences.leaderboardPeriod;
+  const leaderboard = period === 'all-time' ? ALL_TIME_LEADERBOARD : LEADERBOARD;
+  const podium = leaderboard.slice(0, 3);
+  const standings = leaderboard.slice(3);
+  const podiumOrder = [podium[1], podium[0], podium[2]];
+  const profile = getProfile(state);
+  const playerRow = {
+    rank: period === 'all-time' ? 912 : 287,
+    name: profile.name,
+    initials: playerInitials(profile.name),
+    rankName: profile.rank,
+    wins: period === 'all-time' ? profile.wins * 4 : profile.wins,
+    wr: profile.winRate,
+    xp: period === 'all-time' ? profile.xp + 38420 : profile.xp + 8420,
+    country: profile.country,
+  };
 
   return `
     ${pageTitleMarkup({
@@ -257,27 +301,31 @@ function renderLeaderboardPage() {
       title: 'Leaderboard',
       right: `
       <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
-        <button class="btn period-tab active" type="button" data-period="weekly">Weekly</button>
-        <button class="btn period-tab" type="button" data-period="all-time">All-time</button>
+        <button class="btn period-tab ${period === 'weekly' ? 'active' : ''}" type="button" data-period="weekly">Weekly</button>
+        <button class="btn period-tab ${period === 'all-time' ? 'active' : ''}" type="button" data-period="all-time">All-time</button>
       </div>
     `})}
     <div class="podium-grid">
-      ${podium.map(player => `
-        <article class="podium-player place-${player.rank}">
-          <div class="podium-medal">#${player.rank}</div>
+      ${podiumOrder.map(player => {
+        const place = player.rank;
+        const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉';
+
+        return `
+        <article class="podium-player place-${place}">
+          <div class="podium-medal" aria-hidden="true">${medal}</div>
           <div class="podium-block">
-            <span class="podium-place">Place ${player.rank}</span>
+            <span class="podium-place">${place}</span>
             <span class="podium-avatar">${player.initials}</span>
             <h2>${player.name}</h2>
             <p class="podium-rank">${flagBadge(player.country)} ${player.rankName}</p>
             <div class="podium-stats">
-              <span><strong>${player.wins}</strong><small>Wins</small></span>
-              <span><strong>${player.wr}%</strong><small>WR</small></span>
-              <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
+              <span>${player.wins} W</span>
+              <span>${player.wr}%</span>
             </div>
           </div>
         </article>
-      `).join('')}
+        `;
+      }).join('')}
     </div>
     <div class="standings-wrap card">
       <div class="standings-row standings-head">
@@ -296,27 +344,30 @@ function renderLeaderboardPage() {
             <span><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.country}</small></span>
           </span>
           <span class="tier">${player.rankName}</span>
-          <span class="wins"><strong>${player.wins}</strong><small>Wins</small></span>
-          <span class="wr"><strong>${player.wr}%</strong><small>WR</small></span>
-          <span class="xp"><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
+          <span class="wins">${player.wins}</span>
+          <span class="wr">${player.wr}%</span>
+          <span class="xp">${player.xp.toLocaleString()}</span>
         </article>
       `).join('')}
       <article class="standings-row player-standing">
-        <span class="rank-cell">#287</span>
+        <span class="rank-cell">#${playerRow.rank}</span>
         <span class="player-cell">
-          <span class="player-avatar">${PLAYER.initials}</span>
-          <span><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.country}</small></span>
+          <span class="player-avatar">${playerRow.initials}</span>
+          <span><strong>${playerRow.name} <small class="you-badge">YOU</small></strong><small>${flagBadge(playerRow.country)} ${playerRow.country}</small></span>
         </span>
-        <span class="tier">${PLAYER.rank}</span>
-        <span class="wins"><strong>${PLAYER.wins}</strong><small>Wins</small></span>
-        <span class="wr"><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
-        <span class="xp"><strong>${PLAYER.xp.toLocaleString()}</strong><small>XP</small></span>
+        <span class="tier">${playerRow.rankName}</span>
+        <span class="wins">${playerRow.wins}</span>
+        <span class="wr">${playerRow.wr}%</span>
+        <span class="xp">${playerRow.xp.toLocaleString()}</span>
       </article>
-      <p class="season-note">Season ranking updates after completed training sets and ranked matches.</p>
+      <p class="season-note">WIN 4 MORE MATCHES TO BREAK TOP 200 · SEASON ENDS IN 12 DAYS</p>
     </div>`;
 }
 
-function renderSettingsPage() {
+function renderSettingsPage(state) {
+  const profile = getProfile(state);
+  const initials = playerInitials(profile.name);
+
   return `
     ${pageTitleMarkup({ eyebrow: 'YOUR PREFERENCES', title: 'Settings' })}
     <div class="settings-grid">
@@ -327,27 +378,27 @@ function renderSettingsPage() {
         </div>
         <div class="profile-layout">
           <div class="avatar-editor">
-            <div class="settings-avatar" style="--avatar-color:${SETTINGS_AVATAR_COLORS[0]}">
-              <span class="player-avatar">${PLAYER.initials}</span>
+            <div class="settings-avatar" style="--avatar-color:${profile.avatarColor}">
+              <span class="player-avatar">${initials}</span>
             </div>
             <div class="avatar-swatches" aria-label="Avatar color">
               ${SETTINGS_AVATAR_COLORS.map((color, index) => `
-                <button class="avatar-swatch ${index === 0 ? 'active' : ''}" type="button" style="--swatch-color:${color}" data-avatar-color="${color}" aria-label="Avatar color ${index + 1}"></button>
+                <button class="avatar-swatch ${color === profile.avatarColor ? 'active' : ''}" type="button" style="--swatch-color:${color}" data-avatar-color="${color}" aria-label="Avatar color ${index + 1}"></button>
               `).join('')}
             </div>
           </div>
           <div class="profile-fields">
             <label>
               <span>Name</span>
-              <input class="settings-input" type="text" value="${PLAYER.name}" readonly>
+              <input class="settings-input" type="text" name="name" value="${escapeHtml(profile.name)}">
             </label>
             <label>
               <span>Region</span>
-              <input class="settings-input" type="text" value="${PLAYER.country}" readonly>
+              <input class="settings-input" type="text" name="country" value="${escapeHtml(profile.country)}" maxlength="2">
             </label>
             <label>
               <span>Rank</span>
-              <input class="settings-input" type="text" value="${PLAYER.rank}" readonly>
+              <input class="settings-input" type="text" value="${escapeHtml(profile.rank)}" readonly>
             </label>
             <button class="btn primary save-profile" type="button" disabled>Save profile</button>
           </div>
@@ -360,14 +411,14 @@ function renderSettingsPage() {
         </div>
         <div class="account-list">
           <div><span>Email</span><strong>alex.kim@example.com</strong></div>
-          <div><span>Level</span><strong>Level ${PLAYER.level}</strong></div>
-          <div><span>XP</span><strong>${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()}</strong></div>
-          <div><span>Training</span><strong>${PLAYER.trained} this month</strong></div>
-          <div><span>Streak</span><strong>${PLAYER.streak} days</strong></div>
+          <div><span>Level</span><strong>Level ${profile.level}</strong></div>
+          <div><span>XP</span><strong>${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()}</strong></div>
+          <div><span>Training</span><strong>${profile.trained} this month</strong></div>
+          <div><span>Streak</span><strong>${profile.streak} days</strong></div>
         </div>
         <div class="account-actions">
-          <button class="btn block" type="button" disabled>Change password</button>
-          <button class="btn danger block" type="button" disabled>Sign out</button>
+          <button class="btn block account-feedback" type="button" data-account-action="password">Change password</button>
+          <button class="btn danger block account-feedback" type="button" data-account-action="signout">Sign out</button>
         </div>
       </section>
       <section class="settings-card card keybind-card">
@@ -376,14 +427,14 @@ function renderSettingsPage() {
           <h2>Controls</h2>
         </div>
         <div class="keybind-grid">
-          ${SETTINGS_KEYBINDS.map(bind => `
+          ${state.controls.map(bind => `
             <div class="keybind-row">
               <span>${bind.action}</span>
               <kbd>${bind.key}</kbd>
             </div>
           `).join('')}
         </div>
-        <button class="btn reset-controls" type="button" disabled>Reset to defaults</button>
+        <button class="btn reset-controls" type="button">Reset to defaults</button>
       </section>
     </div>`;
 }
@@ -397,12 +448,17 @@ export class ScreenManager {
     this._listeners = {};
 
     this._currentScreen = null;
+    this._state = loadAppState();
     this._buildScreens();
   }
 
   // ─── Build DOM ─────────────────────────────────────────────────────────────
 
   _buildScreens() {
+    const profile = getProfile(this._state);
+    const initials = playerInitials(profile.name);
+    const firstName = profile.name.split(/\s+/).filter(Boolean)[0] ?? profile.name;
+
     const menu = this._createElement('screen-menu', `
       <div class="court-bg" aria-hidden="true">
         <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
@@ -431,10 +487,10 @@ export class ScreenManager {
             <button class="nav-pill" type="button" data-page="settings">Settings</button>
           </nav>
           <div class="player-pill" aria-label="Profil joueur">
-            <span class="player-avatar">${PLAYER.initials}</span>
+            <span class="player-avatar" data-player-initials>${initials}</span>
             <span>
-              <span class="player-name">${PLAYER.name}</span>
-              <span class="player-rank">LVL ${PLAYER.level} · ${PLAYER.rank.toUpperCase()}</span>
+              <span class="player-name" data-player-name>${escapeHtml(profile.name)}</span>
+              <span class="player-rank">LVL ${profile.level} · ${profile.rank.toUpperCase()}</span>
             </span>
           </div>
         </header>
@@ -442,7 +498,7 @@ export class ScreenManager {
         <main class="rally-main">
           <section class="rally-page active" data-panel="home">
             <div class="stats-strip">
-              ${HOME_STATS.map(stat => `
+              ${homeStats(profile).map(stat => `
                 <article class="stat-card">
                   <span class="stat-label">${stat.label}</span>
                   <strong>${stat.value}</strong>
@@ -454,7 +510,7 @@ export class ScreenManager {
             <div class="page-title-row">
               <div>
                 <p class="page-eyebrow">▸ CHOOSE YOUR COURT</p>
-                <h1>Ready to play, ${PLAYER.name.split(' ')[0]}?</h1>
+                <h1 data-home-greeting>Ready to play, ${escapeHtml(firstName)}?</h1>
               </div>
               <div class="daily-bonus"><span></span> DAILY BONUS · 2× XP</div>
             </div>
@@ -486,7 +542,7 @@ export class ScreenManager {
                       </div>
                       <div class="mode-actions">
                         <button class="btn block mode-back" type="button">← Back</button>
-                        <button class="btn primary mode-start" type="button" ${mode.available ? '' : 'disabled'}>${mode.available ? 'Start ▸' : 'Locked'}</button>
+                        <button class="btn primary mode-start" type="button" data-available="${mode.available ? 'true' : 'false'}">${mode.available ? 'Start ▸' : 'Preview'}</button>
                       </div>
                     </div>
                     <div class="mode-footer">
@@ -500,15 +556,15 @@ export class ScreenManager {
           </section>
 
           <section class="rally-page" data-panel="drills">
-            ${renderDrillsPage()}
+            ${renderDrillsPage(this._state)}
           </section>
 
           <section class="rally-page" data-panel="leaderboard">
-            ${renderLeaderboardPage()}
+            ${renderLeaderboardPage(this._state)}
           </section>
 
           <section class="rally-page" data-panel="settings">
-            ${renderSettingsPage()}
+            ${renderSettingsPage(this._state)}
           </section>
         </main>
       </div>
@@ -547,43 +603,99 @@ export class ScreenManager {
       button.addEventListener('click', event => {
         event.stopPropagation();
         const mode = button.closest('.mode-card')?.dataset.mode;
+        if (button.dataset.available !== 'true') {
+          this._showFeedback(menu, 'Match Mode arrive bientot. Les ateliers Attaque et Defense restent jouables pour l’instant.');
+          return;
+        }
         if (mode === 'attack' || mode === 'defense') {
           this._emit('workshop:select', { workshop: mode });
         }
       });
     });
 
+    menu.querySelector('.daily-start')?.addEventListener('click', event => {
+      const button = event.currentTarget;
+      const workshop = button.dataset.workshop;
+      const drillId = button.dataset.drill;
+      if (workshop === 'attack' || workshop === 'defense') {
+        this._state = recordDrillStart(drillId);
+        this._emit('workshop:select', { workshop });
+      }
+    });
+
     menu.querySelectorAll('.filter-tab').forEach(button => {
       button.addEventListener('click', () => {
         const category = button.dataset.drillFilter;
+        this._state = saveAppState({ preferences: { drillFilter: category } });
         menu.querySelectorAll('.filter-tab').forEach(tab => tab.classList.toggle('active', tab === button));
-        menu.querySelectorAll('.drill-card').forEach(card => {
-          card.hidden = category !== 'All' && card.dataset.category !== category;
-        });
+        this._applyDrillFilter(menu, category);
       });
     });
+    this._applyDrillFilter(menu, this._state.preferences.drillFilter);
 
     menu.querySelectorAll('.drill-card').forEach(card => {
       card.addEventListener('click', () => {
         const workshop = card.dataset.workshop;
-        if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
-          this._emit('workshop:select', { workshop });
+        const drill = DRILLS_LIST.find(entry => entry.id === card.dataset.drill);
+        if (card.classList.contains('locked')) {
+          this._showFeedback(menu, `${drill?.title ?? 'This drill'} est verrouille pour l’instant. Continue les ateliers disponibles pour le debloquer.`);
+          return;
         }
+        if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
+          this._state = recordDrillStart(card.dataset.drill);
+          this._emit('workshop:select', { workshop });
+          return;
+        }
+        this._showFeedback(menu, 'Les drills Strategy sont prevus pour une prochaine passe. Aucun nouvel ingame n’est lance.');
       });
     });
 
-    menu.querySelectorAll('.period-tab').forEach(button => {
-      button.addEventListener('click', () => {
-        menu.querySelectorAll('.period-tab').forEach(tab => tab.classList.toggle('active', tab === button));
-      });
-    });
+    this._wireLeaderboard(menu);
 
+    menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', this._state.profile.avatarColor);
     menu.querySelectorAll('.avatar-swatch').forEach(button => {
       button.addEventListener('click', () => {
         const avatar = menu.querySelector('.settings-avatar');
         if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.avatarColor);
         menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
+        menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', button.dataset.avatarColor);
+        this._markProfileDirty(menu);
       });
+    });
+
+    menu.querySelectorAll('.profile-fields input[name]').forEach(input => {
+      input.addEventListener('input', () => this._markProfileDirty(menu));
+    });
+
+    menu.querySelector('.save-profile')?.addEventListener('click', () => {
+      const nameInput = menu.querySelector('.profile-fields input[name="name"]');
+      const countryInput = menu.querySelector('.profile-fields input[name="country"]');
+      const nextName = nameInput?.value.trim() || PLAYER.name;
+      const nextCountry = (countryInput?.value.trim() || PLAYER.country).slice(0, 2).toUpperCase();
+      const avatarColor = menu.querySelector('.profile-card')?.getAttribute('data-avatar-color') ?? this._state.profile.avatarColor;
+      this._state = saveAppState({ profile: { name: nextName, country: nextCountry, avatarColor } });
+      this._syncProfileDom(menu);
+      this._renderLeaderboardPanel(menu);
+      this._wireLeaderboard(menu);
+      this._markProfileDirty(menu, false);
+      this._showFeedback(menu, 'Profil sauvegarde localement.', 'success');
+    });
+
+    menu.querySelectorAll('.account-feedback').forEach(button => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.accountAction;
+        const message = action === 'signout'
+          ? 'Deconnexion simulee : aucune session backend n’est branchee pour le moment.'
+          : 'Changement de mot de passe pret cote UI, a brancher sur une future API compte.';
+        this._showFeedback(menu, message);
+      });
+    });
+
+    menu.querySelector('.reset-controls')?.addEventListener('click', () => {
+      this._state = resetControls();
+      this._renderSettingsPanel(menu);
+      this._wireSettingsAfterRender(menu);
+      this._showFeedback(menu, 'Controles restaures.', 'success');
     });
 
     const workshop = this._createElement('screen-workshop', `
@@ -637,6 +749,104 @@ export class ScreenManager {
 
     document.body.appendChild(menu);
     document.body.appendChild(workshop);
+  }
+
+  _showFeedback(menu, message, variant = 'info') {
+    showToast(menu.querySelector('.rally-shell') ?? menu, message, variant);
+  }
+
+  _applyDrillFilter(menu, category) {
+    menu.querySelectorAll('.drill-card').forEach(card => {
+      card.hidden = category !== 'All' && card.dataset.category !== category;
+    });
+  }
+
+  _renderLeaderboardPanel(menu) {
+    const panel = menu.querySelector('[data-panel="leaderboard"]');
+    if (panel) panel.innerHTML = renderLeaderboardPage(this._state);
+  }
+
+  _wireLeaderboard(menu) {
+    menu.querySelectorAll('.period-tab').forEach(button => {
+      button.addEventListener('click', () => {
+        this._state = saveAppState({ preferences: { leaderboardPeriod: button.dataset.period } });
+        this._renderLeaderboardPanel(menu);
+        this._wireLeaderboard(menu);
+      });
+    });
+  }
+
+  _renderSettingsPanel(menu) {
+    const panel = menu.querySelector('[data-panel="settings"]');
+    if (panel) panel.innerHTML = renderSettingsPage(this._state);
+  }
+
+  _wireSettingsAfterRender(menu) {
+    menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', this._state.profile.avatarColor);
+    menu.querySelectorAll('.avatar-swatch').forEach(button => {
+      button.addEventListener('click', () => {
+        const avatar = menu.querySelector('.settings-avatar');
+        if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.avatarColor);
+        menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
+        menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', button.dataset.avatarColor);
+        this._markProfileDirty(menu);
+      });
+    });
+
+    menu.querySelectorAll('.profile-fields input[name]').forEach(input => {
+      input.addEventListener('input', () => this._markProfileDirty(menu));
+    });
+
+    menu.querySelector('.save-profile')?.addEventListener('click', () => this._saveProfileFromDom(menu));
+
+    menu.querySelectorAll('.account-feedback').forEach(button => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.accountAction;
+        const message = action === 'signout'
+          ? 'Deconnexion simulee : aucune session backend n’est branchee pour le moment.'
+          : 'Changement de mot de passe pret cote UI, a brancher sur une future API compte.';
+        this._showFeedback(menu, message);
+      });
+    });
+
+    menu.querySelector('.reset-controls')?.addEventListener('click', () => {
+      this._state = resetControls();
+      this._renderSettingsPanel(menu);
+      this._wireSettingsAfterRender(menu);
+      this._showFeedback(menu, 'Controles restaures.', 'success');
+    });
+  }
+
+  _saveProfileFromDom(menu) {
+    const nameInput = menu.querySelector('.profile-fields input[name="name"]');
+    const countryInput = menu.querySelector('.profile-fields input[name="country"]');
+    const nextName = nameInput?.value.trim() || PLAYER.name;
+    const nextCountry = (countryInput?.value.trim() || PLAYER.country).slice(0, 2).toUpperCase();
+    const avatarColor = menu.querySelector('.profile-card')?.getAttribute('data-avatar-color') ?? this._state.profile.avatarColor;
+    this._state = saveAppState({ profile: { name: nextName, country: nextCountry, avatarColor } });
+    this._syncProfileDom(menu);
+    this._renderLeaderboardPanel(menu);
+    this._wireLeaderboard(menu);
+    this._markProfileDirty(menu, false);
+    this._showFeedback(menu, 'Profil sauvegarde localement.', 'success');
+  }
+
+  _markProfileDirty(menu, dirty = true) {
+    const button = menu.querySelector('.save-profile');
+    if (button) button.disabled = !dirty;
+  }
+
+  _syncProfileDom(menu) {
+    const profile = getProfile(this._state);
+    const initials = playerInitials(profile.name);
+    const firstName = profile.name.split(/\s+/).filter(Boolean)[0] ?? profile.name;
+    menu.querySelectorAll('[data-player-initials], .settings-avatar .player-avatar').forEach(el => {
+      el.textContent = initials;
+    });
+    const playerName = menu.querySelector('[data-player-name]');
+    if (playerName) playerName.textContent = profile.name;
+    const greeting = menu.querySelector('[data-home-greeting]');
+    if (greeting) greeting.textContent = `Ready to play, ${firstName}?`;
   }
 
   /**
