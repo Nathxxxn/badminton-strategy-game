@@ -395,6 +395,10 @@ export class ScreenManager {
 
     this._currentScreen = screenId;
 
+    if (screenId !== 'exercise') {
+      document.getElementById('instruction')?.classList.add('hidden');
+    }
+
     if (screenId === 'exercise') return;
 
     const el = this._screens[screenId];
