@@ -16,6 +16,7 @@ const INK = '#0f1a14';
 const PLAYER = Object.freeze({
   name: 'Alex Kim',
   initials: 'AK',
+  country: 'KR',
   level: 12,
   xp: 1240,
   xpMax: 2000,
@@ -80,6 +81,37 @@ const MODES = Object.freeze([
   },
 ]);
 
+const DRILLS_LIST = Object.freeze([
+  { id: 'd1', title: 'Cross-court smash', category: 'Attack', difficulty: 2, duration: '8 min', xp: 80, best: 82, attempts: 14, locked: false, color: '#e85d3c', workshop: 'attack' },
+  { id: 'd2', title: 'Drop shot deception', category: 'Attack', difficulty: 3, duration: '10 min', xp: 100, best: 68, attempts: 9, locked: false, color: '#e85d3c', workshop: 'attack' },
+  { id: 'd3', title: 'Straight net kill', category: 'Attack', difficulty: 2, duration: '6 min', xp: 60, best: 91, attempts: 22, locked: false, color: '#e85d3c', workshop: 'attack' },
+  { id: 'd4', title: 'Jumping smash power', category: 'Attack', difficulty: 4, duration: '12 min', xp: 140, best: null, attempts: 0, locked: true, color: '#e85d3c', workshop: 'attack' },
+  { id: 'd5', title: 'Baseline clear defense', category: 'Defense', difficulty: 2, duration: '8 min', xp: 80, best: 74, attempts: 12, locked: false, color: '#1f8a4c', workshop: 'defense' },
+  { id: 'd6', title: 'Smash block timing', category: 'Defense', difficulty: 3, duration: '10 min', xp: 100, best: 65, attempts: 7, locked: false, color: '#1f8a4c', workshop: 'defense' },
+  { id: 'd7', title: 'Counter-attack lifts', category: 'Defense', difficulty: 3, duration: '9 min', xp: 90, best: 71, attempts: 11, locked: false, color: '#1f8a4c', workshop: 'defense' },
+  { id: 'd8', title: 'Deceptive block to net', category: 'Defense', difficulty: 4, duration: '11 min', xp: 130, best: null, attempts: 0, locked: true, color: '#1f8a4c', workshop: 'defense' },
+  { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', difficulty: 3, duration: '15 min', xp: 150, best: 59, attempts: 5, locked: false, color: '#2e6fc5', workshop: null },
+  { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', difficulty: 4, duration: '18 min', xp: 180, best: null, attempts: 0, locked: true, color: '#2e6fc5', workshop: null },
+]);
+
+const LEADERBOARD = Object.freeze([
+  { rank: 1, name: 'Taro Sakai', initials: 'TS', rankName: 'Diamond I', wins: 421, wr: 78, xp: 48210, country: 'JP' },
+  { rank: 2, name: 'Priya Shetty', initials: 'PS', rankName: 'Diamond II', wins: 398, wr: 74, xp: 44180, country: 'IN' },
+  { rank: 3, name: 'Jonas Berg', initials: 'JB', rankName: 'Diamond II', wins: 372, wr: 72, xp: 41200, country: 'SE' },
+  { rank: 4, name: 'Amara Okafor', initials: 'AO', rankName: 'Diamond III', wins: 341, wr: 69, xp: 37400, country: 'NG' },
+  { rank: 5, name: 'Chen Wei', initials: 'CW', rankName: 'Diamond III', wins: 324, wr: 68, xp: 35200, country: 'CN' },
+  { rank: 6, name: 'Sofia Rossi', initials: 'SR', rankName: 'Platinum I', wins: 289, wr: 66, xp: 31800, country: 'IT' },
+  { rank: 7, name: 'Diego Marquez', initials: 'DM', rankName: 'Platinum I', wins: 271, wr: 65, xp: 29900, country: 'MX' },
+  { rank: 8, name: 'Hana Park', initials: 'HP', rankName: 'Platinum II', wins: 258, wr: 64, xp: 28100, country: 'KR' },
+  { rank: 9, name: 'Leo Dubois', initials: 'LD', rankName: 'Platinum II', wins: 244, wr: 62, xp: 26500, country: 'FR' },
+  { rank: 10, name: 'Aisha Khan', initials: 'AK', rankName: 'Platinum III', wins: 231, wr: 61, xp: 24700, country: 'PK' },
+]);
+
+const SETTINGS_AVATAR_COLORS = Object.freeze(['#ffd23f', '#e85d3c', '#1f8a4c', '#2e6fc5', '#0f1a14']);
+const SETTINGS_KEYBINDS = Object.freeze([
+  { action: 'Select Smash', key: '1' }, { action: 'Select Drop', key: '2' }, { action: 'Select Clear', key: '3' }, { action: 'Select Drive', key: '4' }, { action: 'Target Left', key: 'A / ←' }, { action: 'Target Center', key: 'S / ↓' }, { action: 'Target Right', key: 'D / →' }, { action: 'Confirm Shot', key: 'Space' }, { action: 'Pause', key: 'Esc' },
+]);
+
 const SVG_SHUTTLE = `
 <svg viewBox="0 0 100 100" aria-hidden="true">
   <g stroke="${INK}" stroke-width="3" stroke-linejoin="round">
@@ -131,6 +163,160 @@ function modeIcon(modeId) {
         <rect x="86" y="82" width="10" height="14" rx="2" fill="${INK}" transform="rotate(45 86 82)"/>
       </g>
     </svg>`;
+}
+
+function difficultyDots(level, max = 4) {
+  return `
+    <span class="difficulty" aria-label="Difficulty ${level} of ${max}">
+      ${Array.from({ length: max }, (_, index) => `<span class="${index < level ? 'filled' : ''}"></span>`).join('')}
+    </span>`;
+}
+
+function flagBadge(country) {
+  return `<span class="flag-badge" aria-label="${country}">${country}</span>`;
+}
+
+function pageTitleMarkup(eyebrow, title, aside = '') {
+  return `
+    <div class="page-title-row">
+      <div>
+        <p class="page-eyebrow">▸ ${eyebrow}</p>
+        <h1>${title}</h1>
+      </div>
+      ${aside}
+    </div>`;
+}
+
+function drillCardMarkup(drill) {
+  const best = drill.best === null ? 'New' : `${drill.best}%`;
+  const workshopLabel = drill.workshop ? 'Start drill' : 'Preview';
+
+  return `
+    <article
+      class="drill-card ${drill.locked ? 'locked' : ''}"
+      data-drill="${drill.id}"
+      data-category="${drill.category}"
+      data-workshop="${drill.workshop ?? ''}"
+      data-locked="${drill.locked ? 'true' : 'false'}"
+      style="--drill-color:${drill.color}"
+    >
+      <div class="drill-card-top">
+        <span class="chip">${drill.category}</span>
+        ${difficultyDots(drill.difficulty)}
+      </div>
+      <h2>${drill.title}</h2>
+      <div class="drill-meta">
+        <span>${drill.duration}</span>
+        <span>+${drill.xp} XP</span>
+      </div>
+      <div class="drill-progress">
+        <span><small>BEST</small><strong>${best}</strong></span>
+        <span><small>RUNS</small><strong>${drill.attempts}</strong></span>
+      </div>
+      <button class="btn ${drill.workshop && !drill.locked ? 'primary' : 'block'} drill-action" type="button" ${drill.locked || !drill.workshop ? 'disabled' : ''}>
+        ${drill.locked ? 'Locked' : workshopLabel}
+      </button>
+    </article>`;
+}
+
+function renderDrillsPage() {
+  const dailyDrill = DRILLS_LIST[0];
+  const categories = ['All', 'Attack', 'Defense', 'Strategy'];
+
+  return `
+    ${pageTitleMarkup('TRAINING LIBRARY', 'Drills', '<div class="daily-bonus"><span></span> DAILY DRILL · +80 XP</div>')}
+    <div class="filter-tabs" role="tablist" aria-label="Drill filters">
+      ${categories.map(category => `
+        <button class="filter-tab ${category === 'All' ? 'active' : ''}" type="button" data-category="${category}">${category}</button>
+      `).join('')}
+    </div>
+    <section class="daily-drill" style="--drill-color:${dailyDrill.color}">
+      <div>
+        <p class="page-eyebrow">▸ TODAY'S FOCUS</p>
+        <h2>${dailyDrill.title}</h2>
+        <p>${dailyDrill.category} routine · ${dailyDrill.duration} · +${dailyDrill.xp} XP</p>
+      </div>
+      <button class="btn primary drill-action" type="button" data-workshop="${dailyDrill.workshop}">Start ▸</button>
+    </section>
+    <div class="drills-grid">
+      ${DRILLS_LIST.map(drillCardMarkup).join('')}
+    </div>`;
+}
+
+function renderLeaderboardPage() {
+  const podium = LEADERBOARD.slice(0, 3);
+  const standings = LEADERBOARD.slice(3);
+
+  return `
+    ${pageTitleMarkup('GLOBAL STANDINGS', 'Leaderboard', `
+      <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
+        ${['Week', 'Month', 'All-time'].map((period, index) => `<button class="period-tab ${index === 0 ? 'active' : ''}" type="button">${period}</button>`).join('')}
+      </div>
+    `)}
+    <div class="podium-grid">
+      ${podium.map(player => `
+        <article class="podium-player rank-${player.rank}">
+          <span class="podium-rank">#${player.rank}</span>
+          <span class="player-avatar">${player.initials}</span>
+          <h2>${player.name}</h2>
+          <p>${flagBadge(player.country)} ${player.rankName}</p>
+          <strong>${player.xp.toLocaleString()} XP</strong>
+        </article>
+      `).join('')}
+    </div>
+    <div class="standings-card">
+      ${standings.map(player => `
+        <article class="standings-row">
+          <span class="standings-rank">#${player.rank}</span>
+          <span class="player-avatar">${player.initials}</span>
+          <span class="standings-player"><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
+          <span><strong>${player.wins}</strong><small>Wins</small></span>
+          <span><strong>${player.wr}%</strong><small>WR</small></span>
+          <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
+        </article>
+      `).join('')}
+      <article class="standings-row current-player">
+        <span class="standings-rank">#287</span>
+        <span class="player-avatar">${PLAYER.initials}</span>
+        <span class="standings-player"><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
+        <span><strong>${PLAYER.wins}</strong><small>Wins</small></span>
+        <span><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
+        <span><strong>${PLAYER.xp.toLocaleString()}</strong><small>XP</small></span>
+      </article>
+    </div>`;
+}
+
+function renderSettingsPage() {
+  return `
+    ${pageTitleMarkup('YOUR PREFERENCES', 'Settings')}
+    <div class="settings-grid">
+      <section class="settings-panel">
+        <h2>Profile</h2>
+        <div class="settings-avatar" style="--avatar-color:${SETTINGS_AVATAR_COLORS[0]}">
+          <span class="player-avatar">${PLAYER.initials}</span>
+          <div>
+            <strong>${PLAYER.name}</strong>
+            <span>${flagBadge(PLAYER.country)} Level ${PLAYER.level} · ${PLAYER.rank}</span>
+          </div>
+        </div>
+        <div class="avatar-swatches" aria-label="Avatar color">
+          ${SETTINGS_AVATAR_COLORS.map((color, index) => `
+            <button class="avatar-swatch ${index === 0 ? 'active' : ''}" type="button" style="--swatch-color:${color}" data-color="${color}" aria-label="Avatar color ${index + 1}"></button>
+          `).join('')}
+        </div>
+      </section>
+      <section class="settings-panel">
+        <h2>Controls</h2>
+        <div class="keybind-list">
+          ${SETTINGS_KEYBINDS.map(bind => `
+            <div class="keybind-row">
+              <span>${bind.action}</span>
+              <kbd>${bind.key}</kbd>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    </div>`;
 }
 
 export class ScreenManager {
@@ -245,24 +431,15 @@ export class ScreenManager {
           </section>
 
           <section class="rally-page" data-panel="drills">
-            <div class="page-title-row"><div><p class="page-eyebrow">▸ TRAINING LIBRARY</p><h1>Drills</h1></div></div>
-            <div class="info-grid">
-              <article class="card"><h2>Attack drills</h2><p>Smash placement, deception and net kill routines start from Attack Training.</p></article>
-              <article class="card"><h2>Defense drills</h2><p>Blocks, lifts and recovery routines start from Defense Training.</p></article>
-            </div>
+            ${renderDrillsPage()}
           </section>
 
           <section class="rally-page" data-panel="leaderboard">
-            <div class="page-title-row"><div><p class="page-eyebrow">▸ GLOBAL STANDINGS</p><h1>Leaderboard</h1></div></div>
-            <div class="leaderboard-card card"><strong>#287</strong><span>${PLAYER.name}</span><span>${PLAYER.rank}</span><span>${PLAYER.wins} W</span><span>${PLAYER.winRate}% WR</span></div>
+            ${renderLeaderboardPage()}
           </section>
 
           <section class="rally-page" data-panel="settings">
-            <div class="page-title-row"><div><p class="page-eyebrow">▸ YOUR PREFERENCES</p><h1>Settings</h1></div></div>
-            <div class="info-grid">
-              <article class="card"><h2>Profile</h2><p>Display name, country and avatar controls are presentation-only on this prototype screen.</p></article>
-              <article class="card"><h2>Controls</h2><p>The current in-game controls remain handled by the existing canvas runtime.</p></article>
-            </div>
+            ${renderSettingsPage()}
           </section>
         </main>
       </div>
@@ -304,6 +481,41 @@ export class ScreenManager {
         if (mode === 'attack' || mode === 'defense') {
           this._emit('workshop:select', { workshop: mode });
         }
+      });
+    });
+
+    menu.querySelectorAll('.filter-tab').forEach(button => {
+      button.addEventListener('click', () => {
+        const category = button.dataset.category;
+        menu.querySelectorAll('.filter-tab').forEach(tab => tab.classList.toggle('active', tab === button));
+        menu.querySelectorAll('.drill-card').forEach(card => {
+          card.hidden = category !== 'All' && card.dataset.category !== category;
+        });
+      });
+    });
+
+    menu.querySelectorAll('.drill-card, .daily-drill .drill-action').forEach(target => {
+      target.addEventListener('click', event => {
+        const source = event.currentTarget;
+        const workshop = source.dataset.workshop || source.closest('[data-workshop]')?.dataset.workshop;
+        const locked = source.dataset.locked === 'true' || source.closest('[data-locked="true"]');
+        if (!locked && (workshop === 'attack' || workshop === 'defense')) {
+          this._emit('workshop:select', { workshop });
+        }
+      });
+    });
+
+    menu.querySelectorAll('.period-tab').forEach(button => {
+      button.addEventListener('click', () => {
+        menu.querySelectorAll('.period-tab').forEach(tab => tab.classList.toggle('active', tab === button));
+      });
+    });
+
+    menu.querySelectorAll('.avatar-swatch').forEach(button => {
+      button.addEventListener('click', () => {
+        const avatar = menu.querySelector('.settings-avatar');
+        if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.color);
+        menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
       });
     });
 
