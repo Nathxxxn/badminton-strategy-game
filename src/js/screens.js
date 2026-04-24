@@ -3,54 +3,135 @@
  * Developer A · Rendering & UI
  *
  * Responsibilities:
- *  - Create and manage four game screens as DOM overlays over the canvas
- *  - Handle transitions (fade in/out via CSS opacity)
+ *  - Create and manage menu/workshop overlays over the canvas
+ *  - Handle transitions via CSS opacity
  *  - Emit simple events so main.js can wire navigation logic
  *
- * Screens:
- *  'menu'            — Title screen with "Commencer" button
- *  'workshop-select' — Choose attack or defense workshop
- *  'exercise'        — Active gameplay (no overlay, canvas is visible)
- *  'end-rally'       — Score summary with Rejouer / Menu buttons
- *
- * The canvas and HUD remain rendered beneath all overlays at all times.
- * Only 'menu' and 'workshop-select' need overlays; 'exercise' simply hides them.
- * 'end-rally' reuses the existing #end-screen element from index.html.
+ * The active exercise screen intentionally has no overlay element. Once a
+ * workshop starts, the existing canvas, HUD, and instruction UI keep control.
  */
 
-/** SVG shuttlecock logo for the menu screen */
-const SVG_LOGO = `
-<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <circle cx="28" cy="42" r="8" stroke="currentColor" stroke-width="2.5"/>
-  <line x1="28" y1="34" x2="28" y2="18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-  <line x1="28" y1="18" x2="18" y2="9"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
-  <line x1="28" y1="18" x2="23" y2="7"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
-  <line x1="28" y1="18" x2="28" y2="6"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
-  <line x1="28" y1="18" x2="33" y2="7"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
-  <line x1="28" y1="18" x2="38" y2="9"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
+const INK = '#0f1a14';
+
+const PLAYER = Object.freeze({
+  name: 'Alex Kim',
+  initials: 'AK',
+  level: 12,
+  xp: 1240,
+  xpMax: 2000,
+  rank: 'Silver III',
+  wins: 47,
+  winRate: 61,
+  streak: 5,
+  bestStreak: 9,
+  trained: '18h 22m',
+});
+
+const HOME_STATS = Object.freeze([
+  { label: 'LEVEL', value: String(PLAYER.level), hint: `${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()} XP`, bar: PLAYER.xp / PLAYER.xpMax },
+  { label: 'RANK', value: PLAYER.rank, hint: '+42 pts this week' },
+  { label: 'WINS', value: String(PLAYER.wins), hint: `${PLAYER.winRate}% win rate` },
+  { label: 'STREAK', value: String(PLAYER.streak), hint: `personal best: ${PLAYER.bestStreak}` },
+  { label: 'TRAINED', value: PLAYER.trained, hint: 'this month' },
+]);
+
+const MODES = Object.freeze([
+  {
+    id: 'attack',
+    title: 'Attack Training',
+    tagline: 'Level up your offense',
+    blurb: 'Master smashes, drops, and clears. Learn to read openings and finish rallies with precision aggression.',
+    color: '#e85d3c',
+    difficulty: 2,
+    duration: '10-15 min',
+    rewards: '+120 XP',
+    drills: ['Smash placement', 'Drop-shot deception', 'Net kill reflex', 'Attack combinations'],
+    statLabel: 'Smash accuracy',
+    statValue: '78%',
+    available: true,
+  },
+  {
+    id: 'defense',
+    title: 'Defense Training',
+    tagline: 'Become a wall at the back',
+    blurb: 'Read your opponent, block smashes, and counter-attack from the baseline. Turn defense into your offense.',
+    color: '#1f8a4c',
+    difficulty: 2,
+    duration: '10-15 min',
+    rewards: '+120 XP',
+    drills: ['Smash blocks', 'Lift placement', 'Court recovery', 'Counter-attack timing'],
+    statLabel: 'Blocks landed',
+    statValue: '64%',
+    available: true,
+  },
+  {
+    id: 'match',
+    title: 'Match Mode',
+    tagline: 'Put it all on the line',
+    blurb: 'Full ranked match flow is not wired into this prototype yet. The current game interface stays focused on attack and defense workshops.',
+    color: '#2e6fc5',
+    difficulty: 3,
+    duration: '20-30 min',
+    rewards: '+250 XP',
+    drills: ['Ranked flow preview', 'Opponent analysis', 'Shot-clock concept', 'Post-match summary'],
+    statLabel: 'Win rate',
+    statValue: '61%',
+    available: false,
+  },
+]);
+
+const SVG_SHUTTLE = `
+<svg viewBox="0 0 100 100" aria-hidden="true">
+  <g stroke="${INK}" stroke-width="3" stroke-linejoin="round">
+    <path d="M50 55 L18 15 L28 8 Z" fill="#fff8e1"/>
+    <path d="M50 55 L35 6 L52 4 Z" fill="#ffffff"/>
+    <path d="M50 55 L58 4 L75 10 Z" fill="#fff8e1"/>
+    <path d="M50 55 L82 15 L90 28 Z" fill="#ffffff"/>
+    <ellipse cx="50" cy="62" rx="16" ry="11" fill="#e85d3c"/>
+    <ellipse cx="50" cy="58" rx="16" ry="4" fill="#ffd23f"/>
+  </g>
 </svg>`;
 
-/** SVG crossed-swords for Attack */
-const SVG_ATTACK = `
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M8 32L26 10M26 10H18M26 10V18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M11 25L8 28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  <path d="M32 8L14 30M14 30H22M14 30V22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M29 15L32 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
+function modeIcon(modeId) {
+  if (modeId === 'defense') {
+    return `
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <g stroke="${INK}" stroke-width="3" stroke-linejoin="round">
+          <path d="M50 10 L18 22 L18 52 Q18 78 50 92 Q82 78 82 52 L82 22 Z" fill="#1f8a4c"/>
+          <path d="M50 10 L18 22 L18 52 Q18 78 50 92 Z" fill="#156b3a"/>
+          <path d="M38 48 L46 58 L64 38" fill="none" stroke="#fff8e1" stroke-width="5" stroke-linecap="round"/>
+        </g>
+      </svg>`;
+  }
 
-/** SVG shield for Defense */
-const SVG_DEFENSE = `
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M20 6L8 11V21C8 27.6 13 33.4 20 35C27 33.4 32 27.6 32 21V11L20 6Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M15 20L18 23L25 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+  if (modeId === 'match') {
+    return `
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <g stroke="${INK}" stroke-width="3" stroke-linejoin="round">
+          <path d="M28 18 L72 18 L70 46 Q68 62 50 62 Q32 62 30 46 Z" fill="#ffd23f"/>
+          <path d="M28 22 Q14 22 14 34 Q14 44 28 44" fill="none"/>
+          <path d="M72 22 Q86 22 86 34 Q86 44 72 44" fill="none"/>
+          <rect x="40" y="62" width="20" height="10" fill="#e85d3c"/>
+          <rect x="30" y="72" width="40" height="10" rx="2" fill="${INK}"/>
+        </g>
+      </svg>`;
+  }
 
-/** SVG back arrow for secondary button */
-const SVG_BACK = `
-<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M9 2L4 7L9 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+  return `
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <g stroke="${INK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+        <ellipse cx="38" cy="38" rx="26" ry="30" fill="#ffd23f" transform="rotate(-35 38 38)"/>
+        <g stroke="${INK}" stroke-width="1.5" fill="none" transform="rotate(-35 38 38)">
+          <line x1="12" y1="38" x2="64" y2="38"/>
+          <line x1="38" y1="8" x2="38" y2="68"/>
+          <line x1="18" y1="20" x2="58" y2="56"/>
+          <line x1="58" y1="20" x2="18" y2="56"/>
+        </g>
+        <rect x="58" y="58" width="38" height="10" rx="2" fill="#e85d3c" transform="rotate(45 58 58)"/>
+        <rect x="86" y="82" width="10" height="14" rx="2" fill="${INK}" transform="rotate(45 86 82)"/>
+      </g>
+    </svg>`;
+}
 
 export class ScreenManager {
   constructor() {
@@ -67,69 +148,180 @@ export class ScreenManager {
   // ─── Build DOM ─────────────────────────────────────────────────────────────
 
   _buildScreens() {
-    // Menu screen
     const menu = this._createElement('screen-menu', `
-      <div class="screen-content screen-home">
-        <div class="screen-logo">${SVG_LOGO}</div>
-        <p class="screen-kicker">Base unifiee</p>
-        <h1>Badminton <span>Strategy Lab</span></h1>
-        <p class="screen-subtitle">Le point d'entree principal regroupe le parcours modulaire et les prototypes de validation pour repartir d'une base nette.</p>
+      <div class="court-bg" aria-hidden="true">
+        <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+          <g stroke="#0d4424" stroke-width="3" fill="none">
+            <rect x="260" y="120" width="1400" height="840"/>
+            <line x1="260" y1="540" x2="1660" y2="540"/>
+            <line x1="960" y1="120" x2="960" y2="960"/>
+            <rect x="260" y="240" width="1400" height="300"/>
+            <rect x="260" y="540" width="1400" height="300"/>
+          </g>
+        </svg>
+      </div>
+      <div class="rally-shell">
+        <header class="rally-header">
+          <button class="brand-button" type="button" data-page="home">
+            <span class="brand-mark">${SVG_SHUTTLE}</span>
+            <span class="brand-copy">
+              <span class="brand-title">RALLY</span>
+              <span class="brand-subtitle">BADMINTON · STRATEGY</span>
+            </span>
+          </button>
+          <nav class="rally-nav" aria-label="Navigation principale">
+            <button class="nav-pill active" type="button" data-page="home">Home</button>
+            <button class="nav-pill" type="button" data-page="drills">Drills</button>
+            <button class="nav-pill" type="button" data-page="leaderboard">Leaderboard</button>
+            <button class="nav-pill" type="button" data-page="settings">Settings</button>
+          </nav>
+          <div class="player-pill" aria-label="Profil joueur">
+            <span class="player-avatar">${PLAYER.initials}</span>
+            <span>
+              <span class="player-name">${PLAYER.name}</span>
+              <span class="player-rank">LVL ${PLAYER.level} · ${PLAYER.rank.toUpperCase()}</span>
+            </span>
+          </div>
+        </header>
 
-        <div class="home-grid" aria-label="Modes disponibles">
-          <article class="home-card home-card--guided">
-            <span class="home-card-tag">Experience principale</span>
-            <h2>Parcours guide</h2>
-            <p>Menu, ateliers attaque et defense, HUD, score et orchestration modulaire dans <code>src/js/*</code>.</p>
-            <div class="home-card-footer">
-              <button id="btn-start" class="btn-primary">Choisir un atelier</button>
-              <span class="home-card-meta">C'est la base a faire evoluer.</span>
+        <main class="rally-main">
+          <section class="rally-page active" data-panel="home">
+            <div class="stats-strip">
+              ${HOME_STATS.map(stat => `
+                <article class="stat-card">
+                  <span class="stat-label">${stat.label}</span>
+                  <strong>${stat.value}</strong>
+                  <span class="stat-hint">${stat.hint}</span>
+                  ${typeof stat.bar === 'number' ? `<span class="stat-bar"><span style="width:${Math.round(stat.bar * 100)}%"></span></span>` : ''}
+                </article>
+              `).join('')}
             </div>
-          </article>
+            <div class="page-title-row">
+              <div>
+                <p class="page-eyebrow">▸ CHOOSE YOUR COURT</p>
+                <h1>Ready to play, ${PLAYER.name.split(' ')[0]}?</h1>
+              </div>
+              <div class="daily-bonus"><span></span> DAILY BONUS · 2× XP</div>
+            </div>
+            <div class="mode-grid">
+              ${MODES.map(mode => `
+                <article class="mode-card" data-mode="${mode.id}" style="--mode-color:${mode.color}">
+                  <div class="mode-stripe"></div>
+                  <div class="mode-body">
+                    <div class="mode-top">
+                      <span class="mode-icon">${modeIcon(mode.id)}</span>
+                      <span class="mode-meta">
+                        <span class="chip">${mode.duration}</span>
+                        <span class="difficulty" aria-label="Difficulty ${mode.difficulty} of 3">
+                          ${[1, 2, 3].map(n => `<span class="${n <= mode.difficulty ? 'filled' : ''}"></span>`).join('')}
+                        </span>
+                      </span>
+                    </div>
+                    <p class="mode-tagline">${mode.tagline}</p>
+                    <h2>${mode.title}</h2>
+                    <p class="mode-blurb">${mode.blurb}</p>
+                    <div class="mode-expanded" hidden>
+                      <p class="mode-section-label">INCLUDES</p>
+                      <div class="drill-list">
+                        ${mode.drills.map(drill => `<span><b>✓</b>${drill}</span>`).join('')}
+                      </div>
+                      <div class="mode-stat-row">
+                        <span><small>YOUR ${mode.statLabel.toUpperCase()}</small><strong>${mode.statValue}</strong></span>
+                        <span><small>REWARDS</small><strong>${mode.rewards}</strong></span>
+                      </div>
+                      <div class="mode-actions">
+                        <button class="btn block mode-back" type="button">← Back</button>
+                        <button class="btn primary mode-start" type="button" ${mode.available ? '' : 'disabled'}>${mode.available ? 'Start ▸' : 'Locked'}</button>
+                      </div>
+                    </div>
+                    <div class="mode-footer">
+                      <span>${mode.rewards}</span>
+                      <span>${mode.available ? 'Tap to view' : 'Preview'} <b>→</b></span>
+                    </div>
+                  </div>
+                </article>
+              `).join('')}
+            </div>
+          </section>
 
-          <article class="home-card">
-            <span class="home-card-tag">Prototype</span>
-            <h2>Move Test</h2>
-            <p>Sandbox de deplacement pour valider le snap, le rayon d'action et le ressenti du placement.</p>
-            <a class="btn-secondary" href="move-test.html">Ouvrir le test</a>
-          </article>
+          <section class="rally-page" data-panel="drills">
+            <div class="page-title-row"><div><p class="page-eyebrow">▸ TRAINING LIBRARY</p><h1>Drills</h1></div></div>
+            <div class="info-grid">
+              <article class="card"><h2>Attack drills</h2><p>Smash placement, deception and net kill routines start from Attack Training.</p></article>
+              <article class="card"><h2>Defense drills</h2><p>Blocks, lifts and recovery routines start from Defense Training.</p></article>
+            </div>
+          </section>
 
-          <article class="home-card">
-            <span class="home-card-tag">Prototype</span>
-            <h2>Shot Test</h2>
-            <p>Sandbox de tir pour calibrer la projection, la puissance et la lecture des differentes frappes.</p>
-            <a class="btn-secondary" href="shot-test.html">Ouvrir le test</a>
-          </article>
+          <section class="rally-page" data-panel="leaderboard">
+            <div class="page-title-row"><div><p class="page-eyebrow">▸ GLOBAL STANDINGS</p><h1>Leaderboard</h1></div></div>
+            <div class="leaderboard-card card"><strong>#287</strong><span>${PLAYER.name}</span><span>${PLAYER.rank}</span><span>${PLAYER.wins} W</span><span>${PLAYER.winRate}% WR</span></div>
+          </section>
 
-          <article class="home-card">
-            <span class="home-card-tag">Prototype</span>
-            <h2>Rally Test</h2>
-            <p>Mini echange autonome qui combine mouvement, tir et reactivite dans une boucle courte.</p>
-            <a class="btn-secondary" href="rally-test.html">Ouvrir le test</a>
-          </article>
-        </div>
+          <section class="rally-page" data-panel="settings">
+            <div class="page-title-row"><div><p class="page-eyebrow">▸ YOUR PREFERENCES</p><h1>Settings</h1></div></div>
+            <div class="info-grid">
+              <article class="card"><h2>Profile</h2><p>Display name, country and avatar controls are presentation-only on this prototype screen.</p></article>
+              <article class="card"><h2>Controls</h2><p>The current in-game controls remain handled by the existing canvas runtime.</p></article>
+            </div>
+          </section>
+        </main>
       </div>
     `);
-    menu.querySelector('#btn-start').addEventListener('click', () => {
-      this._emit('menu:start');
+
+    menu.querySelectorAll('[data-page]').forEach(button => {
+      button.addEventListener('click', () => {
+        const page = button.dataset.page;
+        menu.querySelectorAll('.nav-pill').forEach(nav => nav.classList.toggle('active', nav.dataset.page === page));
+        menu.querySelectorAll('.rally-page').forEach(panel => panel.classList.toggle('active', panel.dataset.panel === page));
+      });
     });
 
-    // Workshop select screen
+    menu.querySelectorAll('.mode-card').forEach(card => {
+      card.addEventListener('click', event => {
+        if (event.target.closest('button')) return;
+        const shouldExpand = !card.classList.contains('expanded');
+        menu.querySelectorAll('.mode-card').forEach(other => {
+          const expanded = other === card && shouldExpand;
+          other.classList.toggle('expanded', expanded);
+          other.classList.toggle('dimmed', card !== other && shouldExpand);
+          const expandedRegion = other.querySelector('.mode-expanded');
+          if (expandedRegion) expandedRegion.hidden = !expanded;
+        });
+      });
+    });
+
+    menu.querySelectorAll('.mode-back').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        this._collapseModeCards(menu);
+      });
+    });
+
+    menu.querySelectorAll('.mode-start').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        const mode = button.closest('.mode-card')?.dataset.mode;
+        if (mode === 'attack' || mode === 'defense') {
+          this._emit('workshop:select', { workshop: mode });
+        }
+      });
+    });
+
     const workshop = this._createElement('screen-workshop', `
-      <div class="screen-content" style="display:flex;flex-direction:column;align-items:center;gap:24px;">
-        <h2>Choisis ton atelier</h2>
+      <div class="court-bg" aria-hidden="true"></div>
+      <div class="workshop-shell card">
+        <p class="page-eyebrow">▸ CHOOSE YOUR WORKSHOP</p>
+        <h2>Training court</h2>
         <div class="workshop-cards">
-          <button class="workshop-card" data-workshop="attack" aria-label="Atelier Attaque">
-            <span class="workshop-icon">${SVG_ATTACK}</span>
-            <span class="workshop-title">Attaque</span>
-            <span class="workshop-desc">Rotation, smash, net kill</span>
-          </button>
-          <button class="workshop-card" data-workshop="defense" aria-label="Atelier Défense">
-            <span class="workshop-icon">${SVG_DEFENSE}</span>
-            <span class="workshop-title">Défense</span>
-            <span class="workshop-desc">Side-by-side, lift, block</span>
-          </button>
+          ${MODES.filter(mode => mode.available).map(mode => `
+            <button class="workshop-card" type="button" data-workshop="${mode.id}" style="--mode-color:${mode.color}">
+              <span class="workshop-icon">${modeIcon(mode.id)}</span>
+              <span class="workshop-title">${mode.id === 'attack' ? 'Attaque' : 'Défense'}</span>
+              <span class="workshop-desc">${mode.id === 'attack' ? 'Rotation, smash, net kill' : 'Side-by-side, lift, block'}</span>
+            </button>
+          `).join('')}
         </div>
-        <button id="btn-back-menu" class="btn-secondary">${SVG_BACK} Retour</button>
+        <button id="btn-back-menu" class="btn" type="button">← Retour</button>
       </div>
     `);
     workshop.querySelectorAll('.workshop-card').forEach(card => {
@@ -141,15 +333,16 @@ export class ScreenManager {
       this.show('menu');
     });
 
-    // End-rally: reuse existing #end-screen, add Menu button if missing
     const endScreen = document.getElementById('end-screen');
     if (endScreen) {
+      endScreen.classList.add('screen-overlay', 'screen-overlay--end');
+      const actions = endScreen.querySelector('.end-actions') ?? endScreen;
       if (!endScreen.querySelector('#end-menu-btn')) {
         const menuBtn = document.createElement('button');
         menuBtn.id = 'end-menu-btn';
         menuBtn.textContent = 'Menu';
         menuBtn.className = 'btn-secondary';
-        endScreen.appendChild(menuBtn);
+        actions.appendChild(menuBtn);
       }
       endScreen.querySelector('#end-btn').addEventListener('click', () => {
         this._emit('end:replay');
@@ -162,14 +355,23 @@ export class ScreenManager {
 
     this._screens['menu']            = menu;
     this._screens['workshop-select'] = workshop;
-    // 'exercise' has no overlay element — handled specially in show()
 
     document.body.appendChild(menu);
     document.body.appendChild(workshop);
   }
 
   /**
-   * Create a screen overlay div, add class screen-overlay, and return it.
+   * @param {HTMLElement} menu
+   */
+  _collapseModeCards(menu) {
+    menu.querySelectorAll('.mode-card').forEach(card => {
+      card.classList.remove('expanded', 'dimmed');
+      const expandedRegion = card.querySelector('.mode-expanded');
+      if (expandedRegion) expandedRegion.hidden = true;
+    });
+  }
+
+  /**
    * @param {string} id
    * @param {string} innerHTML
    * @returns {HTMLDivElement}
@@ -182,10 +384,7 @@ export class ScreenManager {
     return el;
   }
 
-  // ─── Screen transitions ────────────────────────────────────────────────────
-
   /**
-   * Show the given screen and hide the current one.
    * @param {'menu'|'workshop-select'|'exercise'|'end-rally'} screenId
    */
   show(screenId) {
@@ -196,9 +395,7 @@ export class ScreenManager {
 
     this._currentScreen = screenId;
 
-    if (screenId === 'exercise') {
-      return;
-    }
+    if (screenId === 'exercise') return;
 
     const el = this._screens[screenId];
     if (!el) {
@@ -209,7 +406,6 @@ export class ScreenManager {
   }
 
   /**
-   * Fade-in an overlay element.
    * @param {HTMLElement} el
    */
   _showEl(el) {
@@ -220,7 +416,6 @@ export class ScreenManager {
   }
 
   /**
-   * Fade-out an overlay element, then set display:none after the transition.
    * @param {HTMLElement} el
    */
   _hideEl(el) {
@@ -233,10 +428,7 @@ export class ScreenManager {
     setTimeout(() => { el.style.display = 'none'; }, 400);
   }
 
-  // ─── Event emitter ─────────────────────────────────────────────────────────
-
   /**
-   * Register a callback for a named event.
    * @param {string} event
    * @param {Function} callback
    */
