@@ -1,5 +1,13 @@
 const STORAGE_KEY = 'rally.appState.v1';
 
+import {
+  fetchBackendState,
+  recordBackendDrillStart,
+  resetBackendControls,
+  saveBackendPreferences,
+  saveBackendProfile,
+} from './api-client.js';
+
 const DEFAULT_CONTROLS = Object.freeze([
   { action: 'Select Smash', key: '1' },
   { action: 'Select Drop', key: '2' },
@@ -75,6 +83,13 @@ function getStorage() {
   }
 }
 
+function cacheState(state) {
+  const storage = getStorage();
+  const normalized = normalizeState(state);
+  if (storage) storage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
 export function loadAppState() {
   const storage = getStorage();
   if (!storage) return clone(DEFAULT_APP_STATE);
@@ -91,10 +106,8 @@ export function loadAppState() {
 }
 
 export function saveAppState(patch) {
-  const storage = getStorage();
   const next = mergeState(loadAppState(), patch);
-  if (storage) storage.setItem(STORAGE_KEY, JSON.stringify(next));
-  return next;
+  return cacheState(next);
 }
 
 export function resetControls() {
@@ -108,4 +121,37 @@ export function recordDrillStart(drillId) {
     : state.progression.startedDrills.concat(drillId);
 
   return saveAppState({ progression: { startedDrills } });
+}
+
+export async function loadAppStateAsync() {
+  const backendState = await fetchBackendState();
+  if (backendState) return cacheState(backendState);
+  return loadAppState();
+}
+
+export async function saveAppStateAsync(patch) {
+  let backendState = null;
+
+  if (patch?.profile) {
+    backendState = await saveBackendProfile(patch.profile);
+  }
+
+  if (patch?.preferences) {
+    backendState = await saveBackendPreferences(patch.preferences);
+  }
+
+  if (backendState) return cacheState(backendState);
+  return saveAppState(patch);
+}
+
+export async function resetControlsAsync() {
+  const backendState = await resetBackendControls();
+  if (backendState) return cacheState(backendState);
+  return resetControls();
+}
+
+export async function recordDrillStartAsync(drillId) {
+  const backendState = await recordBackendDrillStart(drillId);
+  if (backendState) return cacheState(backendState);
+  return recordDrillStart(drillId);
 }

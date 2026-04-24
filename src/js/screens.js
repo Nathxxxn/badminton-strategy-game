@@ -14,9 +14,10 @@
 import {
   DEFAULT_APP_STATE,
   loadAppState,
-  recordDrillStart,
-  resetControls,
-  saveAppState,
+  loadAppStateAsync,
+  recordDrillStartAsync,
+  resetControlsAsync,
+  saveAppStateAsync,
 } from './app-state.js';
 import { showToast } from './ui-feedback.js';
 
@@ -450,6 +451,7 @@ export class ScreenManager {
     this._currentScreen = null;
     this._state = loadAppState();
     this._buildScreens();
+    void this._hydrateState();
   }
 
   // ─── Build DOM ─────────────────────────────────────────────────────────────
@@ -498,14 +500,7 @@ export class ScreenManager {
         <main class="rally-main">
           <section class="rally-page active" data-panel="home">
             <div class="stats-strip">
-              ${homeStats(profile).map(stat => `
-                <article class="stat-card">
-                  <span class="stat-label">${stat.label}</span>
-                  <strong>${stat.value}</strong>
-                  <span class="stat-hint">${stat.hint}</span>
-                  ${typeof stat.bar === 'number' ? `<span class="stat-bar"><span style="width:${Math.round(stat.bar * 100)}%"></span></span>` : ''}
-                </article>
-              `).join('')}
+              ${this._homeStatsMarkup(profile)}
             </div>
             <div class="page-title-row">
               <div>
@@ -613,90 +608,11 @@ export class ScreenManager {
       });
     });
 
-    menu.querySelector('.daily-start')?.addEventListener('click', event => {
-      const button = event.currentTarget;
-      const workshop = button.dataset.workshop;
-      const drillId = button.dataset.drill;
-      if (workshop === 'attack' || workshop === 'defense') {
-        this._state = recordDrillStart(drillId);
-        this._emit('workshop:select', { workshop });
-      }
-    });
-
-    menu.querySelectorAll('.filter-tab').forEach(button => {
-      button.addEventListener('click', () => {
-        const category = button.dataset.drillFilter;
-        this._state = saveAppState({ preferences: { drillFilter: category } });
-        menu.querySelectorAll('.filter-tab').forEach(tab => tab.classList.toggle('active', tab === button));
-        this._applyDrillFilter(menu, category);
-      });
-    });
-    this._applyDrillFilter(menu, this._state.preferences.drillFilter);
-
-    menu.querySelectorAll('.drill-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const workshop = card.dataset.workshop;
-        const drill = DRILLS_LIST.find(entry => entry.id === card.dataset.drill);
-        if (card.classList.contains('locked')) {
-          this._showFeedback(menu, `${drill?.title ?? 'This drill'} est verrouille pour l’instant. Continue les ateliers disponibles pour le debloquer.`);
-          return;
-        }
-        if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
-          this._state = recordDrillStart(card.dataset.drill);
-          this._emit('workshop:select', { workshop });
-          return;
-        }
-        this._showFeedback(menu, 'Les drills Strategy sont prevus pour une prochaine passe. Aucun nouvel ingame n’est lance.');
-      });
-    });
+    this._wireDrills(menu);
 
     this._wireLeaderboard(menu);
 
-    menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', this._state.profile.avatarColor);
-    menu.querySelectorAll('.avatar-swatch').forEach(button => {
-      button.addEventListener('click', () => {
-        const avatar = menu.querySelector('.settings-avatar');
-        if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.avatarColor);
-        menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
-        menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', button.dataset.avatarColor);
-        this._markProfileDirty(menu);
-      });
-    });
-
-    menu.querySelectorAll('.profile-fields input[name]').forEach(input => {
-      input.addEventListener('input', () => this._markProfileDirty(menu));
-    });
-
-    menu.querySelector('.save-profile')?.addEventListener('click', () => {
-      const nameInput = menu.querySelector('.profile-fields input[name="name"]');
-      const countryInput = menu.querySelector('.profile-fields input[name="country"]');
-      const nextName = nameInput?.value.trim() || PLAYER.name;
-      const nextCountry = (countryInput?.value.trim() || PLAYER.country).slice(0, 2).toUpperCase();
-      const avatarColor = menu.querySelector('.profile-card')?.getAttribute('data-avatar-color') ?? this._state.profile.avatarColor;
-      this._state = saveAppState({ profile: { name: nextName, country: nextCountry, avatarColor } });
-      this._syncProfileDom(menu);
-      this._renderLeaderboardPanel(menu);
-      this._wireLeaderboard(menu);
-      this._markProfileDirty(menu, false);
-      this._showFeedback(menu, 'Profil sauvegarde localement.', 'success');
-    });
-
-    menu.querySelectorAll('.account-feedback').forEach(button => {
-      button.addEventListener('click', () => {
-        const action = button.dataset.accountAction;
-        const message = action === 'signout'
-          ? 'Deconnexion simulee : aucune session backend n’est branchee pour le moment.'
-          : 'Changement de mot de passe pret cote UI, a brancher sur une future API compte.';
-        this._showFeedback(menu, message);
-      });
-    });
-
-    menu.querySelector('.reset-controls')?.addEventListener('click', () => {
-      this._state = resetControls();
-      this._renderSettingsPanel(menu);
-      this._wireSettingsAfterRender(menu);
-      this._showFeedback(menu, 'Controles restaures.', 'success');
-    });
+    this._wireSettingsAfterRender(menu);
 
     const workshop = this._createElement('screen-workshop', `
       <div class="court-bg" aria-hidden="true"></div>
@@ -755,9 +671,85 @@ export class ScreenManager {
     showToast(menu.querySelector('.rally-shell') ?? menu, message, variant);
   }
 
+  async _hydrateState() {
+    const menu = this._screens.menu;
+    if (!menu) return;
+
+    this._state = await loadAppStateAsync();
+    this._syncProfileDom(menu);
+    this._renderHomeStats(menu);
+    this._renderDrillsPanel(menu);
+    this._wireDrills(menu);
+    this._renderLeaderboardPanel(menu);
+    this._wireLeaderboard(menu);
+    this._renderSettingsPanel(menu);
+    this._wireSettingsAfterRender(menu);
+  }
+
+  _homeStatsMarkup(profile) {
+    return homeStats(profile).map(stat => `
+      <article class="stat-card">
+        <span class="stat-label">${stat.label}</span>
+        <strong>${stat.value}</strong>
+        <span class="stat-hint">${stat.hint}</span>
+        ${typeof stat.bar === 'number' ? `<span class="stat-bar"><span style="width:${Math.round(stat.bar * 100)}%"></span></span>` : ''}
+      </article>
+    `).join('');
+  }
+
+  _renderHomeStats(menu) {
+    const stats = menu.querySelector('.stats-strip');
+    if (stats) stats.innerHTML = this._homeStatsMarkup(getProfile(this._state));
+  }
+
   _applyDrillFilter(menu, category) {
     menu.querySelectorAll('.drill-card').forEach(card => {
       card.hidden = category !== 'All' && card.dataset.category !== category;
+    });
+  }
+
+  _renderDrillsPanel(menu) {
+    const panel = menu.querySelector('[data-panel="drills"]');
+    if (panel) panel.innerHTML = renderDrillsPage(this._state);
+  }
+
+  _wireDrills(menu) {
+    menu.querySelector('.daily-start')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const workshop = button.dataset.workshop;
+      const drillId = button.dataset.drill;
+      if (workshop === 'attack' || workshop === 'defense') {
+        this._state = await recordDrillStartAsync(drillId);
+        this._emit('workshop:select', { workshop });
+      }
+    });
+
+    menu.querySelectorAll('.filter-tab').forEach(button => {
+      button.addEventListener('click', async () => {
+        const category = button.dataset.drillFilter;
+        this._state = await saveAppStateAsync({ preferences: { drillFilter: category } });
+        menu.querySelectorAll('.filter-tab').forEach(tab => tab.classList.toggle('active', tab === button));
+        this._applyDrillFilter(menu, category);
+      });
+    });
+
+    this._applyDrillFilter(menu, this._state.preferences.drillFilter);
+
+    menu.querySelectorAll('.drill-card').forEach(card => {
+      card.addEventListener('click', async () => {
+        const workshop = card.dataset.workshop;
+        const drill = DRILLS_LIST.find(entry => entry.id === card.dataset.drill);
+        if (card.classList.contains('locked')) {
+          this._showFeedback(menu, `${drill?.title ?? 'This drill'} est verrouille pour l’instant. Continue les ateliers disponibles pour le debloquer.`);
+          return;
+        }
+        if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
+          this._state = await recordDrillStartAsync(card.dataset.drill);
+          this._emit('workshop:select', { workshop });
+          return;
+        }
+        this._showFeedback(menu, 'Les drills Strategy sont prevus pour une prochaine passe. Aucun nouvel ingame n’est lance.');
+      });
     });
   }
 
@@ -768,8 +760,8 @@ export class ScreenManager {
 
   _wireLeaderboard(menu) {
     menu.querySelectorAll('.period-tab').forEach(button => {
-      button.addEventListener('click', () => {
-        this._state = saveAppState({ preferences: { leaderboardPeriod: button.dataset.period } });
+      button.addEventListener('click', async () => {
+        this._state = await saveAppStateAsync({ preferences: { leaderboardPeriod: button.dataset.period } });
         this._renderLeaderboardPanel(menu);
         this._wireLeaderboard(menu);
       });
@@ -797,7 +789,9 @@ export class ScreenManager {
       input.addEventListener('input', () => this._markProfileDirty(menu));
     });
 
-    menu.querySelector('.save-profile')?.addEventListener('click', () => this._saveProfileFromDom(menu));
+    menu.querySelector('.save-profile')?.addEventListener('click', () => {
+      void this._saveProfileFromDom(menu);
+    });
 
     menu.querySelectorAll('.account-feedback').forEach(button => {
       button.addEventListener('click', () => {
@@ -809,26 +803,27 @@ export class ScreenManager {
       });
     });
 
-    menu.querySelector('.reset-controls')?.addEventListener('click', () => {
-      this._state = resetControls();
+    menu.querySelector('.reset-controls')?.addEventListener('click', async () => {
+      this._state = await resetControlsAsync();
       this._renderSettingsPanel(menu);
       this._wireSettingsAfterRender(menu);
       this._showFeedback(menu, 'Controles restaures.', 'success');
     });
   }
 
-  _saveProfileFromDom(menu) {
+  async _saveProfileFromDom(menu) {
     const nameInput = menu.querySelector('.profile-fields input[name="name"]');
     const countryInput = menu.querySelector('.profile-fields input[name="country"]');
     const nextName = nameInput?.value.trim() || PLAYER.name;
     const nextCountry = (countryInput?.value.trim() || PLAYER.country).slice(0, 2).toUpperCase();
     const avatarColor = menu.querySelector('.profile-card')?.getAttribute('data-avatar-color') ?? this._state.profile.avatarColor;
-    this._state = saveAppState({ profile: { name: nextName, country: nextCountry, avatarColor } });
+    this._state = await saveAppStateAsync({ profile: { name: nextName, country: nextCountry, avatarColor } });
     this._syncProfileDom(menu);
+    this._renderHomeStats(menu);
     this._renderLeaderboardPanel(menu);
     this._wireLeaderboard(menu);
     this._markProfileDirty(menu, false);
-    this._showFeedback(menu, 'Profil sauvegarde localement.', 'success');
+    this._showFeedback(menu, 'Profil sauvegarde.', 'success');
   }
 
   _markProfileDirty(menu, dirty = true) {

@@ -5,3 +5,5 @@ Thumbs.db
 .claude/
 .superpowers/
 skills-lock.json
+node_modules/
+server/data/
