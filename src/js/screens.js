@@ -165,10 +165,10 @@ function modeIcon(modeId) {
     </svg>`;
 }
 
-function difficultyDots(level, max = 4) {
+function difficultyDots(count, total = 4) {
   return `
-    <span class="difficulty" aria-label="Difficulty ${level} of ${max}">
-      ${Array.from({ length: max }, (_, index) => `<span class="${index < level ? 'filled' : ''}"></span>`).join('')}
+    <span class="difficulty" aria-label="Difficulty ${count} of ${total}">
+      ${Array.from({ length: total }, (_, index) => `<span class="${index < count ? 'filled' : ''}"></span>`).join('')}
     </span>`;
 }
 
@@ -176,20 +176,19 @@ function flagBadge(country) {
   return `<span class="flag-badge" aria-label="${country}">${country}</span>`;
 }
 
-function pageTitleMarkup(eyebrow, title, aside = '') {
+function pageTitleMarkup({ eyebrow, title, right = '' }) {
   return `
     <div class="page-title-row">
       <div>
         <p class="page-eyebrow">▸ ${eyebrow}</p>
         <h1>${title}</h1>
       </div>
-      ${aside}
+      ${right}
     </div>`;
 }
 
 function drillCardMarkup(drill) {
-  const best = drill.best === null ? 'New' : `${drill.best}%`;
-  const workshopLabel = drill.workshop ? 'Start drill' : 'Preview';
+  const playable = !drill.locked && (drill.workshop === 'attack' || drill.workshop === 'defense');
 
   return `
     <article
@@ -197,25 +196,24 @@ function drillCardMarkup(drill) {
       data-drill="${drill.id}"
       data-category="${drill.category}"
       data-workshop="${drill.workshop ?? ''}"
-      data-locked="${drill.locked ? 'true' : 'false'}"
+      data-playable="${playable ? 'true' : 'false'}"
       style="--drill-color:${drill.color}"
     >
-      <div class="drill-card-top">
-        <span class="chip">${drill.category}</span>
-        ${difficultyDots(drill.difficulty)}
+      <div class="drill-stripe"></div>
+      <div class="drill-body">
+        <div class="drill-card-head">
+          <span class="chip drill-chip">${drill.category}</span>
+          ${difficultyDots(drill.difficulty).replace('class="difficulty"', 'class="difficulty compact"')}
+        </div>
+        <h2>${drill.title}</h2>
+        <div class="drill-meta">
+          <span>${drill.duration}</span>
+          <span>+${drill.xp} XP</span>
+          <span>${drill.attempts} runs</span>
+        </div>
+        ${drill.best === null ? '<p class="new-drill">New drill</p>' : `<p class="best-score"><span>BEST</span><strong>${drill.best}%</strong></p>`}
+        ${drill.locked ? '<p class="drill-lock">Locked</p>' : ''}
       </div>
-      <h2>${drill.title}</h2>
-      <div class="drill-meta">
-        <span>${drill.duration}</span>
-        <span>+${drill.xp} XP</span>
-      </div>
-      <div class="drill-progress">
-        <span><small>BEST</small><strong>${best}</strong></span>
-        <span><small>RUNS</small><strong>${drill.attempts}</strong></span>
-      </div>
-      <button class="btn ${drill.workshop && !drill.locked ? 'primary' : 'block'} drill-action" type="button" ${drill.locked || !drill.workshop ? 'disabled' : ''}>
-        ${drill.locked ? 'Locked' : workshopLabel}
-      </button>
     </article>`;
 }
 
@@ -224,21 +222,27 @@ function renderDrillsPage() {
   const categories = ['All', 'Attack', 'Defense', 'Strategy'];
 
   return `
-    ${pageTitleMarkup('TRAINING LIBRARY', 'Drills', '<div class="daily-bonus"><span></span> DAILY DRILL · +80 XP</div>')}
-    <div class="filter-tabs" role="tablist" aria-label="Drill filters">
-      ${categories.map(category => `
-        <button class="filter-tab ${category === 'All' ? 'active' : ''}" type="button" data-category="${category}">${category}</button>
-      `).join('')}
-    </div>
+    ${pageTitleMarkup({
+      eyebrow: 'TRAINING LIBRARY',
+      title: 'Drills',
+      right: `
+        <div class="filter-tabs" role="tablist" aria-label="Drill filters">
+          ${categories.map(category => `
+            <button class="filter-tab ${category === 'All' ? 'active' : ''}" type="button" data-drill-filter="${category}">${category}</button>
+          `).join('')}
+        </div>`,
+    })}
     <section class="daily-drill" style="--drill-color:${dailyDrill.color}">
-      <div>
+      <div class="daily-shuttle">${SVG_SHUTTLE}</div>
+      <div class="daily-copy">
         <p class="page-eyebrow">▸ TODAY'S FOCUS</p>
         <h2>${dailyDrill.title}</h2>
-        <p>${dailyDrill.category} routine · ${dailyDrill.duration} · +${dailyDrill.xp} XP</p>
+        <span class="daily-chip">${dailyDrill.category}</span>
+        <p class="daily-meta">${dailyDrill.duration} · +${dailyDrill.xp} XP · Best ${dailyDrill.best}%</p>
       </div>
-      <button class="btn primary drill-action" type="button" data-workshop="${dailyDrill.workshop}">Start ▸</button>
+      <button class="btn primary daily-start" type="button" disabled>Start ▸</button>
     </section>
-    <div class="drills-grid">
+    <div class="drill-grid">
       ${DRILLS_LIST.map(drillCardMarkup).join('')}
     </div>`;
 }
@@ -248,66 +252,123 @@ function renderLeaderboardPage() {
   const standings = LEADERBOARD.slice(3);
 
   return `
-    ${pageTitleMarkup('GLOBAL STANDINGS', 'Leaderboard', `
+    ${pageTitleMarkup({
+      eyebrow: 'GLOBAL STANDINGS',
+      title: 'Leaderboard',
+      right: `
       <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
         ${['Week', 'Month', 'All-time'].map((period, index) => `<button class="period-tab ${index === 0 ? 'active' : ''}" type="button">${period}</button>`).join('')}
       </div>
-    `)}
+    `})}
     <div class="podium-grid">
       ${podium.map(player => `
-        <article class="podium-player rank-${player.rank}">
-          <span class="podium-rank">#${player.rank}</span>
-          <span class="player-avatar">${player.initials}</span>
-          <h2>${player.name}</h2>
-          <p>${flagBadge(player.country)} ${player.rankName}</p>
-          <strong>${player.xp.toLocaleString()} XP</strong>
+        <article class="podium-player place-${player.rank}">
+          <div class="podium-medal">#${player.rank}</div>
+          <div class="podium-block">
+            <span class="podium-place">Place ${player.rank}</span>
+            <span class="podium-avatar">${player.initials}</span>
+            <h2>${player.name}</h2>
+            <p class="podium-rank">${flagBadge(player.country)} ${player.rankName}</p>
+            <div class="podium-stats">
+              <span><strong>${player.wins}</strong><small>Wins</small></span>
+              <span><strong>${player.wr}%</strong><small>WR</small></span>
+              <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
+            </div>
+          </div>
         </article>
       `).join('')}
     </div>
-    <div class="standings-card">
+    <div class="standings-wrap card">
+      <div class="standings-row standings-head">
+        <span class="rank-cell">Rank</span>
+        <span class="player-cell">Player</span>
+        <span>Wins</span>
+        <span>WR</span>
+        <span>XP</span>
+      </div>
       ${standings.map(player => `
         <article class="standings-row">
-          <span class="standings-rank">#${player.rank}</span>
-          <span class="player-avatar">${player.initials}</span>
-          <span class="standings-player"><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
+          <span class="rank-cell">#${player.rank}</span>
+          <span class="player-cell">
+            <span class="player-avatar">${player.initials}</span>
+            <span class="player-standing"><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.rankName}</small></span>
+          </span>
           <span><strong>${player.wins}</strong><small>Wins</small></span>
           <span><strong>${player.wr}%</strong><small>WR</small></span>
           <span><strong>${player.xp.toLocaleString()}</strong><small>XP</small></span>
         </article>
       `).join('')}
-      <article class="standings-row current-player">
-        <span class="standings-rank">#287</span>
-        <span class="player-avatar">${PLAYER.initials}</span>
-        <span class="standings-player"><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
+      <article class="standings-row">
+        <span class="rank-cell">#287</span>
+        <span class="player-cell">
+          <span class="player-avatar">${PLAYER.initials}</span>
+          <span class="player-standing"><strong>${PLAYER.name}</strong><small>${flagBadge(PLAYER.country)} ${PLAYER.rank}</small></span>
+        </span>
         <span><strong>${PLAYER.wins}</strong><small>Wins</small></span>
         <span><strong>${PLAYER.winRate}%</strong><small>WR</small></span>
         <span><strong>${PLAYER.xp.toLocaleString()}</strong><small>XP</small></span>
       </article>
+      <p class="season-note">Season ranking updates after completed training sets and ranked matches.</p>
     </div>`;
 }
 
 function renderSettingsPage() {
   return `
-    ${pageTitleMarkup('YOUR PREFERENCES', 'Settings')}
+    ${pageTitleMarkup({ eyebrow: 'YOUR PREFERENCES', title: 'Settings' })}
     <div class="settings-grid">
-      <section class="settings-panel">
-        <h2>Profile</h2>
-        <div class="settings-avatar" style="--avatar-color:${SETTINGS_AVATAR_COLORS[0]}">
-          <span class="player-avatar">${PLAYER.initials}</span>
-          <div>
-            <strong>${PLAYER.name}</strong>
-            <span>${flagBadge(PLAYER.country)} Level ${PLAYER.level} · ${PLAYER.rank}</span>
+      <section class="settings-card card profile-card">
+        <div class="settings-card-head">
+          <span class="settings-accent green"></span>
+          <h2>Profile</h2>
+        </div>
+        <div class="profile-layout">
+          <div class="avatar-editor">
+            <div class="settings-avatar" style="--avatar-color:${SETTINGS_AVATAR_COLORS[0]}">
+              <span class="player-avatar">${PLAYER.initials}</span>
+            </div>
+            <div class="avatar-swatches" aria-label="Avatar color">
+              ${SETTINGS_AVATAR_COLORS.map((color, index) => `
+                <button class="avatar-swatch ${index === 0 ? 'active' : ''}" type="button" style="--swatch-color:${color}" data-avatar-color="${color}" aria-label="Avatar color ${index + 1}"></button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="profile-fields">
+            <label>
+              <span>Name</span>
+              <input class="settings-input" type="text" value="${PLAYER.name}" readonly>
+            </label>
+            <label>
+              <span>Region</span>
+              <input class="settings-input" type="text" value="${PLAYER.country}" readonly>
+            </label>
+            <label>
+              <span>Rank</span>
+              <input class="settings-input" type="text" value="${PLAYER.rank}" readonly>
+            </label>
           </div>
         </div>
-        <div class="avatar-swatches" aria-label="Avatar color">
-          ${SETTINGS_AVATAR_COLORS.map((color, index) => `
-            <button class="avatar-swatch ${index === 0 ? 'active' : ''}" type="button" style="--swatch-color:${color}" data-color="${color}" aria-label="Avatar color ${index + 1}"></button>
-          `).join('')}
+      </section>
+      <section class="settings-card card account-card">
+        <div class="settings-card-head">
+          <span class="settings-accent blue"></span>
+          <h2>Account</h2>
+        </div>
+        <div class="account-list">
+          <span><strong>Level ${PLAYER.level}</strong><small>${PLAYER.xp.toLocaleString()} / ${PLAYER.xpMax.toLocaleString()} XP</small></span>
+          <span><strong>${PLAYER.trained}</strong><small>Training this month</small></span>
+          <span><strong>${PLAYER.streak} days</strong><small>Current streak</small></span>
+        </div>
+        <div class="account-actions">
+          <button class="btn block" type="button" disabled>Export</button>
+          <button class="btn block" type="button" disabled>Reset</button>
         </div>
       </section>
-      <section class="settings-panel">
-        <h2>Controls</h2>
-        <div class="keybind-list">
+      <section class="settings-card card keybind-card">
+        <div class="settings-card-head">
+          <span class="settings-accent red"></span>
+          <h2>Controls</h2>
+        </div>
+        <div class="keybind-grid">
           ${SETTINGS_KEYBINDS.map(bind => `
             <div class="keybind-row">
               <span>${bind.action}</span>
@@ -486,7 +547,7 @@ export class ScreenManager {
 
     menu.querySelectorAll('.filter-tab').forEach(button => {
       button.addEventListener('click', () => {
-        const category = button.dataset.category;
+        const category = button.dataset.drillFilter;
         menu.querySelectorAll('.filter-tab').forEach(tab => tab.classList.toggle('active', tab === button));
         menu.querySelectorAll('.drill-card').forEach(card => {
           card.hidden = category !== 'All' && card.dataset.category !== category;
@@ -494,12 +555,10 @@ export class ScreenManager {
       });
     });
 
-    menu.querySelectorAll('.drill-card, .daily-drill .drill-action').forEach(target => {
-      target.addEventListener('click', event => {
-        const source = event.currentTarget;
-        const workshop = source.dataset.workshop || source.closest('[data-workshop]')?.dataset.workshop;
-        const locked = source.dataset.locked === 'true' || source.closest('[data-locked="true"]');
-        if (!locked && (workshop === 'attack' || workshop === 'defense')) {
+    menu.querySelectorAll('.drill-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const workshop = card.dataset.workshop;
+        if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
           this._emit('workshop:select', { workshop });
         }
       });
@@ -514,7 +573,7 @@ export class ScreenManager {
     menu.querySelectorAll('.avatar-swatch').forEach(button => {
       button.addEventListener('click', () => {
         const avatar = menu.querySelector('.settings-avatar');
-        if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.color);
+        if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.avatarColor);
         menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
       });
     });
