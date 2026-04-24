@@ -96,6 +96,11 @@ body {
     linear-gradient(180deg, #0B1622 0%, #08121C 54%, #050B11 100%);
 }
 
+body:has(#screen-menu.active),
+body:has(#screen-workshop.active) {
+  background: var(--rally-cream);
+}
+
 body::before,
 body::after {
   content: '';
