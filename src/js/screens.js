@@ -441,7 +441,10 @@ function renderSettingsPage(state) {
 function renderAuthScreen() {
   return `
     <div class="court-bg" aria-hidden="true"></div>
-    <div class="auth-shell">
+    <div class="auth-shell card">
+      <span class="brand-mark auth-brand">${SVG_SHUTTLE}</span>
+      <p class="page-eyebrow">▸ RALLY ACCOUNT</p>
+      <h1>Sign in to train</h1>
       <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
         <button class="auth-tab active" type="button" data-auth-tab="login">Sign in</button>
         <button class="auth-tab" type="button" data-auth-tab="signup">Create</button>
@@ -455,7 +458,7 @@ function renderAuthScreen() {
           <span>Password</span>
           <input class="settings-input" type="password" name="password" placeholder="Your password" autocomplete="current-password" required>
         </label>
-        <button class="auth-submit" type="submit">SIGN IN</button>
+        <button class="btn primary block" type="submit">Sign in</button>
       </form>
       <form class="auth-form" data-auth-form="signup" hidden>
         <label>
@@ -478,7 +481,7 @@ function renderAuthScreen() {
           <span>Country</span>
           <input class="settings-input" type="text" name="country" placeholder="FR" maxlength="2" value="FR">
         </label>
-        <button class="auth-submit" type="submit">CREATE</button>
+        <button class="btn primary block" type="submit">Create</button>
       </form>
     </div>`;
 }
