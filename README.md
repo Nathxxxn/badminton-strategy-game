@@ -4,7 +4,7 @@ Prototype web pour entrainer la strategie de double au badminton.
 
 ## Demarrage rapide
 
-Le hub principal (`index.html`) charge des modules ES et peut maintenant s'appuyer sur un backend local Express + SQLite pour persister le profil, les preferences et la progression.
+Le hub principal (`index.html`) charge des modules ES et s'appuie sur un backend local Express + SQLite pour l'authentification locale, les sessions, le profil, les preferences, les controles, la progression et l'historique de jeu.
 
 ```bash
 npm install
@@ -17,7 +17,7 @@ Le backend sert aussi les fichiers statiques du projet, dont `index.html` et `da
 
 ### Mode statique
 
-Le frontend garde un fallback `localStorage` si le backend n'est pas disponible. Pour lancer uniquement la partie statique :
+Le backend est maintenant requis pour le flux complet, car le login local est obligatoire. Le mode statique reste utile pour inspecter les prototypes standalone, mais il ne represente plus l'experience app complete :
 
 ```bash
 python3 -m http.server 4173
@@ -31,7 +31,7 @@ Puis ouvre `http://localhost:4173`.
 npm test
 ```
 
-La suite couvre la persistence backend, le client API frontend et le fallback local.
+La suite couvre l'auth locale, les routes protegees, la persistence backend, la progression, le leaderboard personnel, le client API frontend et les helpers d'etat.
 
 ## Entrees disponibles
 
@@ -58,13 +58,28 @@ La suite couvre la persistence backend, le client API frontend et le fallback lo
 
 ## Backend local
 
-Cette version n'a pas encore d'authentification. Le backend utilise un seul joueur local avec l'identifiant interne `default`.
+Cette version utilise une authentification locale email/mot de passe. Les mots de passe sont hashes avec `bcryptjs`, puis le serveur pose un cookie de session HTTP-only. Il n'y a pas encore d'OAuth, de reset email, ni de deploiement production.
+
+La base locale est generee dans `server/data/rally.sqlite` et ignoree par git. Le schema est applique via migrations SQL versionnees dans `server/migrations`. SQLite reste le runtime local, avec une structure de tables separees qui pourra etre adaptee vers Postgres plus tard.
 
 Routes principales :
 
 - `GET /api/health`
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `PUT /api/auth/password`
 - `GET /api/player/state`
 - `PUT /api/player/profile`
 - `PUT /api/player/preferences`
+- `PUT /api/player/controls`
 - `POST /api/player/drills/:drillId/start`
 - `POST /api/player/controls/reset`
+- `POST /api/player/reset-progression`
+- `POST /api/game-sessions`
+- `GET /api/game-sessions?period=weekly|all-time`
+- `GET /api/player/drills`
+- `GET /api/player/leaderboard?period=weekly|all-time`
+
+Les resultats de rally sont envoyes a la fin d'une partie sans changer l'interface ingame. Ils alimentent XP, niveau, streak, temps d'entrainement, meilleurs scores, progression des drills et leaderboard personnel.

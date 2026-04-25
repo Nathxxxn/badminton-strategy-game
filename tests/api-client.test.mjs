@@ -51,3 +51,59 @@ test('recordBackendDrillStart posts the drill route', async () => {
   assert.equal(received.options.method, 'POST');
   assert.deepEqual(state.progression.startedDrills, ['d1']);
 });
+
+test('auth requests include credentials and return user state', async () => {
+  let received = null;
+  globalThis.fetch = async (url, options) => {
+    received = { url, options };
+    return new Response(JSON.stringify({
+      user: { email: 'player@example.com' },
+      state: { profile: { name: 'Nadia Park' } },
+    }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const { signupBackend } = await import('../src/js/api-client.js');
+
+  const payload = await signupBackend({
+    email: 'player@example.com',
+    password: 'secret123',
+    name: 'Nadia Park',
+    country: 'FR',
+  });
+
+  assert.equal(received.url, '/api/auth/signup');
+  assert.equal(received.options.method, 'POST');
+  assert.equal(received.options.credentials, 'include');
+  assert.equal(payload.user.email, 'player@example.com');
+  assert.equal(payload.state.profile.name, 'Nadia Park');
+});
+
+test('recordBackendGameSession posts completed rally summaries', async () => {
+  let received = null;
+  globalThis.fetch = async (url, options) => {
+    received = { url, options };
+    return new Response(JSON.stringify({ stats: { sessionsPlayed: 1 } }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const { recordBackendGameSession } = await import('../src/js/api-client.js');
+
+  const state = await recordBackendGameSession({
+    drillId: 'd1',
+    workshop: 'attack',
+    matchId: 'MATCH_ATTACK_001',
+    score: 320,
+    correct: 3,
+    totalTurns: 4,
+    durationSeconds: 180,
+  });
+
+  assert.equal(received.url, '/api/game-sessions');
+  assert.equal(received.options.method, 'POST');
+  assert.equal(received.options.credentials, 'include');
+  assert.equal(JSON.parse(received.options.body).score, 320);
+  assert.equal(state.stats.sessionsPlayed, 1);
+});

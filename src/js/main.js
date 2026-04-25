@@ -29,6 +29,7 @@ import { buildPlacementPayload, buildTacticalPayload } from './payload-builder.j
 import { loadWorkshopRally, warmScenarioCatalog } from './exercises.js';
 import { evaluatePlacementTurn, evaluateTacticalTurn, prepareTurnForRuntime } from './evaluate.js';
 import { ExerciseTimer }          from './timer.js';
+import { recordGameSessionAsync } from './app-state.js';
 
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
@@ -67,10 +68,12 @@ const drag = new DragShooter(canvas, court, onShotFired);
 /** @type {Array|null} Active rally turn list */
 let currentRally    = null;
 let currentWorkshop = null;
+let currentDrillId  = null;
 let turnIndex       = 0;
 let score           = 0;
 let combo           = 0;
 let correct         = 0;
+let gameStartedAt   = null;
 
 // Extended stats (per-turn accumulation for end-screen)
 let scoreTacticalSum  = 0;
@@ -635,6 +638,21 @@ function showEndScreen() {
   document.getElementById('end-detail').style.whiteSpace = 'pre-line';
   document.getElementById('end-detail').textContent = details.join('\n');
   document.getElementById('end-screen').style.display = 'flex';
+
+  void recordGameSessionAsync({
+    drillId: currentDrillId,
+    workshop: currentWorkshop,
+    matchId: currentRally[0]?.matchId ?? null,
+    score,
+    correct,
+    totalTurns: currentRally.length,
+    durationSeconds: gameStartedAt ? Math.max(0, Math.round((Date.now() - gameStartedAt) / 1000)) : 0,
+    tacticalAverage: typeof avgTactical === 'number' ? avgTactical : null,
+    placementAverage: typeof avgPlacement === 'number' ? avgPlacement : null,
+    completedAt: new Date().toISOString(),
+  }).catch(error => {
+    console.warn('Sauvegarde de session impossible', error);
+  });
 }
 
 // ─── Screen routing ─────────────────────────────────────────────────────────
@@ -642,7 +660,9 @@ function showEndScreen() {
 async function startGame(workshop) {
   const requestId = ++startRequestId;
   currentWorkshop = workshop;
+  currentDrillId = workshop === 'defense' ? 'd5' : workshop === 'attack' ? 'd1' : null;
   currentRally = null;
+  gameStartedAt = Date.now();
   stopTurnTimer();
   cleanupTurnListeners();
   turnIndex = 0; score = 0; combo = 0; correct = 0;

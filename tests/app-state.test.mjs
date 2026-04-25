@@ -19,6 +19,9 @@ const {
   DEFAULT_APP_STATE,
   loadAppState,
   loadAppStateAsync,
+  loginAsync,
+  logoutAsync,
+  recordGameSessionAsync,
   resetControls,
   resetControlsAsync,
   saveAppStateAsync,
@@ -123,4 +126,56 @@ test('async helpers fall back to localStorage when backend is unavailable', asyn
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test('loginAsync returns backend auth payload and caches authenticated state', async () => {
+  storage.clear();
+  globalThis.fetch = async url => {
+    assert.equal(url, '/api/auth/login');
+    return new Response(JSON.stringify({
+      user: { email: 'player@example.com' },
+      state: {
+        ...DEFAULT_APP_STATE,
+        user: { email: 'player@example.com' },
+        profile: { ...DEFAULT_APP_STATE.profile, name: 'Nadia Park' },
+      },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  const payload = await loginAsync({ email: 'player@example.com', password: 'secret123' });
+
+  assert.equal(payload.user.email, 'player@example.com');
+  assert.equal(payload.state.profile.name, 'Nadia Park');
+  assert.equal(loadAppState().profile.name, 'Nadia Park');
+});
+
+test('recordGameSessionAsync mirrors backend progression state', async () => {
+  storage.clear();
+  globalThis.fetch = async url => {
+    assert.equal(url, '/api/game-sessions');
+    return new Response(JSON.stringify({
+      ...DEFAULT_APP_STATE,
+      stats: { sessionsPlayed: 1 },
+      progression: { startedDrills: ['d1'], bestScores: { d1: 320 } },
+    }), { status: 201, headers: { 'content-type': 'application/json' } });
+  };
+
+  const state = await recordGameSessionAsync({ drillId: 'd1', workshop: 'attack', score: 320 });
+
+  assert.equal(state.stats.sessionsPlayed, 1);
+  assert.equal(loadAppState().progression.bestScores.d1, 320);
+});
+
+test('logoutAsync clears cached authenticated state', async () => {
+  storage.clear();
+  saveAppState({ profile: { name: 'Nadia Park' } });
+  globalThis.fetch = async url => {
+    assert.equal(url, '/api/auth/logout');
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  const ok = await logoutAsync();
+
+  assert.equal(ok, true);
+  assert.equal(storage.has('rally.appState.v1'), false);
 });

@@ -397,6 +397,42 @@ body::after {
   justify-content: flex-start;
 }
 
+#screen-auth {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-shell {
+  position: relative;
+  z-index: 1;
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 30px;
+}
+
+.auth-brand {
+  width: 74px;
+  height: 74px;
+}
+
+.auth-shell h1 {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .court-bg {
   position: fixed;
   inset: 0;
@@ -1226,6 +1262,25 @@ body::after {
   padding: 0 36px 24px;
 }
 
+.personal-rank-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 36px 24px;
+}
+
+.personal-rank-card {
+  padding: 18px;
+}
+
+.personal-rank-card strong {
+  display: block;
+  margin: 7px 0 4px;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .podium-player {
   display: flex;
   flex-direction: column;
@@ -1563,12 +1618,20 @@ body::after {
 
 .account-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 20px;
 }
 
 .account-actions .btn {
-  flex: 1;
+  flex: 1 1 150px;
+}
+
+.password-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .btn.danger {
@@ -1783,6 +1846,7 @@ body::after {
   .daily-start { width: 100%; }
   .drill-grid { padding: 0 18px 32px; }
   .podium-grid { grid-template-columns: 1fr; padding: 0 18px 24px; }
+  .personal-rank-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 18px 24px; }
   .podium-player { align-items: stretch; }
   .podium-block,
   .podium-player:not(:has(.podium-block)),
@@ -1816,6 +1880,7 @@ body::after {
   .account-list div { flex-direction: column; }
   .account-list strong { text-align: left; }
   .account-actions { flex-direction: column; }
+  .personal-rank-grid { grid-template-columns: 1fr; }
   .keybind-grid { grid-template-columns: 1fr; }
 }
 

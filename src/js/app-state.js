@@ -1,11 +1,18 @@
 const STORAGE_KEY = 'rally.appState.v1';
 
 import {
+  changeBackendPassword,
   fetchBackendState,
+  fetchBackendSession,
+  loginBackend,
+  logoutBackend,
   recordBackendDrillStart,
+  recordBackendGameSession,
   resetBackendControls,
+  resetBackendProgression,
   saveBackendPreferences,
   saveBackendProfile,
+  signupBackend,
 } from './api-client.js';
 
 const DEFAULT_CONTROLS = Object.freeze([
@@ -90,6 +97,11 @@ function cacheState(state) {
   return normalized;
 }
 
+function clearCachedState() {
+  const storage = getStorage();
+  if (storage) storage.removeItem(STORAGE_KEY);
+}
+
 export function loadAppState() {
   const storage = getStorage();
   if (!storage) return clone(DEFAULT_APP_STATE);
@@ -129,6 +141,34 @@ export async function loadAppStateAsync() {
   return loadAppState();
 }
 
+export async function loadSessionAsync() {
+  const payload = await fetchBackendSession();
+  if (payload?.state) cacheState(payload.state);
+  return payload;
+}
+
+export async function signupAsync(credentials) {
+  const payload = await signupBackend(credentials);
+  if (payload?.state) cacheState(payload.state);
+  return payload;
+}
+
+export async function loginAsync(credentials) {
+  const payload = await loginBackend(credentials);
+  if (payload?.state) cacheState(payload.state);
+  return payload;
+}
+
+export async function logoutAsync() {
+  const ok = await logoutBackend();
+  if (ok) clearCachedState();
+  return ok;
+}
+
+export function changePasswordAsync(passwordPatch) {
+  return changeBackendPassword(passwordPatch);
+}
+
 export async function saveAppStateAsync(patch) {
   let backendState = null;
 
@@ -150,8 +190,20 @@ export async function resetControlsAsync() {
   return resetControls();
 }
 
+export async function resetProgressionAsync() {
+  const backendState = await resetBackendProgression();
+  if (backendState) return cacheState(backendState);
+  return saveAppState({ progression: DEFAULT_APP_STATE.progression });
+}
+
 export async function recordDrillStartAsync(drillId) {
   const backendState = await recordBackendDrillStart(drillId);
   if (backendState) return cacheState(backendState);
   return recordDrillStart(drillId);
+}
+
+export async function recordGameSessionAsync(sessionSummary) {
+  const backendState = await recordBackendGameSession(sessionSummary);
+  if (backendState) return cacheState(backendState);
+  return loadAppState();
 }

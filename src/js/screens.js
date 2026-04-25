@@ -12,12 +12,17 @@
  */
 
 import {
+  changePasswordAsync,
   DEFAULT_APP_STATE,
   loadAppState,
-  loadAppStateAsync,
+  loadSessionAsync,
+  loginAsync,
+  logoutAsync,
   recordDrillStartAsync,
   resetControlsAsync,
+  resetProgressionAsync,
   saveAppStateAsync,
+  signupAsync,
 } from './app-state.js';
 import { showToast } from './ui-feedback.js';
 
@@ -251,6 +256,17 @@ function renderDrillsPage(state) {
   const dailyDrill = DRILLS_LIST[0];
   const categories = ['All', 'Attack', 'Defense', 'Strategy'];
   const activeFilter = state.preferences.drillFilter;
+  const progressById = new Map((state.drills ?? []).map(drill => [drill.id, drill]));
+  const drills = DRILLS_LIST.map(drill => {
+    const progress = progressById.get(drill.id);
+    return {
+      ...drill,
+      attempts: progress?.attempts ?? drill.attempts,
+      best: progress?.bestScore ?? drill.best,
+      started: progress?.started ?? false,
+      completed: progress?.completed ?? false,
+    };
+  });
 
   return `
     ${pageTitleMarkup({
@@ -274,31 +290,20 @@ function renderDrillsPage(state) {
       <button class="btn primary daily-start" type="button" data-drill="${dailyDrill.id}" data-workshop="${dailyDrill.workshop}">Start ▸</button>
     </section>
     <div class="drill-grid">
-      ${DRILLS_LIST.map(drillCardMarkup).join('')}
+      ${drills.map(drillCardMarkup).join('')}
     </div>`;
 }
 
 function renderLeaderboardPage(state) {
   const period = state.preferences.leaderboardPeriod;
-  const leaderboard = period === 'all-time' ? ALL_TIME_LEADERBOARD : LEADERBOARD;
-  const podium = leaderboard.slice(0, 3);
-  const standings = leaderboard.slice(3);
-  const podiumOrder = [podium[1], podium[0], podium[2]];
   const profile = getProfile(state);
-  const playerRow = {
-    rank: period === 'all-time' ? 912 : 287,
-    name: profile.name,
-    initials: playerInitials(profile.name),
-    rankName: profile.rank,
-    wins: period === 'all-time' ? profile.wins * 4 : profile.wins,
-    wr: profile.winRate,
-    xp: period === 'all-time' ? profile.xp + 38420 : profile.xp + 8420,
-    country: profile.country,
-  };
+  const leaderboard = state.leaderboard ?? { summary: { sessionsPlayed: 0, bestScore: 0, averageScore: 0 }, sessions: [] };
+  const sessions = leaderboard.sessions ?? [];
+  const summary = leaderboard.summary ?? {};
 
   return `
     ${pageTitleMarkup({
-      eyebrow: 'GLOBAL STANDINGS',
+      eyebrow: 'PERSONAL STANDINGS',
       title: 'Leaderboard',
       right: `
       <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
@@ -306,62 +311,50 @@ function renderLeaderboardPage(state) {
         <button class="btn period-tab ${period === 'all-time' ? 'active' : ''}" type="button" data-period="all-time">All-time</button>
       </div>
     `})}
-    <div class="podium-grid">
-      ${podiumOrder.map(player => {
-        const place = player.rank;
-        const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉';
-
-        return `
-        <article class="podium-player place-${place}">
-          <div class="podium-medal" aria-hidden="true">${medal}</div>
-          <div class="podium-block">
-            <span class="podium-place">${place}</span>
-            <span class="podium-avatar">${player.initials}</span>
-            <h2>${player.name}</h2>
-            <p class="podium-rank">${flagBadge(player.country)} ${player.rankName}</p>
-            <div class="podium-stats">
-              <span>${player.wins} W</span>
-              <span>${player.wr}%</span>
-            </div>
-          </div>
-        </article>
-        `;
-      }).join('')}
+    <div class="personal-rank-grid">
+      <article class="personal-rank-card card">
+        <span class="stat-label">PLAYER</span>
+        <strong>${escapeHtml(profile.name)}</strong>
+        <span class="stat-hint">${flagBadge(profile.country)} ${profile.rank}</span>
+      </article>
+      <article class="personal-rank-card card">
+        <span class="stat-label">SESSIONS</span>
+        <strong>${summary.sessionsPlayed ?? 0}</strong>
+        <span class="stat-hint">${period === 'weekly' ? 'last 7 days' : 'all time'}</span>
+      </article>
+      <article class="personal-rank-card card">
+        <span class="stat-label">BEST SCORE</span>
+        <strong>${summary.bestScore ?? 0}</strong>
+        <span class="stat-hint">personal record</span>
+      </article>
+      <article class="personal-rank-card card">
+        <span class="stat-label">AVERAGE</span>
+        <strong>${summary.averageScore ?? 0}</strong>
+        <span class="stat-hint">per rally</span>
+      </article>
     </div>
     <div class="standings-wrap card">
       <div class="standings-row standings-head">
-        <span class="rank-cell">RANK</span>
-        <span class="player-cell">PLAYER</span>
-        <span class="tier">TIER</span>
-        <span class="wins">WINS</span>
-        <span class="wr">WR</span>
-        <span class="xp">XP</span>
+        <span class="rank-cell">#</span>
+        <span class="player-cell">SESSION</span>
+        <span class="tier">WORKSHOP</span>
+        <span class="wins">SCORE</span>
+        <span class="wr">ACC</span>
+        <span class="xp">DATE</span>
       </div>
-      ${standings.map(player => `
+      ${sessions.length ? sessions.map((session, index) => `
         <article class="standings-row">
-          <span class="rank-cell">#${player.rank}</span>
+          <span class="rank-cell">#${index + 1}</span>
           <span class="player-cell">
-            <span class="player-avatar">${player.initials}</span>
-            <span><strong>${player.name}</strong><small>${flagBadge(player.country)} ${player.country}</small></span>
+            <span class="player-avatar">${playerInitials(profile.name)}</span>
+            <span><strong>${escapeHtml(session.matchId ?? 'Training rally')}</strong><small>${session.correct}/${session.totalTurns} correct</small></span>
           </span>
-          <span class="tier">${player.rankName}</span>
-          <span class="wins">${player.wins}</span>
-          <span class="wr">${player.wr}%</span>
-          <span class="xp">${player.xp.toLocaleString()}</span>
+          <span class="tier">${escapeHtml(session.workshop)}</span>
+          <span class="wins">${session.score}</span>
+          <span class="wr">${Math.round((session.correct / session.totalTurns) * 100)}%</span>
+          <span class="xp">${new Date(session.completedAt).toLocaleDateString()}</span>
         </article>
-      `).join('')}
-      <article class="standings-row player-standing">
-        <span class="rank-cell">#${playerRow.rank}</span>
-        <span class="player-cell">
-          <span class="player-avatar">${playerRow.initials}</span>
-          <span><strong>${playerRow.name} <small class="you-badge">YOU</small></strong><small>${flagBadge(playerRow.country)} ${playerRow.country}</small></span>
-        </span>
-        <span class="tier">${playerRow.rankName}</span>
-        <span class="wins">${playerRow.wins}</span>
-        <span class="wr">${playerRow.wr}%</span>
-        <span class="xp">${playerRow.xp.toLocaleString()}</span>
-      </article>
-      <p class="season-note">WIN 4 MORE MATCHES TO BREAK TOP 200 · SEASON ENDS IN 12 DAYS</p>
+      `).join('') : '<p class="season-note">NO SESSION RECORDED YET · PLAY A DRILL TO FILL THIS TABLE</p>'}
     </div>`;
 }
 
@@ -411,15 +404,20 @@ function renderSettingsPage(state) {
           <h2>Account</h2>
         </div>
         <div class="account-list">
-          <div><span>Email</span><strong>alex.kim@example.com</strong></div>
+          <div><span>Email</span><strong>${escapeHtml(state.account?.email ?? state.user?.email ?? 'local player')}</strong></div>
           <div><span>Level</span><strong>Level ${profile.level}</strong></div>
           <div><span>XP</span><strong>${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()}</strong></div>
           <div><span>Training</span><strong>${profile.trained} this month</strong></div>
           <div><span>Streak</span><strong>${profile.streak} days</strong></div>
         </div>
+        <div class="password-fields">
+          <input class="settings-input" type="password" name="currentPassword" placeholder="Current password" autocomplete="current-password">
+          <input class="settings-input" type="password" name="newPassword" placeholder="New password" autocomplete="new-password">
+        </div>
         <div class="account-actions">
-          <button class="btn block account-feedback" type="button" data-account-action="password">Change password</button>
-          <button class="btn danger block account-feedback" type="button" data-account-action="signout">Sign out</button>
+          <button class="btn block change-password" type="button">Change password</button>
+          <button class="btn danger block signout-account" type="button">Sign out</button>
+          <button class="btn danger block reset-progression" type="button">Reset progression</button>
         </div>
       </section>
       <section class="settings-card card keybind-card">
@@ -440,6 +438,32 @@ function renderSettingsPage(state) {
     </div>`;
 }
 
+function renderAuthScreen() {
+  return `
+    <div class="court-bg" aria-hidden="true"></div>
+    <div class="auth-shell card">
+      <span class="brand-mark auth-brand">${SVG_SHUTTLE}</span>
+      <p class="page-eyebrow">▸ RALLY ACCOUNT</p>
+      <h1>Sign in to train</h1>
+      <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+        <button class="filter-tab active" type="button" data-auth-tab="login">Login</button>
+        <button class="filter-tab" type="button" data-auth-tab="signup">Create account</button>
+      </div>
+      <form class="auth-form active" data-auth-form="login">
+        <input class="settings-input" type="email" name="email" placeholder="Email" autocomplete="email" required>
+        <input class="settings-input" type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+        <button class="btn primary block" type="submit">Login</button>
+      </form>
+      <form class="auth-form" data-auth-form="signup" hidden>
+        <input class="settings-input" type="text" name="name" placeholder="Player name" autocomplete="name" required>
+        <input class="settings-input" type="email" name="email" placeholder="Email" autocomplete="email" required>
+        <input class="settings-input" type="password" name="password" placeholder="Password" autocomplete="new-password" required>
+        <input class="settings-input" type="text" name="country" placeholder="Country code" maxlength="2" value="FR">
+        <button class="btn primary block" type="submit">Create account</button>
+      </form>
+    </div>`;
+}
+
 export class ScreenManager {
   constructor() {
     /** @type {Record<string, HTMLElement>} */
@@ -450,8 +474,9 @@ export class ScreenManager {
 
     this._currentScreen = null;
     this._state = loadAppState();
+    this._authenticated = false;
     this._buildScreens();
-    void this._hydrateState();
+    void this._hydrateSession();
   }
 
   // ─── Build DOM ─────────────────────────────────────────────────────────────
@@ -460,6 +485,9 @@ export class ScreenManager {
     const profile = getProfile(this._state);
     const initials = playerInitials(profile.name);
     const firstName = profile.name.split(/\s+/).filter(Boolean)[0] ?? profile.name;
+
+    const auth = this._createElement('screen-auth', renderAuthScreen());
+    this._wireAuth(auth);
 
     const menu = this._createElement('screen-menu', `
       <div class="court-bg" aria-hidden="true">
@@ -661,8 +689,10 @@ export class ScreenManager {
     }
 
     this._screens['menu']            = menu;
+    this._screens['auth']            = auth;
     this._screens['workshop-select'] = workshop;
 
+    document.body.appendChild(auth);
     document.body.appendChild(menu);
     document.body.appendChild(workshop);
   }
@@ -671,11 +701,19 @@ export class ScreenManager {
     showToast(menu.querySelector('.rally-shell') ?? menu, message, variant);
   }
 
-  async _hydrateState() {
+  async _hydrateSession() {
     const menu = this._screens.menu;
     if (!menu) return;
 
-    this._state = await loadAppStateAsync();
+    const payload = await loadSessionAsync();
+    if (!payload?.state) {
+      this._authenticated = false;
+      this.show('auth');
+      return;
+    }
+
+    this._authenticated = true;
+    this._state = payload.state;
     this._syncProfileDom(menu);
     this._renderHomeStats(menu);
     this._renderDrillsPanel(menu);
@@ -684,6 +722,74 @@ export class ScreenManager {
     this._wireLeaderboard(menu);
     this._renderSettingsPanel(menu);
     this._wireSettingsAfterRender(menu);
+    if (this._currentScreen === 'auth') this.show('menu');
+  }
+
+  _wireAuth(auth) {
+    auth.querySelectorAll('[data-auth-tab]').forEach(button => {
+      button.addEventListener('click', () => {
+        const mode = button.dataset.authTab;
+        auth.querySelectorAll('[data-auth-tab]').forEach(tab => tab.classList.toggle('active', tab === button));
+        auth.querySelectorAll('[data-auth-form]').forEach(form => {
+          const active = form.dataset.authForm === mode;
+          form.hidden = !active;
+          form.classList.toggle('active', active);
+        });
+      });
+    });
+
+    auth.querySelector('[data-auth-form="login"]')?.addEventListener('submit', event => {
+      event.preventDefault();
+      void this._submitLogin(auth, event.currentTarget);
+    });
+
+    auth.querySelector('[data-auth-form="signup"]')?.addEventListener('submit', event => {
+      event.preventDefault();
+      void this._submitSignup(auth, event.currentTarget);
+    });
+  }
+
+  async _submitLogin(auth, form) {
+    const formData = new FormData(form);
+    const payload = await loginAsync({
+      email: formData.get('email'),
+      password: formData.get('password'),
+    });
+    if (!payload?.state) {
+      this._showFeedback(auth, 'Login impossible. Verifie ton email et ton mot de passe.', 'error');
+      return;
+    }
+    await this._acceptAuthPayload(payload);
+  }
+
+  async _submitSignup(auth, form) {
+    const formData = new FormData(form);
+    const payload = await signupAsync({
+      name: formData.get('name'),
+      email: formData.get('email'),
+      password: formData.get('password'),
+      country: formData.get('country'),
+    });
+    if (!payload?.state) {
+      this._showFeedback(auth, 'Creation de compte impossible. Utilise un email unique et un mot de passe de 6 caracteres minimum.', 'error');
+      return;
+    }
+    await this._acceptAuthPayload(payload);
+  }
+
+  async _acceptAuthPayload(payload) {
+    this._authenticated = true;
+    this._state = payload.state;
+    const menu = this._screens.menu;
+    this._syncProfileDom(menu);
+    this._renderHomeStats(menu);
+    this._renderDrillsPanel(menu);
+    this._wireDrills(menu);
+    this._renderLeaderboardPanel(menu);
+    this._wireLeaderboard(menu);
+    this._renderSettingsPanel(menu);
+    this._wireSettingsAfterRender(menu);
+    this.show('menu');
   }
 
   _homeStatsMarkup(profile) {
@@ -793,14 +899,33 @@ export class ScreenManager {
       void this._saveProfileFromDom(menu);
     });
 
-    menu.querySelectorAll('.account-feedback').forEach(button => {
-      button.addEventListener('click', () => {
-        const action = button.dataset.accountAction;
-        const message = action === 'signout'
-          ? 'Deconnexion simulee : aucune session backend n’est branchee pour le moment.'
-          : 'Changement de mot de passe pret cote UI, a brancher sur une future API compte.';
-        this._showFeedback(menu, message);
-      });
+    menu.querySelector('.change-password')?.addEventListener('click', async () => {
+      const currentPassword = menu.querySelector('input[name="currentPassword"]')?.value ?? '';
+      const newPassword = menu.querySelector('input[name="newPassword"]')?.value ?? '';
+      const ok = await changePasswordAsync({ currentPassword, newPassword });
+      this._showFeedback(menu, ok ? 'Mot de passe modifie.' : 'Mot de passe actuel invalide ou nouveau mot de passe trop court.', ok ? 'success' : 'error');
+    });
+
+    menu.querySelector('.signout-account')?.addEventListener('click', async () => {
+      const ok = await logoutAsync();
+      if (!ok) {
+        this._showFeedback(menu, 'Deconnexion impossible pour le moment.', 'error');
+        return;
+      }
+      this._authenticated = false;
+      this.show('auth');
+    });
+
+    menu.querySelector('.reset-progression')?.addEventListener('click', async () => {
+      this._state = await resetProgressionAsync();
+      this._renderHomeStats(menu);
+      this._renderDrillsPanel(menu);
+      this._wireDrills(menu);
+      this._renderLeaderboardPanel(menu);
+      this._wireLeaderboard(menu);
+      this._renderSettingsPanel(menu);
+      this._wireSettingsAfterRender(menu);
+      this._showFeedback(menu, 'Progression remise a zero.', 'success');
     });
 
     menu.querySelector('.reset-controls')?.addEventListener('click', async () => {
@@ -869,9 +994,13 @@ export class ScreenManager {
   }
 
   /**
-   * @param {'menu'|'workshop-select'|'exercise'|'end-rally'} screenId
+   * @param {'auth'|'menu'|'workshop-select'|'exercise'|'end-rally'} screenId
    */
   show(screenId) {
+    if (screenId === 'menu' && !this._authenticated) {
+      screenId = 'auth';
+    }
+
     if (this._currentScreen && this._currentScreen !== 'exercise') {
       const prev = this._screens[this._currentScreen];
       if (prev) this._hideEl(prev);

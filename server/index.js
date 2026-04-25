@@ -1,19 +1,60 @@
+import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createPlayerStore } from './db.js';
-import { DEFAULT_APP_STATE } from './default-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DRILL_FILTERS = new Set(['All', 'Attack', 'Defense', 'Strategy']);
 const LEADERBOARD_PERIODS = new Set(['weekly', 'all-time']);
+const SESSION_COOKIE = 'rally_session';
+const PASSWORD_MIN_LENGTH = 6;
 
 function badRequest(res, error) {
   return res.status(400).json({ error });
+}
+
+function unauthorized(res) {
+  return res.status(401).json({ error: 'Authentication required' });
+}
+
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 1000 * 60 * 60 * 24 * 30,
+  };
+}
+
+function clearCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  };
+}
+
+function parseCookies(header = '') {
+  return Object.fromEntries(
+    String(header)
+      .split(';')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => {
+        const [key, ...value] = part.split('=');
+        return [decodeURIComponent(key), decodeURIComponent(value.join('='))];
+      }),
+  );
+}
+
+function sessionTokenFromRequest(req) {
+  return parseCookies(req.headers.cookie)[SESSION_COOKIE] ?? null;
 }
 
 function sanitizeProfile(body) {
@@ -45,42 +86,162 @@ function sanitizePreferences(body) {
   return patch;
 }
 
+function sanitizeControls(body) {
+  if (!Array.isArray(body.controls)) return null;
+  return body.controls
+    .filter(bind => typeof bind?.action === 'string' && typeof bind?.key === 'string')
+    .map(bind => ({ action: bind.action.trim(), key: bind.key.trim() }))
+    .filter(bind => bind.action && bind.key);
+}
+
+function sanitizeSignup(body) {
+  const email = String(body.email ?? '').trim().toLowerCase();
+  const password = String(body.password ?? '');
+  const name = String(body.name ?? '').trim();
+  const country = String(body.country ?? '').trim();
+  if (!email.includes('@')) return null;
+  if (password.length < PASSWORD_MIN_LENGTH) return null;
+  if (!name) return null;
+  return { email, password, name, country };
+}
+
+function sanitizeLogin(body) {
+  const email = String(body.email ?? '').trim().toLowerCase();
+  const password = String(body.password ?? '');
+  if (!email || !password) return null;
+  return { email, password };
+}
+
+function authPayload(store, userId) {
+  const user = store.auth.getUser(userId);
+  return {
+    user: store.auth.publicUser(user),
+    state: store.getState(userId),
+  };
+}
+
+function requireAuth(store) {
+  return (req, res, next) => {
+    const token = sessionTokenFromRequest(req);
+    const session = store.auth.findSession(token);
+    if (!session) return unauthorized(res);
+    req.sessionToken = token;
+    req.user = { id: session.user_id, email: session.email };
+    return next();
+  };
+}
+
 export function createApp({ store = createPlayerStore(), staticRoot = PROJECT_ROOT } = {}) {
   const app = express();
+  const protectedRoute = requireAuth(store);
 
-  app.use(cors());
-  app.use(express.json({ limit: '32kb' }));
+  app.use(cors({ credentials: true, origin: true }));
+  app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
   });
 
-  app.get('/api/player/state', (_req, res) => {
-    res.json(store.getState());
+  app.post('/api/auth/signup', async (req, res) => {
+    const input = sanitizeSignup(req.body ?? {});
+    if (!input) return badRequest(res, 'Invalid signup');
+    if (store.auth.findUserByEmail(input.email)) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    const user = store.auth.createUser({ ...input, passwordHash });
+    const token = store.auth.createSession(user.id);
+    res.cookie(SESSION_COOKIE, token, cookieOptions());
+    return res.status(201).json(authPayload(store, user.id));
   });
 
-  app.put('/api/player/profile', (req, res) => {
-    const profilePatch = sanitizeProfile(req.body ?? {});
-    res.json(store.updateState({ profile: profilePatch }));
+  app.post('/api/auth/login', async (req, res) => {
+    const input = sanitizeLogin(req.body ?? {});
+    if (!input) return badRequest(res, 'Invalid login');
+    const user = store.auth.findUserByEmail(input.email);
+    if (!user || !(await bcrypt.compare(input.password, user.password_hash))) {
+      return unauthorized(res);
+    }
+    const token = store.auth.createSession(user.id);
+    res.cookie(SESSION_COOKIE, token, cookieOptions());
+    return res.json(authPayload(store, user.id));
   });
 
-  app.put('/api/player/preferences', (req, res) => {
+  app.post('/api/auth/logout', protectedRoute, (req, res) => {
+    store.auth.revokeSessionToken(req.sessionToken);
+    res.cookie(SESSION_COOKIE, '', clearCookieOptions());
+    res.json({ ok: true });
+  });
+
+  app.get('/api/auth/me', protectedRoute, (req, res) => {
+    res.json(authPayload(store, req.user.id));
+  });
+
+  app.put('/api/auth/password', protectedRoute, async (req, res) => {
+    const currentPassword = String(req.body?.currentPassword ?? '');
+    const newPassword = String(req.body?.newPassword ?? '');
+    if (newPassword.length < PASSWORD_MIN_LENGTH) return badRequest(res, 'Invalid new password');
+
+    const user = store.auth.getUser(req.user.id);
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      return badRequest(res, 'Invalid current password');
+    }
+
+    store.auth.updatePassword(req.user.id, await bcrypt.hash(newPassword, 12));
+    return res.json({ ok: true });
+  });
+
+  app.get('/api/player/state', protectedRoute, (req, res) => {
+    res.json(store.getState(req.user.id));
+  });
+
+  app.put('/api/player/profile', protectedRoute, (req, res) => {
+    res.json(store.updateProfile(req.user.id, sanitizeProfile(req.body ?? {})));
+  });
+
+  app.put('/api/player/preferences', protectedRoute, (req, res) => {
     const preferencesPatch = sanitizePreferences(req.body ?? {});
     if (!preferencesPatch) return badRequest(res, 'Invalid preferences');
-    return res.json(store.updateState({ preferences: preferencesPatch }));
+    return res.json(store.updatePreferences(req.user.id, preferencesPatch));
   });
 
-  app.post('/api/player/drills/:drillId/start', (req, res) => {
-    const state = store.getState();
+  app.put('/api/player/controls', protectedRoute, (req, res) => {
+    const controls = sanitizeControls(req.body ?? {});
+    if (!controls) return badRequest(res, 'Invalid controls');
+    return res.json(store.updateControls(req.user.id, controls));
+  });
+
+  app.post('/api/player/controls/reset', protectedRoute, (req, res) => {
+    res.json(store.resetControls(req.user.id));
+  });
+
+  app.post('/api/player/reset-progression', protectedRoute, (req, res) => {
+    res.json(store.resetProgression(req.user.id));
+  });
+
+  app.post('/api/player/drills/:drillId/start', protectedRoute, (req, res) => {
     const drillId = String(req.params.drillId ?? '').trim();
-    const startedDrills = drillId && !state.progression.startedDrills.includes(drillId)
-      ? state.progression.startedDrills.concat(drillId)
-      : state.progression.startedDrills;
-    res.json(store.updateState({ progression: { startedDrills } }));
+    if (!drillId) return badRequest(res, 'Invalid drill');
+    res.json(store.startDrill(req.user.id, drillId));
   });
 
-  app.post('/api/player/controls/reset', (_req, res) => {
-    res.json(store.updateState({ controls: DEFAULT_APP_STATE.controls }));
+  app.get('/api/player/drills', protectedRoute, (req, res) => {
+    res.json({ drills: store.getState(req.user.id).drills });
+  });
+
+  app.get('/api/player/leaderboard', protectedRoute, (req, res) => {
+    const period = LEADERBOARD_PERIODS.has(req.query.period) ? req.query.period : 'weekly';
+    res.json(store.sessionsForPeriod(req.user.id, period));
+  });
+
+  app.post('/api/game-sessions', protectedRoute, (req, res) => {
+    res.status(201).json(store.recordGameSession(req.user.id, req.body ?? {}));
+  });
+
+  app.get('/api/game-sessions', protectedRoute, (req, res) => {
+    const period = LEADERBOARD_PERIODS.has(req.query.period) ? req.query.period : 'weekly';
+    res.json(store.sessionsForPeriod(req.user.id, period));
   });
 
   app.use(express.static(staticRoot));
