@@ -4,21 +4,26 @@ import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { DEFAULT_APP_STATE, DEFAULT_CONTROLS } from './default-state.js';
+import {
+  calculateProgression,
+  rankForRating,
+  STARTING_RATING,
+} from './progression.js';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const MIGRATIONS_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'migrations');
 
 const DRILL_CATALOG = Object.freeze([
-  { id: 'd1', title: 'Cross-court smash', category: 'Attack', workshop: 'attack' },
-  { id: 'd2', title: 'Drop shot deception', category: 'Attack', workshop: 'attack' },
-  { id: 'd3', title: 'Straight net kill', category: 'Attack', workshop: 'attack' },
-  { id: 'd4', title: 'Jumping smash power', category: 'Attack', workshop: 'attack' },
-  { id: 'd5', title: 'Baseline clear defense', category: 'Defense', workshop: 'defense' },
-  { id: 'd6', title: 'Smash block timing', category: 'Defense', workshop: 'defense' },
-  { id: 'd7', title: 'Counter-attack lifts', category: 'Defense', workshop: 'defense' },
-  { id: 'd8', title: 'Deceptive block to net', category: 'Defense', workshop: 'defense' },
-  { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', workshop: null },
-  { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', workshop: null },
+  { id: 'd1', title: 'Cross-court smash', category: 'Attack', workshop: 'attack', difficulty: 2 },
+  { id: 'd2', title: 'Drop shot deception', category: 'Attack', workshop: 'attack', difficulty: 3 },
+  { id: 'd3', title: 'Straight net kill', category: 'Attack', workshop: 'attack', difficulty: 2 },
+  { id: 'd4', title: 'Jumping smash power', category: 'Attack', workshop: 'attack', difficulty: 4 },
+  { id: 'd5', title: 'Baseline clear defense', category: 'Defense', workshop: 'defense', difficulty: 2 },
+  { id: 'd6', title: 'Smash block timing', category: 'Defense', workshop: 'defense', difficulty: 3 },
+  { id: 'd7', title: 'Counter-attack lifts', category: 'Defense', workshop: 'defense', difficulty: 3 },
+  { id: 'd8', title: 'Deceptive block to net', category: 'Defense', workshop: 'defense', difficulty: 4 },
+  { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', workshop: null, difficulty: 3 },
+  { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', workshop: null, difficulty: 4 },
 ]);
 
 function nowIso() {
@@ -79,18 +84,6 @@ function secondsToTrained(seconds) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-function xpMaxForLevel(level) {
-  return 2000 + Math.max(0, level - 12) * 250;
-}
-
-function rankForLevel(level) {
-  if (level >= 30) return 'Diamond I';
-  if (level >= 24) return 'Platinum I';
-  if (level >= 18) return 'Gold I';
-  if (level >= 12) return 'Silver III';
-  return 'Bronze I';
-}
-
 function mapProfile(row) {
   return {
     name: row.name,
@@ -100,8 +93,11 @@ function mapProfile(row) {
     level: row.level,
     xp: row.xp,
     xpMax: row.xp_max,
-    rank: row.rank,
+    rank: rankForRating(row.rating ?? STARTING_RATING),
+    rating: row.rating ?? STARTING_RATING,
+    peakRating: row.peak_rating ?? STARTING_RATING,
     wins: row.wins,
+    losses: row.losses ?? 0,
     winRate: row.win_rate,
     streak: row.streak,
     bestStreak: row.best_streak,
@@ -126,6 +122,12 @@ function mapStats(row) {
     bestScore: row?.best_score ?? 0,
     averageScore: sessionsPlayed > 0 ? Math.round((row.total_score ?? 0) / sessionsPlayed) : 0,
     accuracy: (row?.total_turns ?? 0) > 0 ? Math.round(((row.total_correct ?? 0) / row.total_turns) * 100) : 0,
+    wins: row?.wins ?? 0,
+    losses: row?.losses ?? 0,
+    currentStreak: row?.current_streak ?? 0,
+    bestStreak: row?.best_streak ?? 0,
+    rating: row?.rating ?? STARTING_RATING,
+    peakRating: row?.peak_rating ?? STARTING_RATING,
     totalDurationSeconds: row?.total_duration_seconds ?? 0,
     lastPlayedAt: row?.last_played_at ?? null,
   };
@@ -143,6 +145,12 @@ function mapSession(row) {
     durationSeconds: row.duration_seconds,
     tacticalAverage: row.tactical_average,
     placementAverage: row.placement_average,
+    result: row.result,
+    accuracy: row.accuracy ?? Math.round((row.correct / row.total_turns) * 100),
+    ratingBefore: row.rating_before,
+    ratingAfter: row.rating_after,
+    ratingDelta: row.rating_delta,
+    xpGained: row.xp_gained,
     completedAt: row.completed_at,
   };
 }
@@ -193,10 +201,10 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
   const insertProfile = db.prepare(`
     INSERT INTO player_profiles (
       user_id, name, initials, country, avatar_color, level, xp, xp_max, rank,
-      wins, win_rate, streak, best_streak, trained_seconds
+      wins, losses, win_rate, streak, best_streak, trained_seconds, rating, peak_rating
     )
     VALUES (@userId, @name, @initials, @country, @avatarColor, @level, @xp, @xpMax, @rank,
-      @wins, @winRate, @streak, @bestStreak, @trainedSeconds)
+      @wins, @losses, @winRate, @streak, @bestStreak, @trainedSeconds, @rating, @peakRating)
   `);
   const insertPreferences = db.prepare(`
     INSERT INTO player_preferences (user_id, drill_filter, leaderboard_period)
@@ -214,11 +222,15 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
   const getControlsRows = db.prepare('SELECT action, key_value, sort_order FROM player_controls WHERE user_id = ? ORDER BY sort_order ASC');
   const getStatsRow = db.prepare('SELECT * FROM player_stats WHERE user_id = ?');
   const getDrillRows = db.prepare('SELECT * FROM drill_progress WHERE user_id = ?');
-  const getSessionsRows = db.prepare('SELECT * FROM game_sessions WHERE user_id = ? ORDER BY completed_at DESC, created_at DESC');
+  const getSessionsRows = db.prepare(`
+    SELECT * FROM game_sessions
+    WHERE user_id = ?
+    ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC
+  `);
   const getWeeklySessionsRows = db.prepare(`
     SELECT * FROM game_sessions
     WHERE user_id = ? AND completed_at >= ?
-    ORDER BY completed_at DESC, created_at DESC
+    ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC
   `);
   const insertSession = db.prepare(`
     INSERT INTO sessions (id, user_id, token_hash, created_at, expires_at)
@@ -238,8 +250,9 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
   `);
   const updateProfileStatsStatement = db.prepare(`
     UPDATE player_profiles
-    SET level = @level, xp = @xp, xp_max = @xpMax, rank = @rank, wins = @wins,
-      win_rate = @winRate, streak = @streak, best_streak = @bestStreak, trained_seconds = @trainedSeconds
+    SET level = @level, xp = @xp, xp_max = @xpMax, rank = @rank, rating = @rating,
+      peak_rating = @peakRating, wins = @wins, losses = @losses, win_rate = @winRate,
+      streak = @streak, best_streak = @bestStreak, trained_seconds = @trainedSeconds
     WHERE user_id = @userId
   `);
   const updatePreferencesStatement = db.prepare(`
@@ -253,8 +266,8 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     ON CONFLICT(user_id, drill_id) DO UPDATE SET started = 1
   `);
   const upsertDrillResult = db.prepare(`
-    INSERT INTO drill_progress (user_id, drill_id, workshop, started, completed, attempts, best_score, last_played_at)
-    VALUES (@userId, @drillId, @workshop, 1, @completed, 1, @bestScore, @lastPlayedAt)
+    INSERT INTO drill_progress (user_id, drill_id, workshop, started, completed, attempts, best_score, last_played_at, last_result)
+    VALUES (@userId, @drillId, @workshop, 1, @completed, 1, @bestScore, @lastPlayedAt, @lastResult)
     ON CONFLICT(user_id, drill_id) DO UPDATE SET
       started = 1,
       completed = MAX(completed, excluded.completed),
@@ -263,15 +276,18 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         WHEN best_score IS NULL OR excluded.best_score > best_score THEN excluded.best_score
         ELSE best_score
       END,
-      last_played_at = excluded.last_played_at
+      last_played_at = excluded.last_played_at,
+      last_result = excluded.last_result
   `);
   const insertGameSession = db.prepare(`
     INSERT INTO game_sessions (
       id, user_id, drill_id, workshop, match_id, score, correct, total_turns, duration_seconds,
-      tactical_average, placement_average, completed_at, created_at
+      tactical_average, placement_average, result, accuracy, rating_before, rating_after,
+      rating_delta, xp_gained, completed_at, created_at
     )
     VALUES (@id, @userId, @drillId, @workshop, @matchId, @score, @correct, @totalTurns, @durationSeconds,
-      @tacticalAverage, @placementAverage, @completedAt, @createdAt)
+      @tacticalAverage, @placementAverage, @result, @accuracy, @ratingBefore, @ratingAfter,
+      @ratingDelta, @xpGained, @completedAt, @createdAt)
   `);
   const updateStats = db.prepare(`
     UPDATE player_stats
@@ -281,6 +297,12 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
       total_turns = total_turns + @totalTurns,
       total_duration_seconds = total_duration_seconds + @durationSeconds,
       best_score = MAX(best_score, @score),
+      wins = @wins,
+      losses = @losses,
+      current_streak = @streak,
+      best_streak = @bestStreak,
+      rating = @rating,
+      peak_rating = @peakRating,
       last_played_at = @completedAt
     WHERE user_id = @userId
   `);
@@ -289,7 +311,9 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
   const resetStats = db.prepare(`
     UPDATE player_stats
     SET sessions_played = 0, total_score = 0, total_correct = 0, total_turns = 0,
-      total_duration_seconds = 0, best_score = 0, last_played_at = NULL
+      total_duration_seconds = 0, best_score = 0, wins = 0, losses = 0,
+      current_streak = 0, best_streak = 0, rating = 600, peak_rating = 600,
+      last_played_at = NULL
     WHERE user_id = ?
   `);
 
@@ -314,8 +338,11 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         level: profile.level,
         xp: profile.xp,
         xpMax: profile.xpMax,
-        rank: profile.rank,
+        rank: rankForRating(profile.rating),
+        rating: profile.rating,
+        peakRating: profile.peakRating,
         wins: profile.wins,
+        losses: profile.losses,
         winRate: profile.winRate,
         streak: profile.streak,
         bestStreak: profile.bestStreak,
@@ -372,6 +399,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         attempts: row?.attempts ?? 0,
         bestScore: row?.best_score ?? null,
         lastPlayedAt: row?.last_played_at ?? null,
+        lastResult: row?.last_result ?? null,
       };
     });
   }
@@ -448,13 +476,36 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
   function recordGameSession(userId, payload) {
     const completedAt = typeof payload.completedAt === 'string' ? payload.completedAt : nowIso();
     const score = Math.max(0, Number.parseInt(payload.score, 10) || 0);
-    const totalTurns = Math.max(1, Number.parseInt(payload.totalTurns, 10) || 1);
+    const totalTurns = Math.max(0, Number.parseInt(payload.totalTurns, 10) || 0);
     const correct = Math.max(0, Number.parseInt(payload.correct, 10) || 0);
+    if (totalTurns <= 0 || correct > totalTurns) return getState(userId);
     const durationSeconds = Math.max(0, Number.parseInt(payload.durationSeconds, 10) || 0);
     const workshop = String(payload.workshop ?? 'attack');
     const drillId = payload.drillId ? String(payload.drillId) : defaultDrillForWorkshop(workshop);
-    const xpGained = Math.max(10, Math.round(score / totalTurns));
-    const completed = correct >= Math.ceil(totalTurns * 0.6) ? 1 : 0;
+    const drill = DRILL_CATALOG.find(entry => entry.id === drillId);
+    const profileRow = getProfileRow.get(userId);
+    const progression = calculateProgression({
+      current: {
+        level: profileRow.level,
+        xp: profileRow.xp,
+        xpMax: profileRow.xp_max,
+        rating: profileRow.rating,
+        peakRating: profileRow.peak_rating,
+        wins: profileRow.wins,
+        losses: profileRow.losses,
+        streak: profileRow.streak,
+        bestStreak: profileRow.best_streak,
+        trainedSeconds: profileRow.trained_seconds,
+      },
+      session: {
+        score,
+        correct,
+        totalTurns,
+        durationSeconds,
+        difficulty: drill?.difficulty ?? 2,
+      },
+    });
+    const completed = progression.session.result === 'W' ? 1 : 0;
     const tx = db.transaction(() => {
       insertGameSession.run({
         id: randomUUID(),
@@ -468,33 +519,54 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         durationSeconds,
         tacticalAverage: Number.isFinite(payload.tacticalAverage) ? payload.tacticalAverage : null,
         placementAverage: Number.isFinite(payload.placementAverage) ? payload.placementAverage : null,
+        result: progression.session.result,
+        accuracy: progression.session.accuracy,
+        ratingBefore: progression.session.ratingBefore,
+        ratingAfter: progression.session.ratingAfter,
+        ratingDelta: progression.session.ratingDelta,
+        xpGained: progression.session.xpGained,
         completedAt,
         createdAt: nowIso(),
       });
-      updateStats.run({ userId, score, correct, totalTurns, durationSeconds, completedAt });
       if (drillId) {
-        upsertDrillResult.run({ userId, drillId, workshop, completed, bestScore: score, lastPlayedAt: completedAt });
+        upsertDrillResult.run({
+          userId,
+          drillId,
+          workshop,
+          completed,
+          bestScore: score,
+          lastPlayedAt: completedAt,
+          lastResult: progression.session.result,
+        });
       }
-      const profileRow = getProfileRow.get(userId);
-      const statsRow = getStatsRow.get(userId);
-      const xp = profileRow.xp + xpGained;
-      const level = profileRow.level + Math.floor(xp / profileRow.xp_max);
-      const xpMax = xpMaxForLevel(level);
-      const normalizedXp = xp % profileRow.xp_max;
-      const wins = profileRow.wins + (completed ? 1 : 0);
-      const winRate = statsRow.total_turns > 0 ? Math.round((statsRow.total_correct / statsRow.total_turns) * 100) : profileRow.win_rate;
-      const streak = completed ? profileRow.streak + 1 : 0;
+      updateStats.run({
+        userId,
+        score,
+        correct,
+        totalTurns,
+        durationSeconds,
+        completedAt,
+        wins: progression.profile.wins,
+        losses: progression.profile.losses,
+        streak: progression.profile.streak,
+        bestStreak: progression.profile.bestStreak,
+        rating: progression.profile.rating,
+        peakRating: progression.profile.peakRating,
+      });
       updateProfileStatsStatement.run({
         userId,
-        level,
-        xp: normalizedXp,
-        xpMax,
-        rank: rankForLevel(level),
-        wins,
-        winRate,
-        streak,
-        bestStreak: Math.max(profileRow.best_streak, streak),
-        trainedSeconds: profileRow.trained_seconds + durationSeconds,
+        level: progression.profile.level,
+        xp: progression.profile.xp,
+        xpMax: progression.profile.xpMax,
+        rank: progression.profile.rank,
+        rating: progression.profile.rating,
+        peakRating: progression.profile.peakRating,
+        wins: progression.profile.wins,
+        losses: progression.profile.losses,
+        winRate: progression.profile.winRate,
+        streak: progression.profile.streak,
+        bestStreak: progression.profile.bestStreak,
+        trainedSeconds: progression.profile.trainedSeconds,
       });
     });
     tx();
@@ -530,8 +602,11 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         level: profile.level,
         xp: profile.xp,
         xpMax: profile.xpMax,
-        rank: profile.rank,
+        rank: rankForRating(profile.rating),
+        rating: profile.rating,
+        peakRating: profile.peakRating,
         wins: profile.wins,
+        losses: profile.losses,
         winRate: profile.winRate,
         streak: profile.streak,
         bestStreak: profile.bestStreak,

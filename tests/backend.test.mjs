@@ -83,6 +83,14 @@ test('signup creates user, profile, preferences and stats, then sets a session c
     assert.equal(body.user.email, 'player@example.com');
     assert.equal(body.state.profile.name, 'Nadia Park');
     assert.equal(body.state.profile.country, 'FR');
+    assert.equal(body.state.profile.level, 1);
+    assert.equal(body.state.profile.xp, 0);
+    assert.equal(body.state.profile.rank, 'P12');
+    assert.equal(body.state.profile.rating, 600);
+    assert.equal(body.state.profile.peakRating, 600);
+    assert.equal(body.state.profile.wins, 0);
+    assert.equal(body.state.profile.losses, 0);
+    assert.equal(body.state.profile.streak, 0);
     assert.equal(body.state.preferences.leaderboardPeriod, 'weekly');
     assert.equal(body.state.stats.sessionsPlayed, 0);
     assert.deepEqual(body.state.progression.startedDrills, []);
@@ -221,7 +229,7 @@ test('POST /api/player/drills/:drillId/start does not duplicate drills', async (
   });
 });
 
-test('POST /api/game-sessions updates XP, best score, attempts and completion', async () => {
+test('POST /api/game-sessions records a competitive win with rating, XP, best score and completion', async () => {
   await withServer(async ({ baseUrl }) => {
     const { cookie } = await signup(baseUrl);
 
@@ -245,12 +253,67 @@ test('POST /api/game-sessions updates XP, best score, attempts and completion', 
     const drill = body.drills.find(entry => entry.id === 'd1');
     assert.equal(response.status, 201);
     assert.equal(body.stats.sessionsPlayed, 1);
-    assert.equal(body.profile.xp, DEFAULT_APP_STATE.profile.xp + 80);
+    assert.equal(body.profile.wins, 1);
+    assert.equal(body.profile.losses, 0);
+    assert.equal(body.profile.streak, 1);
+    assert.equal(body.profile.bestStreak, 1);
+    assert.ok(body.profile.rating > DEFAULT_APP_STATE.profile.rating);
+    assert.equal(body.profile.peakRating, body.profile.rating);
+    assert.ok(body.profile.xp > DEFAULT_APP_STATE.profile.xp);
     assert.equal(body.profile.trained, '3m');
     assert.equal(drill.attempts, 1);
     assert.equal(drill.completed, true);
     assert.equal(drill.bestScore, 320);
     assert.equal(body.progression.bestScores.d1, 320);
+    assert.equal(body.leaderboard.sessions[0].result, 'W');
+    assert.ok(body.leaderboard.sessions[0].ratingDelta > 0);
+    assert.equal(body.leaderboard.sessions[0].accuracy, 75);
+  });
+});
+
+test('POST /api/game-sessions records a competitive loss with limited rating drop and streak reset', async () => {
+  await withServer(async ({ baseUrl }) => {
+    const { cookie } = await signup(baseUrl);
+
+    await requestJson(baseUrl, '/api/game-sessions', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ drillId: 'd1', workshop: 'attack', score: 320, correct: 3, totalTurns: 4, durationSeconds: 180 }),
+    });
+    const { response, body } = await requestJson(baseUrl, '/api/game-sessions', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ drillId: 'd1', workshop: 'attack', score: 60, correct: 1, totalTurns: 4, durationSeconds: 90 }),
+    });
+
+    const latest = body.leaderboard.sessions.find(session => session.result === 'L');
+    assert.equal(response.status, 201);
+    assert.equal(body.profile.wins, 1);
+    assert.equal(body.profile.losses, 1);
+    assert.equal(body.profile.streak, 0);
+    assert.equal(body.profile.bestStreak, 1);
+    assert.equal(latest.result, 'L');
+    assert.ok(latest.ratingDelta < 0);
+    assert.ok(latest.ratingDelta >= -18);
+  });
+});
+
+test('competitive rank updates when rating crosses French badminton thresholds', async () => {
+  await withServer(async ({ baseUrl }) => {
+    const { cookie } = await signup(baseUrl);
+    let state = null;
+
+    for (let index = 0; index < 4; index += 1) {
+      const result = await requestJson(baseUrl, '/api/game-sessions', {
+        method: 'POST',
+        headers: { cookie },
+        body: JSON.stringify({ drillId: 'd1', workshop: 'attack', score: 500, correct: 4, totalTurns: 4, durationSeconds: 120 }),
+      });
+      state = result.body;
+    }
+
+    assert.ok(state.profile.rating >= 720);
+    assert.notEqual(state.profile.rank, 'P12');
   });
 });
 
@@ -274,6 +337,9 @@ test('personal leaderboard filters weekly and all-time game sessions', async () 
     assert.equal(weekly.response.status, 200);
     assert.equal(weekly.body.sessions.length, 1);
     assert.equal(weekly.body.sessions[0].matchId, 'new');
+    assert.equal(weekly.body.sessions[0].result, 'W');
+    assert.equal(typeof weekly.body.sessions[0].ratingDelta, 'number');
+    assert.equal(weekly.body.sessions[0].accuracy, 75);
     assert.equal(allTime.body.sessions.length, 2);
     assert.equal(allTime.body.summary.bestScore, 240);
   });
@@ -312,6 +378,11 @@ test('reset progression clears sessions and drill progress but keeps account and
     assert.equal(reset.response.status, 200);
     assert.equal(reset.body.user.email, 'player@example.com');
     assert.equal(reset.body.profile.name, 'Nadia Park');
+    assert.equal(reset.body.profile.rating, 600);
+    assert.equal(reset.body.profile.rank, 'P12');
+    assert.equal(reset.body.profile.wins, 0);
+    assert.equal(reset.body.profile.losses, 0);
+    assert.equal(reset.body.profile.streak, 0);
     assert.equal(reset.body.stats.sessionsPlayed, 0);
     assert.deepEqual(reset.body.progression.startedDrills, []);
     assert.equal(reset.body.drills.find(drill => drill.id === 'd1').attempts, 0);

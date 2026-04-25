@@ -52,12 +52,19 @@ function getProfile(state) {
 }
 
 function homeStats(profile) {
+  const rating = profile.rating ?? 600;
+  const peakRating = profile.peakRating ?? rating;
+  const wins = profile.wins ?? 0;
+  const losses = profile.losses ?? 0;
+  const winRate = profile.winRate ?? 0;
+  const xpRatio = profile.xpMax > 0 ? profile.xp / profile.xpMax : 0;
+
   return [
-    { label: 'LEVEL', value: String(profile.level), hint: `${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP`, bar: profile.xp / profile.xpMax },
-    { label: 'RANK', value: profile.rank, hint: '+42 pts this week' },
-    { label: 'WINS', value: String(profile.wins), hint: `${profile.winRate}% win rate` },
+    { label: 'RANK', value: profile.rank, hint: `${rating.toLocaleString()} rating · PEAK ${peakRating.toLocaleString()}` },
+    { label: 'LEVEL', value: String(profile.level), hint: `${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP`, bar: xpRatio },
+    { label: 'RECORD', value: `${wins}-${losses}`, hint: `${winRate}% win rate` },
     { label: 'STREAK', value: String(profile.streak), hint: `personal best: ${profile.bestStreak}` },
-    { label: 'TRAINED', value: profile.trained, hint: 'this month' },
+    { label: 'TRAINED', value: profile.trained, hint: 'total time' },
   ];
 }
 
@@ -117,32 +124,6 @@ const DRILLS_LIST = Object.freeze([
   { id: 'd8', title: 'Deceptive block to net', category: 'Defense', difficulty: 4, duration: '11 min', xp: 130, best: null, attempts: 0, locked: true, color: '#1f8a4c', workshop: 'defense' },
   { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', difficulty: 3, duration: '15 min', xp: 150, best: 59, attempts: 5, locked: false, color: '#2e6fc5', workshop: null },
   { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', difficulty: 4, duration: '18 min', xp: 180, best: null, attempts: 0, locked: true, color: '#2e6fc5', workshop: null },
-]);
-
-const LEADERBOARD = Object.freeze([
-  { rank: 1, name: 'Taro Sakai', initials: 'TS', rankName: 'Diamond I', wins: 421, wr: 78, xp: 48210, country: 'JP' },
-  { rank: 2, name: 'Priya Shetty', initials: 'PS', rankName: 'Diamond II', wins: 398, wr: 74, xp: 44180, country: 'IN' },
-  { rank: 3, name: 'Jonas Berg', initials: 'JB', rankName: 'Diamond II', wins: 372, wr: 72, xp: 41200, country: 'SE' },
-  { rank: 4, name: 'Amara Okafor', initials: 'AO', rankName: 'Diamond III', wins: 341, wr: 69, xp: 37400, country: 'NG' },
-  { rank: 5, name: 'Chen Wei', initials: 'CW', rankName: 'Diamond III', wins: 324, wr: 68, xp: 35200, country: 'CN' },
-  { rank: 6, name: 'Sofia Rossi', initials: 'SR', rankName: 'Platinum I', wins: 289, wr: 66, xp: 31800, country: 'IT' },
-  { rank: 7, name: 'Diego Marquez', initials: 'DM', rankName: 'Platinum I', wins: 271, wr: 65, xp: 29900, country: 'MX' },
-  { rank: 8, name: 'Hana Park', initials: 'HP', rankName: 'Platinum II', wins: 258, wr: 64, xp: 28100, country: 'KR' },
-  { rank: 9, name: 'Leo Dubois', initials: 'LD', rankName: 'Platinum II', wins: 244, wr: 62, xp: 26500, country: 'FR' },
-  { rank: 10, name: 'Aisha Khan', initials: 'AK', rankName: 'Platinum III', wins: 231, wr: 61, xp: 24700, country: 'PK' },
-]);
-
-const ALL_TIME_LEADERBOARD = Object.freeze([
-  { rank: 1, name: 'Taro Sakai', initials: 'TS', rankName: 'Legend', wins: 1842, wr: 81, xp: 221400, country: 'JP' },
-  { rank: 2, name: 'Chen Wei', initials: 'CW', rankName: 'Legend', wins: 1730, wr: 79, xp: 207900, country: 'CN' },
-  { rank: 3, name: 'Priya Shetty', initials: 'PS', rankName: 'Master I', wins: 1698, wr: 77, xp: 198200, country: 'IN' },
-  { rank: 4, name: 'Jonas Berg', initials: 'JB', rankName: 'Master I', wins: 1512, wr: 74, xp: 176500, country: 'SE' },
-  { rank: 5, name: 'Amara Okafor', initials: 'AO', rankName: 'Master II', wins: 1450, wr: 72, xp: 168100, country: 'NG' },
-  { rank: 6, name: 'Sofia Rossi', initials: 'SR', rankName: 'Master II', wins: 1394, wr: 71, xp: 160400, country: 'IT' },
-  { rank: 7, name: 'Diego Marquez', initials: 'DM', rankName: 'Diamond I', wins: 1320, wr: 69, xp: 151900, country: 'MX' },
-  { rank: 8, name: 'Hana Park', initials: 'HP', rankName: 'Diamond I', wins: 1268, wr: 68, xp: 145700, country: 'KR' },
-  { rank: 9, name: 'Leo Dubois', initials: 'LD', rankName: 'Diamond II', wins: 1190, wr: 66, xp: 137200, country: 'FR' },
-  { rank: 10, name: 'Aisha Khan', initials: 'AK', rankName: 'Diamond II', wins: 1134, wr: 65, xp: 129800, country: 'PK' },
 ]);
 
 const SETTINGS_AVATAR_COLORS = Object.freeze(['#ffd23f', '#e85d3c', '#1f8a4c', '#2e6fc5', '#0f1a14']);
@@ -224,6 +205,7 @@ function pageTitleMarkup({ eyebrow, title, right = '' }) {
 
 function drillCardMarkup(drill) {
   const playable = !drill.locked && (drill.workshop === 'attack' || drill.workshop === 'defense');
+  const lastResult = drill.lastResult ? `Last ${drill.lastResult}` : 'No result yet';
 
   return `
     <article
@@ -246,7 +228,7 @@ function drillCardMarkup(drill) {
           <span>+${drill.xp} XP</span>
           <span>${drill.attempts} runs</span>
         </div>
-        ${drill.best === null ? '<p class="new-drill">New drill</p>' : `<p class="best-score"><span>BEST</span><strong>${drill.best}%</strong></p>`}
+        ${drill.best === null ? `<p class="new-drill">${lastResult}</p>` : `<p class="best-score"><span>BEST · ${lastResult}</span><strong>${drill.best}</strong></p>`}
         ${drill.locked ? '<p class="drill-lock">Locked</p>' : ''}
       </div>
     </article>`;
@@ -265,6 +247,7 @@ function renderDrillsPage(state) {
       best: progress?.bestScore ?? drill.best,
       started: progress?.started ?? false,
       completed: progress?.completed ?? false,
+      lastResult: progress?.lastResult ?? null,
     };
   });
 
@@ -315,12 +298,12 @@ function renderLeaderboardPage(state) {
       <article class="personal-rank-card card">
         <span class="stat-label">PLAYER</span>
         <strong>${escapeHtml(profile.name)}</strong>
-        <span class="stat-hint">${flagBadge(profile.country)} ${profile.rank}</span>
+        <span class="stat-hint">${flagBadge(profile.country)} ${profile.rank} · ${profile.rating ?? 600} rating</span>
       </article>
       <article class="personal-rank-card card">
-        <span class="stat-label">SESSIONS</span>
-        <strong>${summary.sessionsPlayed ?? 0}</strong>
-        <span class="stat-hint">${period === 'weekly' ? 'last 7 days' : 'all time'}</span>
+        <span class="stat-label">RECORD</span>
+        <strong>${profile.wins ?? 0}-${profile.losses ?? 0}</strong>
+        <span class="stat-hint">${profile.winRate ?? 0}% win rate</span>
       </article>
       <article class="personal-rank-card card">
         <span class="stat-label">BEST SCORE</span>
@@ -337,22 +320,22 @@ function renderLeaderboardPage(state) {
       <div class="standings-row standings-head">
         <span class="rank-cell">#</span>
         <span class="player-cell">SESSION</span>
-        <span class="tier">WORKSHOP</span>
+        <span class="tier">RESULT</span>
         <span class="wins">SCORE</span>
         <span class="wr">ACC</span>
-        <span class="xp">DATE</span>
+        <span class="xp">RATING</span>
       </div>
       ${sessions.length ? sessions.map((session, index) => `
         <article class="standings-row">
           <span class="rank-cell">#${index + 1}</span>
           <span class="player-cell">
             <span class="player-avatar">${playerInitials(profile.name)}</span>
-            <span><strong>${escapeHtml(session.matchId ?? 'Training rally')}</strong><small>${session.correct}/${session.totalTurns} correct</small></span>
+            <span><strong>${escapeHtml(session.matchId ?? 'Training rally')}</strong><small>${escapeHtml(session.workshop)} · ${new Date(session.completedAt).toLocaleDateString()}</small></span>
           </span>
-          <span class="tier">${escapeHtml(session.workshop)}</span>
+          <span class="tier">${session.result ?? '—'}</span>
           <span class="wins">${session.score}</span>
-          <span class="wr">${Math.round((session.correct / session.totalTurns) * 100)}%</span>
-          <span class="xp">${new Date(session.completedAt).toLocaleDateString()}</span>
+          <span class="wr">${session.accuracy ?? Math.round((session.correct / session.totalTurns) * 100)}%</span>
+          <span class="xp">${session.ratingDelta > 0 ? '+' : ''}${session.ratingDelta ?? 0}</span>
         </article>
       `).join('') : '<p class="season-note">NO SESSION RECORDED YET · PLAY A DRILL TO FILL THIS TABLE</p>'}
     </div>`;
@@ -392,7 +375,7 @@ function renderSettingsPage(state) {
             </label>
             <label>
               <span>Rank</span>
-              <input class="settings-input" type="text" value="${escapeHtml(profile.rank)}" readonly>
+              <input class="settings-input" type="text" value="${escapeHtml(profile.rank)} · ${profile.rating ?? 600} rating" readonly>
             </label>
             <button class="btn primary save-profile" type="button" disabled>Save profile</button>
           </div>
@@ -407,8 +390,10 @@ function renderSettingsPage(state) {
           <div><span>Email</span><strong>${escapeHtml(state.account?.email ?? state.user?.email ?? 'local player')}</strong></div>
           <div><span>Level</span><strong>Level ${profile.level}</strong></div>
           <div><span>XP</span><strong>${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()}</strong></div>
-          <div><span>Training</span><strong>${profile.trained} this month</strong></div>
-          <div><span>Streak</span><strong>${profile.streak} days</strong></div>
+          <div><span>PEAK</span><strong>${profile.peakRating ?? profile.rating ?? 600} rating</strong></div>
+          <div><span>Record</span><strong>${profile.wins ?? 0}-${profile.losses ?? 0} · ${profile.winRate ?? 0}% WR</strong></div>
+          <div><span>Training</span><strong>${profile.trained} total</strong></div>
+          <div><span>Streak</span><strong>${profile.streak} wins</strong></div>
         </div>
         <div class="password-fields">
           <input class="settings-input" type="password" name="currentPassword" placeholder="Current password" autocomplete="current-password">
@@ -542,7 +527,7 @@ export class ScreenManager {
             <span class="player-avatar" data-player-initials>${initials}</span>
             <span>
               <span class="player-name" data-player-name>${escapeHtml(profile.name)}</span>
-              <span class="player-rank">LVL ${profile.level} · ${profile.rank.toUpperCase()}</span>
+              <span class="player-rank" data-player-rank>LVL ${profile.level} · ${profile.rank.toUpperCase()} · ${profile.rating ?? 600}</span>
             </span>
           </div>
         </header>
@@ -991,6 +976,8 @@ export class ScreenManager {
     });
     const playerName = menu.querySelector('[data-player-name]');
     if (playerName) playerName.textContent = profile.name;
+    const playerRank = menu.querySelector('[data-player-rank]');
+    if (playerRank) playerRank.textContent = `LVL ${profile.level} · ${profile.rank.toUpperCase()} · ${profile.rating ?? 600}`;
     const greeting = menu.querySelector('[data-home-greeting]');
     if (greeting) greeting.textContent = `Ready to play, ${firstName}?`;
   }
