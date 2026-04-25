@@ -1001,6 +1001,12 @@ export class ScreenManager {
       screenId = 'auth';
     }
 
+    if (this._currentScreen === screenId) {
+      const current = this._screens[screenId];
+      if (current) this._showEl(current);
+      return;
+    }
+
     if (this._currentScreen && this._currentScreen !== 'exercise') {
       const prev = this._screens[this._currentScreen];
       if (prev) this._hideEl(prev);
