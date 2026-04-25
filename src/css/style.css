@@ -449,6 +449,10 @@ body::after {
   gap: 18px;
 }
 
+.auth-form[hidden] {
+  display: none;
+}
+
 .auth-form label {
   display: grid;
   gap: 12px;
