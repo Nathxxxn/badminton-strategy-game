@@ -399,46 +399,42 @@ body::after {
 
 #screen-auth {
   min-height: 100vh;
-  padding: 24px;
+  padding: 28px 36px;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .auth-shell {
   position: relative;
   z-index: 1;
-  width: min(460px, 100%);
+  width: min(860px, 100%);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 30px;
-}
-
-.auth-brand {
-  width: 74px;
-  height: 74px;
-}
-
-.auth-shell h1 {
-  font-size: 40px;
-  line-height: 1;
+  gap: 22px;
+  padding: 0;
+  background: transparent;
 }
 
 .auth-tabs {
   display: flex;
   gap: 8px;
-  padding: 4px;
-  border: 3px solid var(--rally-ink);
-  border-radius: 12px;
-  background: var(--rally-cream-2);
+  width: min(420px, 100%);
+  padding: 5px;
+  border: 5px solid var(--rally-ink);
+  border-radius: 18px;
+  background: var(--rally-cream);
+  box-shadow: 0 8px 0 0 var(--rally-ink);
 }
 
 .auth-tab {
   flex: 1;
-  min-height: 42px;
+  min-height: 46px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   color: var(--rally-ink-soft);
-  font: 800 14px/1 var(--font-rally);
+  font: 800 16px/1 var(--font-rally);
+  text-transform: uppercase;
   cursor: pointer;
 }
 
@@ -450,16 +446,55 @@ body::after {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
 }
 
 .auth-form label {
   display: grid;
-  gap: 6px;
+  gap: 12px;
   color: var(--rally-ink);
-  font: 700 11px/1 var(--font-rally-mono);
-  letter-spacing: 1.2px;
+  font: 800 24px/1 var(--font-rally-mono);
+  letter-spacing: 6px;
   text-transform: uppercase;
+}
+
+.auth-form .settings-input {
+  min-height: 92px;
+  padding: 0 28px;
+  border: 6px solid var(--rally-ink);
+  border-radius: 20px;
+  background: var(--rally-feather);
+  color: var(--rally-ink);
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.auth-form .settings-input::placeholder {
+  color: #6d6d6d;
+  opacity: 0.9;
+}
+
+.auth-submit {
+  min-height: 88px;
+  margin-top: 6px;
+  border: 6px solid var(--rally-ink);
+  border-radius: 22px;
+  background: var(--rally-cream);
+  color: var(--rally-ink);
+  font: 800 30px/1 var(--font-rally);
+  cursor: pointer;
+  box-shadow: 0 12px 0 0 var(--rally-ink);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.auth-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 0 0 var(--rally-ink);
+}
+
+.auth-submit:active {
+  transform: translateY(6px);
+  box-shadow: 0 6px 0 0 var(--rally-ink);
 }
 
 .court-bg {
