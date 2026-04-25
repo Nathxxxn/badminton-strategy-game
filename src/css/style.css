@@ -425,12 +425,41 @@ body::after {
 .auth-tabs {
   display: flex;
   gap: 8px;
+  padding: 4px;
+  border: 3px solid var(--rally-ink);
+  border-radius: 12px;
+  background: var(--rally-cream-2);
+}
+
+.auth-tab {
+  flex: 1;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rally-ink-soft);
+  font: 800 14px/1 var(--font-rally);
+  cursor: pointer;
+}
+
+.auth-tab.active {
+  background: var(--rally-ink);
+  color: var(--rally-feather);
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--rally-ink);
+  font: 700 11px/1 var(--font-rally-mono);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
 }
 
 .court-bg {

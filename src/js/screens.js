@@ -446,20 +446,42 @@ function renderAuthScreen() {
       <p class="page-eyebrow">▸ RALLY ACCOUNT</p>
       <h1>Sign in to train</h1>
       <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
-        <button class="filter-tab active" type="button" data-auth-tab="login">Login</button>
-        <button class="filter-tab" type="button" data-auth-tab="signup">Create account</button>
+        <button class="auth-tab active" type="button" data-auth-tab="login">Sign in</button>
+        <button class="auth-tab" type="button" data-auth-tab="signup">Create</button>
       </div>
       <form class="auth-form active" data-auth-form="login">
-        <input class="settings-input" type="email" name="email" placeholder="Email" autocomplete="email" required>
-        <input class="settings-input" type="password" name="password" placeholder="Password" autocomplete="current-password" required>
-        <button class="btn primary block" type="submit">Login</button>
+        <label>
+          <span>Email</span>
+          <input class="settings-input" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input class="settings-input" type="password" name="password" placeholder="Your password" autocomplete="current-password" required>
+        </label>
+        <button class="btn primary block" type="submit">Sign in</button>
       </form>
       <form class="auth-form" data-auth-form="signup" hidden>
-        <input class="settings-input" type="text" name="name" placeholder="Player name" autocomplete="name" required>
-        <input class="settings-input" type="email" name="email" placeholder="Email" autocomplete="email" required>
-        <input class="settings-input" type="password" name="password" placeholder="Password" autocomplete="new-password" required>
-        <input class="settings-input" type="text" name="country" placeholder="Country code" maxlength="2" value="FR">
-        <button class="btn primary block" type="submit">Create account</button>
+        <label>
+          <span>Player name</span>
+          <input class="settings-input" type="text" name="name" placeholder="Alex Kim" autocomplete="name" required>
+        </label>
+        <label>
+          <span>Email</span>
+          <input class="settings-input" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input class="settings-input" type="password" name="password" placeholder="Minimum 6 characters" autocomplete="new-password" required>
+        </label>
+        <label>
+          <span>Confirm password</span>
+          <input class="settings-input" type="password" name="confirmPassword" placeholder="Repeat password" autocomplete="new-password" required>
+        </label>
+        <label>
+          <span>Country</span>
+          <input class="settings-input" type="text" name="country" placeholder="FR" maxlength="2" value="FR">
+        </label>
+        <button class="btn primary block" type="submit">Create</button>
       </form>
     </div>`;
 }
@@ -764,6 +786,10 @@ export class ScreenManager {
 
   async _submitSignup(auth, form) {
     const formData = new FormData(form);
+    if (formData.get('password') !== formData.get('confirmPassword')) {
+      this._showFeedback(auth, 'Les mots de passe ne correspondent pas.', 'error');
+      return;
+    }
     const payload = await signupAsync({
       name: formData.get('name'),
       email: formData.get('email'),
