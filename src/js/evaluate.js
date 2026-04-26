@@ -185,7 +185,7 @@ export function evaluateTacticalTurn(turn, logicPayload) {
 
   const impactPoint = logicPayload.impactPoint ?? { x: 0.5, y: 0.5 };
   const analysis = tacticalEngine.getCompleteAnalysis(incoming, user, opponents, impactPoint);
-  
+
   const feedback = feedbackEngine.getTacticalFeedback(analysis);
 
   return {
