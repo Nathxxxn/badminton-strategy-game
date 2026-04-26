@@ -629,8 +629,15 @@ body::after {
     var(--rally-accent) 0 6px,
     #ffb547 6px 12px
   );
+  background-size: 17px 13px;
   border-right: 2.5px solid var(--rally-ink);
   transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: xpStripeShift 1.4s linear infinite;
+}
+
+@keyframes xpStripeShift {
+  from { background-position: 0 0; }
+  to   { background-position: 24px 0; }
 }
 .xp-label {
   display: flex; justify-content: space-between;
@@ -679,11 +686,11 @@ body::after {
 }
 .timer-pill:has(#hud-timer.timer-urgent) {
   background: var(--rally-danger); color: var(--rally-feather);
-  animation: timerPulse 0.6s infinite alternate;
+  animation: timerPulse 0.55s infinite alternate;
 }
 @keyframes timerPulse {
-  from { transform: scale(1); }
-  to   { transform: scale(1.05); }
+  from { transform: scale(1);    box-shadow: 3px 3px 0 0 var(--rally-ink); }
+  to   { transform: scale(1.08); box-shadow: 5px 5px 0 0 var(--rally-ink); }
 }
 
 /* Score pill */
@@ -716,19 +723,53 @@ body::after {
 .combo-badge[hidden] { display: none; }
 
 @keyframes comboAppear {
-  0%   { transform: scale(1.5) rotate(-4deg); opacity: 0; }
-  60%  { transform: scale(0.9) rotate(2deg); }
+  0%   { transform: scale(1.6) rotate(-6deg); opacity: 0; }
+  55%  { transform: scale(0.85) rotate(3deg); opacity: 1; }
+  80%  { transform: scale(1.05) rotate(-1deg); }
   100% { transform: scale(1) rotate(0); opacity: 1; }
 }
-.combo-badge.pop { animation: comboAppear 0.4s ease-out both; }
 
-/* Score pop animation */
-@keyframes scorePop {
-  0%   { transform: scale(1);    }
-  40%  { transform: scale(1.25); }
-  100% { transform: scale(1);    }
+/* Sustained pulse while combo is hot (≥ 3). Looped, low-amplitude. */
+@keyframes comboPulse {
+  0%, 100% { box-shadow: 3px 3px 0 0 #ffb547; transform: scale(1); }
+  50%      { box-shadow: 3px 3px 0 0 var(--rally-accent); transform: scale(1.04); }
 }
-#hud-score.score-pop { animation: scorePop 0.35s ease-out both; }
+
+.combo-badge.pop { animation: comboAppear 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.combo-badge.hot { animation: comboPulse 1.1s ease-in-out infinite; }
+
+/* Score pop animation — bouncier with a tiny rotational kick */
+@keyframes scorePop {
+  0%   { transform: scale(1)    rotate(0); }
+  30%  { transform: scale(1.35) rotate(-3deg); }
+  60%  { transform: scale(0.92) rotate(1.5deg); }
+  100% { transform: scale(1)    rotate(0); }
+}
+#hud-score.score-pop { animation: scorePop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Score-pill background flash on point gain. .gain = positive (cream flash),
+   .gain-bad = wrong answer (danger flash). One-shot, both share keyframes. */
+@keyframes scoreGainFlash {
+  0%   { background: var(--rally-accent); }
+  35%  { background: var(--rally-cream); }
+  100% { background: var(--rally-accent); }
+}
+@keyframes scoreLossFlash {
+  0%   { background: var(--rally-accent); }
+  35%  { background: var(--rally-danger); color: var(--rally-feather); }
+  100% { background: var(--rally-accent); }
+}
+.score-pill.gain     { animation: scoreGainFlash 0.45s ease-out both; }
+.score-pill.gain-bad { animation: scoreLossFlash 0.45s ease-out both; }
+
+/* Level chip — flash + bounce when player levels up */
+@keyframes levelUpPulse {
+  0%   { transform: scale(1);    box-shadow: 3px 3px 0 0 var(--rally-ink); }
+  30%  { transform: scale(1.20); box-shadow: 5px 5px 0 0 var(--rally-accent), 3px 3px 0 0 var(--rally-ink); }
+  60%  { transform: scale(0.95); box-shadow: 3px 3px 0 0 var(--rally-ink); }
+  100% { transform: scale(1);    box-shadow: 3px 3px 0 0 var(--rally-ink); }
+}
+.level-chip.level-up { animation: levelUpPulse 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
 /* ─── Instruction banner — Rally design ─────────────────────────────────────── */
 .instr {
