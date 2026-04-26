@@ -40,14 +40,19 @@ const MAX_SPIN_DEVIATION_PX = 60;
 
 // ─── Visual constants ─────────────────────────────────────────────────────────
 
-/** Thickness of the aim line (CSS px) */
-const LINE_W = 3;
+/** Base thickness of the aim line (CSS px) — grows with power for the tension effect */
+const LINE_W_MIN = 3;
+const LINE_W_MAX = 8;
 
-/** Radius of the drag start indicator ring (CSS px) */
+/** Radius of the drag start indicator ring (CSS px) — grows slightly with tension */
 const START_RING_R = 10;
+const START_RING_R_MAX = 16;
 
 /** Radius of the aim endpoint dot (CSS px) */
 const END_DOT_R = 5;
+
+/** Rally palette */
+const INK = '#0f1a14';
 
 /**
  * Color stops for the aim line, keyed by power threshold.
@@ -246,15 +251,15 @@ export class DragShooter {
     // Spin: perpendicular deviation of the midpoint, normalized to [-1, 1]
     const spin = Math.max(-1, Math.min(1, this._spinDeviation / MAX_SPIN_DEVIATION_PX));
 
-    // Aim point: normalize the drag direction back into court coordinates.
-    // The aim is in the direction of the drag FROM the shuttlecock.
+    // Slingshot: the player drags AWAY from the target (toward themselves).
+    // Aim direction is therefore the OPPOSITE of the drag delta.
     let aimNorm;
     if (len < 1) {
       // No movement — default to shuttlecock position
       aimNorm = { ...this._shuttleNorm };
     } else {
-      const aimCanvasX = this._origin.x + dx;
-      const aimCanvasY = this._origin.y + dy;
+      const aimCanvasX = this._origin.x - dx;
+      const aimCanvasY = this._origin.y - dy;
       const raw = this.court.toNormalized(aimCanvasX, aimCanvasY);
       aimNorm = snapToGrid(
         Math.max(0, Math.min(1, raw.x)),
@@ -330,23 +335,23 @@ export class DragShooter {
    * @returns {{ x: number, y: number }|null}
    */
   _projectLanding(aimPoint, power) {
-    // Use raw canvas direction to avoid snap-grid dead zone:
-    // when pointer and shuttle share the same snap row, snapped dy=0 would
-    // wrongly suppress the preview even though the user is dragging upward.
+    // Slingshot: the player drags AWAY from the target (downward, toward
+    // themselves), so a valid backward drag has current.y > origin.y.
     if (!this._current || !this._origin ||
-        this._current.y >= this._origin.y) return null;
+        this._current.y <= this._origin.y) return null;
 
-    // Pointer already in opponent's half — use snapped aim directly
+    // The aimPoint is already inverted in _computeShot. If it landed in the
+    // opponent's half via snap, use it directly.
     if (aimPoint.y < 0.5) return { x: aimPoint.x, y: aimPoint.y };
 
-    // Project using raw (unsnapped) normalized direction for accuracy
+    // Project using the INVERTED raw direction (slingshot).
     const raw = this.court.toNormalized(this._current.x, this._current.y);
     const sx  = this._shuttleNorm.x;
     const sy  = this._shuttleNorm.y;
-    const rdx = raw.x - sx;
-    const rdy = raw.y - sy;
+    const rdx = sx - raw.x;
+    const rdy = sy - raw.y;
 
-    if (rdy >= 0) return null;  // guard: should not happen given canvas check
+    if (rdy >= 0) return null;  // guard: drag direction does not aim forward
 
     // smash (power≈1): lands deep (y≈0.08) — drop (power≈0): lands close (y≈0.42)
     const targetY = 0.08 + (1 - power) * 0.34;
@@ -416,41 +421,57 @@ export class DragShooter {
     const c = this._current;
     const colour = this._powerColour(power);
 
+    // Tension effect: line thickens and start ring grows as the slingshot is stretched.
+    const lineW    = LINE_W_MIN + (LINE_W_MAX - LINE_W_MIN) * power;
+    const ringR    = START_RING_R + (START_RING_R_MAX - START_RING_R) * power;
+
     ctx.save();
     ctx.globalAlpha = LINE_ALPHA;
 
-    // ── Start ring at shuttlecock ────────────────────────────────────────────
+    // ── Tension ring at shuttlecock (ink halo + colored core) ────────────────
     ctx.beginPath();
-    ctx.arc(o.x, o.y, START_RING_R, 0, Math.PI * 2);
+    ctx.arc(o.x, o.y, ringR + 1.5, 0, Math.PI * 2);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth   = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, ringR, 0, Math.PI * 2);
     ctx.strokeStyle = colour;
     ctx.lineWidth   = 2;
     ctx.stroke();
 
-    // ── Aim line (straight or curved for spin) ───────────────────────────────
-    ctx.beginPath();
+    // ── Slingshot rope (ink outline + colored core, thickens with tension) ───
+    const drawPath = () => {
+      ctx.beginPath();
+      if (Math.abs(spin) > 0.08) {
+        const mx = (o.x + c.x) / 2;
+        const my = (o.y + c.y) / 2;
+        const dx = c.x - o.x;
+        const dy = c.y - o.y;
+        const len = Math.hypot(dx, dy);
+        const spinOffset = spin * MAX_SPIN_DEVIATION_PX * 0.5;
+        const cpx = mx + (dy / len) * spinOffset;
+        const cpy = my - (dx / len) * spinOffset;
+        ctx.moveTo(o.x, o.y);
+        ctx.quadraticCurveTo(cpx, cpy, c.x, c.y);
+      } else {
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(c.x, c.y);
+      }
+    };
+
+    // Ink outline for legibility against the green court
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth   = lineW + 3;
+    drawPath();
+    ctx.stroke();
+
+    // Colored core
     ctx.strokeStyle = colour;
-    ctx.lineWidth   = LINE_W;
-    ctx.lineCap     = 'round';
-
-    if (Math.abs(spin) > 0.08) {
-      // Draw a quadratic curve to indicate spin direction
-      const mx = (o.x + c.x) / 2;
-      const my = (o.y + c.y) / 2;
-
-      // Perpendicular offset for the control point
-      const dx = c.x - o.x;
-      const dy = c.y - o.y;
-      const len = Math.hypot(dx, dy);
-      const spinOffset = spin * MAX_SPIN_DEVIATION_PX * 0.5;
-      const cpx = mx + (dy / len) * spinOffset;
-      const cpy = my - (dx / len) * spinOffset;
-
-      ctx.moveTo(o.x, o.y);
-      ctx.quadraticCurveTo(cpx, cpy, c.x, c.y);
-    } else {
-      ctx.moveTo(o.x, o.y);
-      ctx.lineTo(c.x, c.y);
-    }
+    ctx.lineWidth   = lineW;
+    drawPath();
     ctx.stroke();
 
     // ── Spin indicator (separate arc near midpoint) ──────────────────────────
@@ -458,14 +479,15 @@ export class DragShooter {
       this._drawSpinIndicator(o, c, spin);
     }
 
-    // ── Endpoint dot ────────────────────────────────────────────────────────
+    // ── Endpoint pull-handle (ink ring + colored fill) ───────────────────────
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, END_DOT_R + 1, 0, Math.PI * 2);
+    ctx.fillStyle = INK;
+    ctx.fill();
     ctx.beginPath();
     ctx.arc(c.x, c.y, END_DOT_R, 0, Math.PI * 2);
     ctx.fillStyle = colour;
     ctx.fill();
-
-    // ── Power label (shot type) ───────────────────────────────────────────────
-    this._drawPowerLabel(o, c, power);
 
     ctx.restore();
   }
@@ -492,36 +514,6 @@ export class DragShooter {
     ctx.arc(mx, my, r, startAngle, endAngle, dir < 0);
     ctx.stroke();
 
-    ctx.restore();
-  }
-
-  /**
-   * Draw a small text label above the endpoint indicating shot type.
-   */
-  _drawPowerLabel(o, c, power) {
-    const { ctx } = this;
-    const label =
-      power < 0.3 ? 'Drop' :
-      power < 0.6 ? 'Drive' : 'Smash';
-
-    const dx = c.x - o.x;
-    const dy = c.y - o.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 20) return;
-
-    // Offset the label slightly perpendicular to the drag line
-    const px = -dy / len;
-    const py =  dx / len;
-    const lx = c.x + px * 18;
-    const ly = c.y + py * 18;
-
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.font        = 'bold 11px system-ui, sans-serif';
-    ctx.fillStyle   = this._powerColour(power);
-    ctx.textAlign   = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, lx, ly);
     ctx.restore();
   }
 

@@ -134,8 +134,345 @@ body::after {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
+  background: var(--rally-cream);
+}
+
+/* Subtle cream grain (matches design inspiration) */
+#app::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, rgba(15,26,20,0.05) 1px, transparent 0);
+  background-size: 28px 28px;
+  opacity: .5;
+  z-index: 0;
+}
+
+/* ─── Game stage (court + side rails) ──────────────────────────────────────── */
+#game-stage-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 20px 16px;
+  z-index: 1;
+}
+
+.stage-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.side-rail {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: linear-gradient(180deg, var(--rally-court) 0%, var(--rally-court-dark) 100%);
+  border: 4px solid var(--rally-ink);
+  border-radius: 20px;
+  box-shadow: 6px 6px 0 0 var(--rally-ink);
+  overflow: hidden;
+}
+
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Hide rails on narrow viewports */
+@media (max-width: 980px) {
+  .side-rail { display: none; }
+  #game-stage-wrap { padding: 8px 12px 12px; gap: 8px; }
+  .stage-row { gap: 0; }
+}
+
+/* ─── Shot-type selector (vertical column inside .stage) ───────────────────── */
+.shot-type-selector {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.shot-type-selector[hidden] { display: none; }
+
+.shot-type-btn {
+  background: var(--rally-cream);
+  color: var(--rally-ink);
+  border: 3px solid var(--rally-ink);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  font: 800 13px 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  min-width: 96px;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+}
+
+.shot-type-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--rally-ink);
+}
+
+.shot-type-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--rally-ink);
+}
+
+.shot-type-btn.is-active {
+  background: var(--rally-accent);
+}
+
+@media (max-width: 980px) {
+  .shot-type-selector { right: 8px; gap: 6px; }
+  .shot-type-btn { min-width: 72px; padding: 6px 10px; font-size: 11px; }
+}
+
+/* ─── Pause overlay ─────────────────────────────────────────────────────────── */
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(15, 26, 20, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  font-family: var(--font-rally);
+  color: var(--rally-ink);
+  animation: pauseFadeIn 140ms ease-out;
+}
+
+.pause-overlay[hidden] { display: none; }
+
+@keyframes pauseFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pause-card {
+  background: var(--rally-cream);
+  border: 4px solid var(--rally-ink);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 0 var(--rally-ink);
+  padding: 28px 32px;
+  width: min(420px, 90vw);
+  text-align: center;
+}
+
+.pause-eyebrow {
+  font-family: var(--font-rally-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--rally-ink-soft);
+  margin-bottom: 6px;
+}
+
+.pause-title {
+  font-family: var(--font-rally);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+  color: var(--rally-ink);
+}
+
+.pause-hint {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--rally-ink-soft);
+  margin-bottom: 18px;
+}
+
+.pause-hint kbd {
+  font-family: var(--font-rally-mono);
+  border: 2px solid var(--rally-ink);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--rally-cream-2);
+  color: var(--rally-ink);
+}
+
+.pause-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-rally {
+  background: var(--rally-cream-2);
+  color: var(--rally-ink);
+  border: 3px solid var(--rally-ink);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  font: 800 13px var(--font-rally-mono);
+  letter-spacing: 0.06em;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+}
+
+.btn-rally:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--rally-ink);
+}
+
+.btn-rally:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--rally-ink);
+}
+
+.btn-rally-primary {
+  background: var(--rally-accent);
+}
+
+@media (max-width: 560px) {
+  .pause-card { padding: 22px 20px; }
+  .pause-title { font-size: 22px; }
+}
+
+/* ─── Side rail cards ───────────────────────────────────────────────────────── */
+.rail-card {
+  background: var(--rally-cream);
+  border: 3px solid var(--rally-ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  padding: 12px 14px;
+  font-family: var(--font-rally);
+  color: var(--rally-ink);
+}
+.rail-ttl {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-rally-mono);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--rally-ink-soft);
+  margin-bottom: 10px;
+}
+.rail-ico {
+  width: 20px; height: 20px;
+  background: var(--rally-ink); color: var(--rally-accent);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Stat rows */
+.stat-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1.5px dashed rgba(15,26,20,0.12);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-k { font-size: 12px; color: var(--rally-ink-soft); }
+.stat-v {
+  font-family: var(--font-rally-mono);
+  font-weight: 800; font-size: 14px;
+  color: var(--rally-ink);
+}
+.stat-v.good { color: #3aa66a; }
+.stat-v.bad  { color: var(--rally-danger); }
+
+/* Coach card (ink with accent shadow) */
+.coach-card {
+  background: var(--rally-ink); color: var(--rally-feather);
+  border: 3px solid var(--rally-ink); border-radius: 14px;
+  box-shadow: 4px 4px 0 0 var(--rally-accent);
+  padding: 12px 14px;
+  font-family: var(--font-rally);
+}
+.coach-ttl {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--rally-accent);
+  font-family: var(--font-rally-mono);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.coach-tip { font-size: 13px; line-height: 1.4; }
+
+/* Legend */
+.legend { display: flex; flex-direction: column; gap: 6px; }
+.legend-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--rally-ink-soft);
+}
+.legend-sw {
+  width: 14px; height: 14px;
+  border: 2px solid var(--rally-ink); border-radius: 3px;
+  flex-shrink: 0;
+}
+.legend-sw.you     { background: var(--rally-accent); }
+.legend-sw.ally    { background: #2e6fc5; }
+.legend-sw.opp     { background: var(--rally-danger); }
+.legend-sw.shuttle { background: var(--rally-feather); border-radius: 50%; }
+.legend-sw.target  { background: repeating-linear-gradient(45deg, var(--rally-accent) 0 3px, var(--rally-ink) 3px 6px); }
+
+/* Opponents grid */
+.opp-grid { display: flex; gap: 10px; }
+.opp-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex: 1;
+}
+.opp-dot {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--rally-ink);
+  box-shadow: 3px 3px 0 0 rgba(15,26,20,0.4);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-rally-mono); font-weight: 800; font-size: 11px;
+  color: var(--rally-feather);
+}
+.opp-dot.opp1, .opp-dot.opp2 { background: var(--rally-danger); }
+.opp-tag {
+  font-family: var(--font-rally-mono);
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  color: var(--rally-ink-soft);
+}
+
+/* Shortcuts */
+.shortcuts { display: flex; flex-direction: column; gap: 6px; }
+.shortcut-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px;
+  color: var(--rally-ink);
+}
+.shortcut-row kbd {
+  font-family: var(--font-rally-mono);
+  font-size: 10px; font-weight: 700;
+  border: 2px solid var(--rally-ink);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--rally-cream-2);
+  color: var(--rally-ink);
 }
 
 #noscript-fallback {
@@ -166,11 +503,15 @@ body::after {
 
 /* ─── Canvas ──────────────────────────────────────────────────────────────────── */
 #game-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  background: transparent;
   -webkit-tap-highlight-color: transparent;
   cursor: default;
+  z-index: 1;
 }
 
 /* ─── Focus styles (accessibility) ──────────────────────────────────────────── */
@@ -180,10 +521,9 @@ body::after {
   border-radius: 4px;
 }
 
-/* ─── HUD overlay — Rally design ────────────────────────────────────────────── */
+/* ─── HUD bar — Rally design ────────────────────────────────────────────────── */
 #hud {
-  position: fixed;
-  top: 0; left: 0; right: 0;
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -195,6 +535,7 @@ body::after {
   font-family: var(--font-rally);
   color: var(--rally-ink);
   z-index: var(--z-hud);
+  flex-shrink: 0;
 }
 
 .hud-left {
@@ -248,8 +589,9 @@ body::after {
   background: var(--rally-court);
   flex-shrink: 0;
 }
-.mode-chip.attack .mode-dot  { background: var(--rally-danger); }
-.mode-chip.match  .mode-dot  { background: #2e6fc5; }
+.mode-chip.attack  .mode-dot { background: var(--rally-danger); }
+.mode-chip.defense .mode-dot { background: var(--rally-court); }
+.mode-chip.match   .mode-dot { background: #2e6fc5; }
 
 /* Level chip */
 .level-chip {
@@ -260,10 +602,11 @@ body::after {
   flex-shrink: 0;
 }
 .level-tag {
-  background: var(--rally-ink); color: var(--rally-accent);
-  padding: 5px 8px;
+  background: var(--rally-cream); color: var(--rally-ink);
+  padding: 5px 8px 5px 12px;
   font-family: var(--font-rally-mono); font-size: 9px; font-weight: 700;
   letter-spacing: 1.5px; text-transform: uppercase;
+  border-right: 2px solid var(--rally-ink);
 }
 .level-chip #hud-level-num {
   padding: 5px 12px; font-weight: 800; font-size: 15px;
@@ -387,50 +730,66 @@ body::after {
 }
 #hud-score.score-pop { animation: scorePop 0.35s ease-out both; }
 
-/* ─── Instruction card — Rally design ───────────────────────────────────────── */
+/* ─── Instruction banner — Rally design ─────────────────────────────────────── */
 .instr {
-  position: fixed;
-  bottom: 24px; left: 50%; transform: translateX(-50%);
-  width: min(600px, calc(100% - 48px));
+  flex-shrink: 0;
+  width: 100%;
   background: var(--rally-cream);
   border: 4px solid var(--rally-ink);
-  border-radius: 20px;
+  border-radius: 16px;
   box-shadow: 6px 6px 0 0 var(--rally-ink);
-  padding: 14px 18px;
+  padding: 12px 18px;
   display: grid;
-  grid-template-columns: 52px 1fr;
+  grid-template-columns: 48px 1fr;
   gap: 14px;
   align-items: center;
-  z-index: var(--z-hud);
   font-family: var(--font-rally);
   color: var(--rally-ink);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .instr.hidden {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateY(-8px);
   pointer-events: none;
+  /* Collapse so the stage gets the freed vertical space */
+  max-height: 0;
+  margin: 0;
+  padding: 0;
+  border-width: 0;
+  overflow: hidden;
 }
 
 /* Badge icon */
 .instr-badge {
-  width: 52px; height: 52px;
+  width: 48px; height: 48px;
   background: var(--rally-ink); color: var(--rally-accent);
-  border: 3px solid var(--rally-ink); border-radius: 14px;
+  border: 3px solid var(--rally-ink); border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .instr-badge.shot { background: var(--rally-danger); color: var(--rally-feather); }
 .instr-badge.pos  { background: #2e6fc5;              color: var(--rally-feather); }
 
-/* Body */
-.instr-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+/* Body — three rows: label · text · meta */
+.instr-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 2px;
+  min-width: 0;
+  align-items: center;
+}
+.instr-label { grid-row: 1; grid-column: 1; }
+.instr-text  { grid-row: 1; grid-column: 2; }
+.instr-meta  { grid-row: 2; grid-column: 1 / -1; }
 
 .instr-label {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font-rally-mono); font-size: 10px; font-weight: 700;
   letter-spacing: 2px; text-transform: uppercase;
   color: var(--rally-ink-soft);
+  white-space: nowrap;
 }
 .instr-label::before {
   content: ''; display: inline-block;
@@ -441,11 +800,14 @@ body::after {
 .instr-label.pos  { color: #2e6fc5; }
 
 .instr-text {
-  font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--rally-ink);
+  font-size: 15px; font-weight: 700; line-height: 1.25; color: var(--rally-ink);
+  white-space: pre-line;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .instr-meta {
-  margin-top: 2px; font-size: 11px; color: var(--rally-ink-soft);
+  font-size: 11px; color: var(--rally-ink-soft);
   font-family: var(--font-rally-mono);
 }
 

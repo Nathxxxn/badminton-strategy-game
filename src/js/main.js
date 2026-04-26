@@ -21,7 +21,6 @@ import { Renderer }               from './renderer.js';
 import { ZoneOverlay, getZoneAt } from './zones.js';
 import { DragShooter }            from './drag.js';
 import { Animator }               from './animations.js';
-import { snapToGrid }             from './snap.js';
 import { HUD }                    from './hud.js';
 import { ScreenManager }          from './screens.js';
 import { payloadToLogic }         from './coord-adapter.js';
@@ -30,6 +29,7 @@ import { loadWorkshopRally, warmScenarioCatalog } from './exercises.js';
 import { evaluatePlacementTurn, evaluateTacticalTurn, prepareTurnForRuntime } from './evaluate.js';
 import { ExerciseTimer }          from './timer.js';
 import { recordGameSessionAsync } from './app-state.js';
+import { ShotTypeSelector, clampPowerForType } from './shot-type-selector.js';
 
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
@@ -48,6 +48,17 @@ const renderer = new Renderer(canvas, court);
 const zones    = new ZoneOverlay(canvas, court);
 const anim     = new Animator(canvas, court);
 const hud      = new HUD();
+
+// Redraw the full scene when canvas geometry changes (instruction banner
+// expanding, screen transitions, viewport resize). Without this, _resize
+// clears the canvas backing store and only the court would be redrawn.
+court.onGeometryChange(() => {
+  const turn = currentRally?.[turnIndex];
+  if (!turn) { court.draw(); return; }
+  // If a positioning hover is active, preserve the veil during resync.
+  const showVeil = positioningHoverHandler !== null && turn.type === 'positioning';
+  renderBase(turn, { showVeil });
+});
 const screens  = new ScreenManager();
 const timer    = new ExerciseTimer(
   DEFAULT_PLAYER_PROFILE.rank,
@@ -62,6 +73,10 @@ const timer    = new ExerciseTimer(
 
 // DragShooter references onShotFired which is declared below (hoisted)
 const drag = new DragShooter(canvas, court, onShotFired);
+
+const shotTypeSelector = new ShotTypeSelector(
+  document.getElementById('shot-type-selector'),
+);
 
 // ─── Game state ───────────────────────────────────────────────────────────────
 
@@ -90,13 +105,13 @@ let countTooFar       = 0;
 /** rAF id for the drag render loop */
 let dragRafId = null;
 
-/** Zone ID under cursor during positioning hover */
-let hoverZone = null;
-
 /** Tracks whether a turn is currently active (prevents input during animations) */
 let turnActive = false;
 let startRequestId = 0;
 let timedTurnContext = null;
+
+/** Hover-tracker handler for positioning turns (so we can remove it on cleanup) */
+let positioningHoverHandler = null;
 
 // ─── Rendering helpers ─────────────────────────────────────────────────────
 
@@ -104,12 +119,15 @@ let timedTurnContext = null;
  * Render one static frame: court + optional hover zone + scene.
  * Does NOT drive animations — those composite on top each rAF tick.
  */
-function renderBase(turn, { showShuttle = true, hoverZoneId = null } = {}) {
+function renderBase(turn, { showShuttle = true, reachMode = 'idle', showVeil = false } = {}) {
   court.draw();
-  if (hoverZoneId) zones.drawHoverZone(hoverZoneId);
+  // Veil sits between the court and the players so player circles stay crisp.
+  if (showVeil && turn?.type === 'positioning' && turn?.moveRadius && turn?.players?.ally1) {
+    renderer.drawOutOfReachVeil(turn.players.ally1, turn.moveRadius);
+  }
   renderer.drawScene(turn.players, showShuttle ? turn.shuttlecock : null, 'ally1', turn.equipment ?? null);
   if (turn?.type === 'positioning' && turn?.moveRadius && turn?.players?.ally1) {
-    renderer.drawReachCircle(turn.players.ally1, turn.moveRadius, MOVE_RADIUS_STROKE);
+    renderer.drawReachCircle(turn.players.ally1, turn.moveRadius, MOVE_RADIUS_STROKE, reachMode);
   }
   if (turn?.playerReach && turn?.players?.ally1) {
     renderer.drawReachCircle(turn.players.ally1, turn.playerReach);
@@ -120,14 +138,14 @@ function renderFeedbackFrame(
   turn,
   {
     showShuttle = true,
-    hoverZoneId = null,
     correctionFrom = null,
     correctionTo = null,
+    correctionTier = 'wrong',
   } = {},
 ) {
-  renderBase(turn, { showShuttle, hoverZoneId });
+  renderBase(turn, { showShuttle });
   if (correctionFrom && correctionTo) {
-    renderer.drawCorrectionIndicator(correctionFrom, correctionTo);
+    renderer.drawChoiceVsOptimal(correctionFrom, correctionTo, correctionTier);
   }
 }
 
@@ -177,12 +195,16 @@ function onShotPointerDown() {
  * Called before any screen transition away from 'exercise'.
  */
 function cleanupTurnListeners() {
-  canvas.removeEventListener('pointermove', onPositionHover);
   canvas.removeEventListener('pointerup', onPositionClick);
   canvas.removeEventListener('pointerdown', onShotPointerDown);
+  if (positioningHoverHandler) {
+    canvas.removeEventListener('pointermove', positioningHoverHandler);
+    positioningHoverHandler = null;
+  }
   canvas.style.cursor = 'default';
   stopDragLoop();
   drag.deactivate();
+  shotTypeSelector.hide();
 }
 
 function clampToRadius(origin, target, radiusMetres) {
@@ -194,8 +216,9 @@ function clampToRadius(origin, target, radiusMetres) {
 
   if (distM <= radiusMetres || distM === 0) return target;
 
+  // Continuous clamp — no grid snapping, fluid placement.
   const scale = radiusMetres / distM;
-  return snapToGrid(origin.x + dx * scale, origin.y + dy * scale);
+  return { x: origin.x + dx * scale, y: origin.y + dy * scale };
 }
 
 function constrainPlacementPos(turn, pos) {
@@ -219,8 +242,13 @@ function getTimePressure(turn) {
   return { enabled, secondsPerTurn };
 }
 
+// TEMP: timer disabled globally during Lot D playtesting. Re-enable by
+// removing this early return.
+const TIMER_DISABLED = true;
+
 function startTurnTimer(turn) {
   stopTurnTimer();
+  if (TIMER_DISABLED) return;
 
   const { enabled, secondsPerTurn } = getTimePressure(turn);
   if (!enabled) return;
@@ -351,53 +379,76 @@ async function handleTurnTimeout(context) {
 
 function startPositioningTurn(turn) {
   turnActive = true;
-  hoverZone = null;
-  renderBase(turn);
+  renderBase(turn, { showVeil: true, reachMode: 'idle' });
   hud.setInstruction(turn);
   hud.update(score, turnIndex, currentRally.length, combo);
   canvas.style.cursor = 'crosshair';
-  canvas.addEventListener('pointermove', onPositionHover);
   canvas.addEventListener('pointerup', onPositionClick, { once: true });
-  startTurnTimer(turn);
-}
 
-function onPositionHover(e) {
-  const turn = currentRally[turnIndex];
-  const rect = canvas.getBoundingClientRect();
-  const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
-  const snapped = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
-  const pos = constrainPlacementPos(turn, snapped);
-  const newHover = (pos.y >= 0.5) ? getZoneAt(pos.x, pos.y) : null;
-  if (newHover !== hoverZone) {
-    hoverZone = newHover;
-    renderBase(turn, { hoverZoneId: hoverZone });
+  if (turn?.moveRadius && turn?.players?.ally1) {
+    let isOutOfReach = false;
+    positioningHoverHandler = (e) => {
+      if (!turnActive) return;
+      const rect = canvas.getBoundingClientRect();
+      const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
+      // Outside the court rect — don't change state (cursor stays as default)
+      if (raw.x < 0 || raw.x > 1 || raw.y < 0 || raw.y > 1) return;
+
+      const dxM = (raw.x - turn.players.ally1.x) * 6.1;
+      const dyM = (raw.y - turn.players.ally1.y) * 13.4;
+      const distM = Math.hypot(dxM, dyM);
+      const newOut = distM > turn.moveRadius;
+
+      if (newOut !== isOutOfReach) {
+        isOutOfReach = newOut;
+        canvas.style.cursor = newOut ? 'not-allowed' : 'crosshair';
+        renderBase(turn, { showVeil: true, reachMode: newOut ? 'hover-out' : 'idle' });
+      }
+    };
+    canvas.addEventListener('pointermove', positioningHoverHandler);
   }
+
+  startTurnTimer(turn);
 }
 
 async function onPositionClick(e) {
   if (!turnActive) return;
-  canvas.removeEventListener('pointermove', onPositionHover);
-  canvas.style.cursor = 'default';
-  hoverZone = null;
 
   const turn = currentRally[turnIndex];
   const rect = canvas.getBoundingClientRect();
   const raw  = court.toNormalized(e.clientX - rect.left, e.clientY - rect.top);
-  const snapped = snapToGrid(Math.max(0, Math.min(1, raw.x)), Math.max(0, Math.min(1, raw.y)));
+
+  // Reject clicks that fall outside the rendered court rect.
+  // Without this, the surrounding green stage padding would clamp to the court
+  // edge and the registered point would not match the cursor.
+  if (raw.x < 0 || raw.x > 1 || raw.y < 0 || raw.y > 1) {
+    canvas.addEventListener('pointerup', onPositionClick, { once: true });
+    return;
+  }
+
+  // Continuous coordinates — no grid snap so the choice matches the cursor.
+  const point = { x: raw.x, y: raw.y };
 
   // Reject clicks on opponent half
-  if (snapped.y < 0.5) {
-    renderBase(turn);
-    zones.drawWrongZones([getZoneAt(snapped.x, snapped.y)].filter(Boolean));
+  if (point.y < 0.5) {
+    renderBase(turn, { showVeil: true, reachMode: 'idle' });
+    zones.drawWrongZones([getZoneAt(point.x, point.y)].filter(Boolean));
     await hud.showExplanation('⚠ Clique sur ta moitié du terrain !', '#f97316', 1200);
-    canvas.addEventListener('pointermove', onPositionHover);
     canvas.addEventListener('pointerup', onPositionClick, { once: true });
     canvas.style.cursor = 'crosshair';
     return;
   }
 
+  // Click accepted — tear down the hover tracker so veil/cursor don't follow
+  // through the animation and feedback frames.
+  canvas.style.cursor = 'default';
+  if (positioningHoverHandler) {
+    canvas.removeEventListener('pointermove', positioningHoverHandler);
+    positioningHoverHandler = null;
+  }
+
   stopTurnTimer();
-  const pos = constrainPlacementPos(turn, snapped);
+  const pos = constrainPlacementPos(turn, point);
 
   await animatePlacementResolution(turn, pos);
 
@@ -405,13 +456,18 @@ async function onPositionClick(e) {
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
   recordPlacementFeedback(feedback);
 
+  // Tier governs the choice-marker color in drawChoiceVsOptimal.
+  const tier =
+    feedback.totalScore >= 85 ? 'good' :
+    feedback.totalScore >= 60 ? 'near' :
+                                'wrong';
+
   // Freeze result frame
   renderFeedbackFrame(turn, {
     correctionFrom: pos,
     correctionTo: feedback.idealPositionRender,
+    correctionTier: tier,
   });
-  if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
-  else            zones.drawCheckmark(pos.x, pos.y);
 
   await runAnims(
     [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
@@ -419,9 +475,8 @@ async function onPositionClick(e) {
       renderFeedbackFrame(turn, {
         correctionFrom: pos,
         correctionTo: feedback.idealPositionRender,
+        correctionTier: tier,
       });
-      if (!isCorrect) zones.drawClickMarker(pos.x, pos.y);
-      else            zones.drawCheckmark(pos.x, pos.y);
     },
   );
 
@@ -441,6 +496,8 @@ async function startShotTurn(turn) {
   // Show instruction immediately — player reads while shuttle flies in
   hud.setInstruction(turn);
   hud.update(score, turnIndex, currentRally.length, combo);
+  shotTypeSelector.reset();
+  shotTypeSelector.show();
   // Animate incoming shuttle
   await runAnims(
     [() => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high')],
@@ -459,27 +516,37 @@ async function onShotFired(shot) {
   stopTurnTimer();
   stopDragLoop();
   drag.deactivate();
+  shotTypeSelector.hide();
   const turn = currentRally[turnIndex];
 
-  const flightSpeed = shot.power < 0.3 ? 'slow' : shot.power < 0.6 ? 'medium' : 'fast';
+  // Bride douce: clamp the raw drag-power into the chosen type's window so the
+  // visualised flight matches the player's stated intent. aimPoint and spin
+  // remain untouched.
+  const forcedType = shotTypeSelector.getSelected();
+  const bridedShot = { ...shot, power: clampPowerForType(shot.power, forcedType) };
+
+  const flightSpeed = bridedShot.power < 0.3 ? 'slow' : bridedShot.power < 0.6 ? 'medium' : 'fast';
 
   // Opponents react toward landing zone simultaneously with the shot flight
   const opp1   = turn.players.opponent1;
   const opp2   = turn.players.opponent2;
-  const { x: lx, y: ly } = shot.aimPoint;
+  const { x: lx, y: ly } = bridedShot.aimPoint;
   const opp1Target = { x: (opp1.x + lx) / 2, y: (opp1.y + ly) / 2 };
   const opp2Target = { x: (opp2.x + lx) / 2, y: (opp2.y + ly) / 2 };
 
   await runAnims(
     [
-      () => anim.flyShuttle(turn.shuttlecock.position, shot.aimPoint, flightSpeed, 'low'),
+      () => anim.flyShuttle(turn.shuttlecock.position, bridedShot.aimPoint, flightSpeed, 'low'),
       () => anim.movePlayer(opp1, opp1Target, false),
       () => anim.movePlayer(opp2, opp2Target, false),
     ],
     () => renderBase(turn, { showShuttle: false }),
   );
 
-  const feedback = evaluateTacticalTurn(turn, payloadToLogic(buildTacticalPayload(shot, turn)));
+  const feedback = evaluateTacticalTurn(
+    turn,
+    payloadToLogic(buildTacticalPayload(bridedShot, turn, { forcedType })),
+  );
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
   recordTacticalFeedback(feedback);
 
@@ -489,8 +556,8 @@ async function onShotFired(shot) {
     correctionFrom: turn.shuttlecock.position,
     correctionTo: feedback.correctionRenderPos,
   });
-  if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
-  else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
+  if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
+  else            zones.drawCheckmark(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
 
   await runAnims(
     [() => anim.flashFeedback(isCorrect ? 'correct' : 'wrong')],
@@ -500,13 +567,10 @@ async function onShotFired(shot) {
         correctionFrom: turn.shuttlecock.position,
         correctionTo: feedback.correctionRenderPos,
       });
-      if (!isCorrect) zones.drawClickMarker(shot.aimPoint.x, shot.aimPoint.y);
-      else            zones.drawCheckmark(shot.aimPoint.x, shot.aimPoint.y);
+      if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
+      else            zones.drawCheckmark(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
     },
   );
-
-  if (feedback.flags?.isBackhandTargeted) await hud.showPopup('backhand', 900);
-  if (feedback.flags?.isBodyHit) await hud.showPopup('body', 900);
 
   await hud.showMessages(
     buildScoreLines(feedback.totalScore, feedback.messages),
@@ -678,6 +742,7 @@ async function startGame(workshop) {
 
   screens.show('exercise');
   hud.show();
+  hud.setMode(workshop);
   hud.setLevel(DEFAULT_PLAYER_PROFILE.level);
   hud.setXP(DEFAULT_PLAYER_PROFILE.points, 100);
   hud.setInstruction({ type: 'positioning', label: 'Chargement', text: 'Chargement des scenarios...' });
@@ -706,6 +771,9 @@ function resetAndShowMenu() {
   stopTurnTimer();
   cleanupTurnListeners();
   turnActive = false;
+  paused = false;
+  const pauseOverlay = document.getElementById('pause-overlay');
+  if (pauseOverlay) pauseOverlay.hidden = true;
   currentRally = null;
   document.getElementById('end-screen').style.display = 'none';
   hud.hideInstruction();
@@ -718,6 +786,89 @@ screens.on('menu:start',       ()             => screens.show('workshop-select')
 screens.on('workshop:select',  ({ workshop }) => { void startGame(workshop); });
 screens.on('end:replay',       ()             => { if (currentWorkshop) void startGame(currentWorkshop); });
 screens.on('end:menu',         ()             => resetAndShowMenu());
+
+// HUD back button → return to main menu
+hud.onBack(() => resetAndShowMenu());
+
+// ─── Pause + keyboard shortcuts ─────────────────────────────────────────────
+
+let paused = false;
+const SHOT_HOTKEYS = { '1': 'SMASH', '2': 'DROP', '3': 'DRIVE', '4': 'CLEAR' };
+
+function isInExercise() {
+  return Boolean(currentRally) && turnIndex < currentRally.length;
+}
+
+function pauseGame() {
+  if (paused || !isInExercise()) return;
+  paused = true;
+  // Freeze the timer (no-op while TIMER_DISABLED but kept for parity).
+  if (typeof timer.pause === 'function') timer.pause();
+  // Disarm the drag input so a release while paused cannot fire a shot.
+  drag.deactivate();
+  stopDragLoop();
+  const overlay = document.getElementById('pause-overlay');
+  if (overlay) overlay.hidden = false;
+}
+
+function resumeGame() {
+  if (!paused) return;
+  paused = false;
+  const overlay = document.getElementById('pause-overlay');
+  if (overlay) overlay.hidden = true;
+
+  if (typeof timer.resume === 'function') timer.resume();
+
+  // Re-arm whatever turn was active so the player can continue.
+  const turn = currentRally?.[turnIndex];
+  if (!turn || !turnActive) return;
+
+  if (turn.type === 'shot') {
+    canvas.addEventListener('pointerdown', onShotPointerDown, { once: true, passive: true });
+    drag.activate(turn.shuttlecock.position);
+    renderBase(turn);
+  } else if (turn.type === 'positioning') {
+    canvas.addEventListener('pointerup', onPositionClick, { once: true });
+    canvas.style.cursor = 'crosshair';
+    renderBase(turn, { showVeil: true, reachMode: 'idle' });
+  }
+}
+
+function togglePause() {
+  if (paused) resumeGame();
+  else        pauseGame();
+}
+
+document.getElementById('hud-pause-btn')?.addEventListener('click', togglePause);
+document.getElementById('pause-resume-btn')?.addEventListener('click', resumeGame);
+document.getElementById('pause-menu-btn')?.addEventListener('click', () => {
+  paused = false;
+  const overlay = document.getElementById('pause-overlay');
+  if (overlay) overlay.hidden = true;
+  resetAndShowMenu();
+});
+
+window.addEventListener('keydown', (e) => {
+  // Ignore when typing in an input.
+  if (e.target instanceof HTMLElement &&
+      (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
+  if (e.key === 'Escape') {
+    if (isInExercise()) {
+      e.preventDefault();
+      togglePause();
+    }
+    return;
+  }
+
+  if (paused) return;
+
+  const type = SHOT_HOTKEYS[e.key];
+  if (type && shotTypeSelector.isShown()) {
+    e.preventDefault();
+    shotTypeSelector.select(type);
+  }
+});
 
 // ─── Startup ────────────────────────────────────────────────────────────────
 

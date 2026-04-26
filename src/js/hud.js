@@ -237,4 +237,37 @@ export class HUD {
       this._levelNumEl.textContent = level;
     }
   }
+
+  // ─── Mode chip / back button ──────────────────────────────────────────────
+
+  /**
+   * Wire the back-button click handler. Call once at startup.
+   * @param {() => void} callback
+   */
+  onBack(callback) {
+    const btn = document.getElementById('hud-back-btn');
+    if (btn && typeof callback === 'function') {
+      btn.addEventListener('click', () => callback());
+    }
+  }
+
+  /**
+   * Update the mode chip label + class to reflect the active workshop.
+   * @param {'attack'|'defense'|'match'|null} workshop
+   */
+  setMode(workshop) {
+    const chip  = document.getElementById('hud-mode-chip');
+    const label = document.getElementById('hud-mode-label');
+    if (chip) {
+      chip.classList.remove('attack', 'defense', 'match');
+      if (workshop) chip.classList.add(workshop);
+    }
+    if (label) {
+      label.textContent =
+        workshop === 'attack'  ? 'Attaque' :
+        workshop === 'defense' ? 'Défense' :
+        workshop === 'match'   ? 'Match'   :
+                                 'Entraînement';
+    }
+  }
 }
