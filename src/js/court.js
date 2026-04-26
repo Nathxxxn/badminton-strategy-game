@@ -56,7 +56,7 @@ const LINE_W = 1.5;   // court line thickness (CSS px)
 const NET_W  = 2;     // net line thickness (CSS px)
 
 // Inner padding around the court inside the canvas (CSS px)
-const PAD = { top: 48, right: 32, bottom: 48, left: 32 };
+const PAD = { top: 72, right: 32, bottom: 48, left: 32 };
 
 const COURT_RADIUS  = 12;   // rounded corner radius (CSS px)
 const SHADOW_OFFSET = 6;    // ink shadow offset (CSS px)
