@@ -637,7 +637,7 @@ body::after {
 
 @keyframes xpStripeShift {
   from { background-position: 0 0; }
-  to   { background-position: 24px 0; }
+  to   { background-position: 17px 0; }
 }
 .xp-label {
   display: flex; justify-content: space-between;
