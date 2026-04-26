@@ -71,6 +71,8 @@ class TacticalEngine {
         let distanceScore = Math.min(90, (minDistanceMeters / 4.0) * 90);
         let totalScore = 0;
         let hittingBody = false;
+        let tooClose = false;
+        let tooShort = false;
 
         // 3. SCALING PAR TYPE DE COUP
         if (user.type === 'KILL') {
@@ -99,6 +101,16 @@ class TacticalEngine {
                 totalScore = 5; // Quasi inutile tactiquement
             }
         }
+        if (user.type === 'CLEAR') {
+            if (minDistanceMeters < 2.0) {
+                totalScore -= 20;
+                tooClose = true;
+            }
+            if (user.endPos.y < (5.0 / 6.70)) {
+                totalScore -= 20;
+                tooShort = true;
+            }
+        }
 
         // Bonus Smash au corps
         if (user.type === 'SMASH') {
@@ -121,6 +133,8 @@ class TacticalEngine {
             score: Math.min(100, Math.max(0, Math.round(totalScore))),
             isReversTargeted: isRevers,
             isBodyHit: hittingBody,
+            isTooClose: tooClose,
+            isTooShort: tooShort,
             reachMeters: rules.reach,
             details: { 
                 placement: Math.round(distanceScore), 

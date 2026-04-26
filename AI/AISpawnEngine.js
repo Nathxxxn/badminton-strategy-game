@@ -52,16 +52,18 @@ class AISpawnEngine {
     /**
      * GÉNÉRATION DE COUP IA
      */
-    generateBestShot(incoming, opponents, rank) {
+    
+    generateBestShot(incoming, opponents, rank, impactPos = {x: 0.5, y: 0.5}) {
         const windowSize = this.getRankWindowSize(rank);
         const allPossibleShots = [];
-        const step = 0.1; // Grid 10x10 par type de coup
+        const step = 0.1; 
         const types = Object.keys(this.tactical.SHOT_PARAMS);
 
         types.forEach(type => {
             for (let x = 0.05; x <= 0.95; x += step) {
                 for (let y = 0.05; y <= 0.95; y += step) {
-                    const res = this.tactical.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents);
+                    // TRANSMETTRE impactPos ICI 👇
+                    const res = this.tactical.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, impactPos);
                     allPossibleShots.push({ type, endPos: {x, y}, score: res.score });
                 }
             }

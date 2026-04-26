@@ -154,7 +154,7 @@ class ScenarioGenerator {
         const riverMeters = 1.98;
         const limitY = (riverMeters + 1.0) / 6.70; // ~0.44 en normalisé
 
-        if (opp1Start.y <= limitY) {
+        if (playerPos.y <= limitY) {
             possibleShots.push('NET_DROP');
         }
 
