@@ -200,6 +200,7 @@ export class HUD {
       this._setFeedbackTier(this._tierFromColor(color));
       setTimeout(() => {
         this._textEl.style.color = '';
+        this._setFeedbackTier(null);
         resolve();
       }, durationMs);
     });
@@ -218,6 +219,7 @@ export class HUD {
       setTimeout(() => {
         this._textEl.style.whiteSpace = '';
         this._textEl.style.color = '';
+        this._setFeedbackTier(null);
         resolve();
       }, durationMs);
     });
