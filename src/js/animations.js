@@ -19,7 +19,6 @@
  * Coordinate system: normalized (0–1), converted via court.toCanvas().
  */
 
-import { snapToGrid } from './snap.js';
 
 // ─── Timing constants ─────────────────────────────────────────────────────────
 
@@ -107,8 +106,8 @@ export class Animator {
   flyShuttle(from, to, speed = 'medium', height = 'normal') {
     return new Promise(resolve => {
       this._flight = {
-        from:     snapToGrid(from.x, from.y),
-        to:       snapToGrid(to.x,   to.y),
+        from:     { x: from.x, y: from.y },
+        to:       { x: to.x,   y: to.y   },
         duration: FLIGHT_DURATION[speed] ?? FLIGHT_DURATION.medium,
         height,
         startMs:  null,
@@ -130,8 +129,8 @@ export class Animator {
   movePlayer(from, to, isAlly = true) {
     return new Promise(resolve => {
       this._movements.push({
-        from:     snapToGrid(from.x, from.y),
-        to:       snapToGrid(to.x,   to.y),
+        from:     { x: from.x, y: from.y },
+        to:       { x: to.x,   y: to.y   },
         isAlly,
         duration: MOVE_DURATION,
         startMs:  null,

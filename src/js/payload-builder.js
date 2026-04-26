@@ -21,7 +21,7 @@ export function deriveShuttleType(shot) {
   return 'DRIVE';
 }
 
-export function buildTacticalPayload(shot, turn) {
+export function buildTacticalPayload(shot, turn, { forcedType = null } = {}) {
   const opp1      = turn.players?.opponent1 ?? null;
   const opp2      = turn.players?.opponent2 ?? null;
   const equipment = turn.equipment ?? {};
@@ -30,7 +30,7 @@ export function buildTacticalPayload(shot, turn) {
   const opp2Hand  = equipment.opp2?.hand ?? equipment.opponent2?.hand ?? null;
 
   return {
-    shuttleType:  deriveShuttleType(shot),
+    shuttleType:  forcedType ?? deriveShuttleType(shot),
     shuttleEndPos: { x: shot.aimPoint.x, y: shot.aimPoint.y },
     impactPoint:  impact ? { x: impact.x, y: impact.y } : null,
     opponentsPos: {
