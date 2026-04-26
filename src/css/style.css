@@ -800,6 +800,40 @@ body::after {
   overflow: hidden;
 }
 
+/* ─── Instruction card — feedback tiers ─────────────────────────────────────── */
+.instr.feedback-correct {
+  border-color: #2f8f54;
+  box-shadow: 6px 6px 0 0 #2f8f54;
+  animation: instrCorrectPulse 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.instr.feedback-near {
+  border-color: #ea7a1d;
+  box-shadow: 6px 6px 0 0 #ea7a1d;
+  animation: instrNearPulse 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.instr.feedback-wrong {
+  border-color: var(--rally-danger);
+  box-shadow: 6px 6px 0 0 var(--rally-danger);
+  animation: instrWrongShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes instrCorrectPulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+@keyframes instrNearPulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.015); }
+  100% { transform: scale(1); }
+}
+@keyframes instrWrongShake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+  40%, 60% { transform: translate3d(3px, 0, 0); }
+}
+
 /* Badge icon */
 .instr-badge {
   width: 48px; height: 48px;

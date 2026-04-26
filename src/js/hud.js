@@ -140,6 +140,7 @@ export class HUD {
    */
   setInstruction(turn) {
     this._instrEl.classList.remove('hidden');
+    this._instrEl.classList.remove('feedback-correct', 'feedback-wrong', 'feedback-near');
     this._instrEl.dataset.type = turn.type;
 
     const isShot = turn.type === 'shot';
@@ -160,9 +161,25 @@ export class HUD {
     }
   }
 
+  _setFeedbackTier(tier) {
+    this._instrEl.classList.remove('feedback-correct', 'feedback-wrong', 'feedback-near');
+    if (!tier) return;
+    void this._instrEl.offsetWidth;
+    this._instrEl.classList.add(`feedback-${tier}`);
+  }
+
+  _tierFromColor(color) {
+    if (!color) return null;
+    if (color === '#34d399') return 'correct';
+    if (color === '#f87171') return 'wrong';
+    if (color === '#f97316') return 'near';
+    return null;
+  }
+
   /** Hide the instruction card. */
   hideInstruction() {
     this._instrEl.classList.add('hidden');
+    this._instrEl.classList.remove('feedback-correct', 'feedback-wrong', 'feedback-near');
   }
 
   // ─── Feedback explanation ──────────────────────────────────────────────────
@@ -180,6 +197,7 @@ export class HUD {
       this._textEl.textContent = text;
       this._textEl.style.color = color;
       this._instrEl.classList.remove('hidden');
+      this._setFeedbackTier(this._tierFromColor(color));
       setTimeout(() => {
         this._textEl.style.color = '';
         resolve();
@@ -196,6 +214,7 @@ export class HUD {
       this._textEl.textContent = text;
       this._textEl.style.color = color;
       this._instrEl.classList.remove('hidden');
+      this._setFeedbackTier(this._tierFromColor(color));
       setTimeout(() => {
         this._textEl.style.whiteSpace = '';
         this._textEl.style.color = '';
