@@ -43,19 +43,23 @@ const SINGLES_RIGHT  = 1 - SINGLES_SIDE_DIST;     // ≈ 0.9246
 // ─── Visual constants ──────────────────────────────────────────────────────────
 
 const COLOUR = {
-  pageBg:     '#1a1a2e',              // matches body background in style.css
-  surfaceA:   '#0d2b0d',              // opponent's half (slightly darker)
-  surfaceB:   '#0f3d0f',              // ally's half
-  lines:      '#dde8dd',              // court lines (slightly warm white)
-  net:        '#ffffff',
-  netGlow:    'rgba(255,255,255,0.18)',
+  pageBg:   '#f4ecd8',              // cream page background
+  surfaceA: '#156b3a',              // opponent's half (darker green)
+  surfaceB: '#1f8a4c',              // ally's half (green)
+  lines:    '#f4ecd8',              // cream court lines
+  net:      '#0f1a14',              // ink net post
+  border:   '#0f1a14',              // court frame border / shadow
+  netBand:  'rgba(15,26,20,0.22)', // subtle net band overlay
 };
 
 const LINE_W = 1.5;   // court line thickness (CSS px)
-const NET_W  = 3;     // net line thickness (CSS px)
+const NET_W  = 2;     // net line thickness (CSS px)
 
 // Inner padding around the court inside the canvas (CSS px)
 const PAD = { top: 48, right: 32, bottom: 48, left: 32 };
+
+const COURT_RADIUS  = 12;   // rounded corner radius (CSS px)
+const SHADOW_OFFSET = 6;    // ink shadow offset (CSS px)
 
 // ─── Court class ──────────────────────────────────────────────────────────────
 
@@ -135,10 +139,12 @@ export class Court {
 
     ctx.clearRect(0, 0, cssW, cssH);
 
-    this._drawPageBackground(cssW, cssH);
-    this._drawSurface();
-    this._drawCourtLines();
-    this._drawNet();
+    this._drawPageBackground(cssW, cssH);  // cream
+    this._drawCourtShadow();               // ink offset shadow
+    this._drawSurface();                   // green halves (clipped)
+    this._drawCourtLines();                // cream lines
+    this._drawNet();                       // ink net
+    this._drawCourtFrameStroke();          // ink border on top
   }
 
   // ─── Private drawing helpers ────────────────────────────────────────────────
@@ -148,17 +154,32 @@ export class Court {
     this.ctx.fillRect(0, 0, w, h);
   }
 
-  /** Court surface — two halves with a subtle tonal difference. */
+  _drawCourtShadow() {
+    const { ctx, courtX, courtY, courtW, courtH } = this;
+    ctx.save();
+    ctx.fillStyle = COLOUR.border;
+    ctx.beginPath();
+    ctx.roundRect(courtX + SHADOW_OFFSET, courtY + SHADOW_OFFSET, courtW, courtH, COURT_RADIUS);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Court surface — two halves with rounded corners clip. */
   _drawSurface() {
     const { ctx, courtX, courtY, courtW, courtH } = this;
 
-    // Opponent's half (top)
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(courtX, courtY, courtW, courtH, COURT_RADIUS);
+    ctx.clip();
+
     ctx.fillStyle = COLOUR.surfaceA;
     ctx.fillRect(courtX, courtY, courtW, courtH * 0.5);
 
-    // Ally's half (bottom)
     ctx.fillStyle = COLOUR.surfaceB;
     ctx.fillRect(courtX, courtY + courtH * 0.5, courtW, courtH * 0.5);
+
+    ctx.restore();
   }
 
   /** All BWF regulation lines for a doubles court. */
@@ -193,24 +214,20 @@ export class Court {
     this._vLine(0.5, SHORT_SVC_BOT, 1);              // bottom half
   }
 
-  /** Net — rendered as a glowing white line across the center. */
+  /** Net — ink style, no glow. */
   _drawNet() {
     const { ctx } = this;
     const left  = this.toCanvas(0, NET_Y);
     const right = this.toCanvas(1, NET_Y);
+    const bandH = Math.round(this.courtH * 0.022);
 
     ctx.save();
 
-    // Soft glow behind the net
-    ctx.strokeStyle = COLOUR.netGlow;
-    ctx.lineWidth   = NET_W + 6;
-    ctx.lineCap     = 'round';
-    ctx.beginPath();
-    ctx.moveTo(left.x, left.y);
-    ctx.lineTo(right.x, right.y);
-    ctx.stroke();
+    // Subtle net band
+    ctx.fillStyle = COLOUR.netBand;
+    ctx.fillRect(left.x, left.y - Math.round(bandH * 0.5), this.courtW, bandH);
 
-    // Net line itself
+    // Net post line
     ctx.strokeStyle = COLOUR.net;
     ctx.lineWidth   = NET_W;
     ctx.lineCap     = 'square';
@@ -219,6 +236,17 @@ export class Court {
     ctx.lineTo(right.x, right.y);
     ctx.stroke();
 
+    ctx.restore();
+  }
+
+  _drawCourtFrameStroke() {
+    const { ctx, courtX, courtY, courtW, courtH } = this;
+    ctx.save();
+    ctx.strokeStyle = COLOUR.border;
+    ctx.lineWidth   = 4;
+    ctx.beginPath();
+    ctx.roundRect(courtX, courtY, courtW, courtH, COURT_RADIUS);
+    ctx.stroke();
     ctx.restore();
   }
 
