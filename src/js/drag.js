@@ -32,6 +32,18 @@ import { deriveShuttleType } from './payload-builder.js';
 /** Maximum drag distance in CSS pixels — maps to power = 1.0 */
 const MAX_DRAG_PX = 160;
 
+/**
+ * Drag length below this stays at power = 0. Avoids ghost shots on a stray
+ * tap, and gives the slingshot a tactile "engage" point.
+ */
+const DEADZONE_PX = 14;
+
+/**
+ * Power threshold (post-easing) at which the max-tension cue appears.
+ * Picked just below 1.0 so the player sees the cue before bottoming out.
+ */
+const MAX_TENSION_T = 0.96;
+
 /** Radius of the activation zone around the shuttlecock (CSS px) */
 const ACTIVATION_RADIUS_PX = 36;
 
@@ -245,8 +257,18 @@ export class DragShooter {
     const dy = this._current.y - this._origin.y;
     const len = Math.hypot(dx, dy);
 
-    // Power: clamped drag length normalized to [0, 1]
-    const power = Math.min(1, len / MAX_DRAG_PX);
+    // Power: deadzone clears any drag below DEADZONE_PX, then we re-normalize
+    // the remaining range so the curve still spans 0..1, then we apply
+    // an ease-in-out (sine) curve so the middle of the pull feels softer
+    // and the last 30% feels heavier — matches the "rope tightening" feel.
+    let power;
+    if (len <= DEADZONE_PX) {
+      power = 0;
+    } else {
+      const tRaw = Math.min(1, (len - DEADZONE_PX) / (MAX_DRAG_PX - DEADZONE_PX));
+      // Ease-in-out (cosine): soft start, steep end
+      power = 0.5 - 0.5 * Math.cos(Math.PI * tRaw);
+    }
 
     // Spin: perpendicular deviation of the midpoint, normalized to [-1, 1]
     const spin = Math.max(-1, Math.min(1, this._spinDeviation / MAX_SPIN_DEVIATION_PX));
@@ -255,7 +277,6 @@ export class DragShooter {
     // Aim direction is therefore the OPPOSITE of the drag delta.
     let aimNorm;
     if (len < 1) {
-      // No movement — default to shuttlecock position
       aimNorm = { ...this._shuttleNorm };
     } else {
       const aimCanvasX = this._origin.x - dx;
@@ -427,6 +448,31 @@ export class DragShooter {
 
     ctx.save();
     ctx.globalAlpha = LINE_ALPHA;
+
+    // ── Max-tension halo (only at near-full power) ───────────────────────────
+    if (power >= MAX_TENSION_T) {
+      // Outer ink halo grows slightly with a sine pulse so the player sees the
+      // slingshot is "bottomed out" without a hard edge.
+      const t      = (Date.now() % 600) / 600;     // 0..1, ~600ms cycle
+      const pulse  = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+      const haloR  = ringR + 6 + pulse * 4;
+
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, haloR, 0, Math.PI * 2);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth   = 2.5;
+      ctx.globalAlpha = 0.55;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, haloR - 2, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffd23f';                 // rally accent
+      ctx.lineWidth   = 2;
+      ctx.globalAlpha = 0.85;
+      ctx.stroke();
+
+      ctx.globalAlpha = LINE_ALPHA;
+    }
 
     // ── Tension ring at shuttlecock (ink halo + colored core) ────────────────
     ctx.beginPath();
