@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rally — In-Game Screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --ink: #0f1a14;
+    --ink-soft: #2a3d32;
+    --ink-line: rgba(15,26,20,0.12);
+    --cream: #f4ecd8;
+    --cream-2: #ebe0c4;
+    --cream-3: #e1d4b0;
+    --court: #1f8a4c;
+    --court-dark: #156b3a;
+    --court-deep: #0d4424;
+    --court-line: #f4ecd8;
+    --feather: #fff8e1;
+    --accent: #ffd23f;
+    --accent-2: #ffb547;
+    --danger: #e85d3c;
+    --correct: #3aa66a;
+    --wrong: #e85d3c;
+    --blue: #2e6fc5;
+    --purple: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    font-feature-settings: "ss01" on;
+    overflow: hidden;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Buttons & chips ─────────────────────────────────────────── */
+  .btn {
+    font-family: inherit; font-weight: 700; cursor: pointer;
+    border: 3px solid var(--ink); border-radius: 12px;
+    background: var(--cream); color: var(--ink);
+    padding: 10px 16px; font-size: 14px;
+    box-shadow: 4px 4px 0 0 var(--ink);
+    transition: transform .1s, box-shadow .1s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 0 var(--ink); }
+  .btn:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 0 var(--ink); }
+  .btn.primary { background: var(--accent); }
+  .btn.danger { background: var(--danger); color: var(--feather); }
+  .btn.dark { background: var(--ink); color: var(--feather); }
+  .btn.ghost { box-shadow: none; background: transparent; border-color: transparent; }
+  .btn.ghost:hover { background: rgba(15,26,20,0.06); transform: none; box-shadow: none; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; border-width: 2px; box-shadow: 3px 3px 0 0 var(--ink); border-radius: 8px; }
+  .btn.sm:hover { box-shadow: 4px 4px 0 0 var(--ink); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; padding: 4px 10px; border-radius: 6px;
+    border: 2px solid var(--ink); background: var(--ink); color: var(--feather);
+    text-transform: uppercase;
+  }
+  .chip.cream { background: var(--cream); color: var(--ink); }
+  .chip.accent { background: var(--accent); color: var(--ink); }
+  .chip.court { background: var(--court); color: var(--feather); }
+
+  /* ── Cards ──────────────────────────────────────────────────── */
+  .card {
+    background: var(--cream);
+    border: 3px solid var(--ink);
+    border-radius: 16px;
+    box-shadow: 5px 5px 0 0 var(--ink);
+  }
+  .card.sm { box-shadow: 3px 3px 0 0 var(--ink); border-width: 2px; border-radius: 12px; }
+  .card.ink { background: var(--ink); color: var(--feather); }
+
+  /* ── App shell ──────────────────────────────────────────────── */
+  #app {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    background: var(--cream);
+  }
+
+  /* Subtle cream grain */
+  #app::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(15,26,20,0.05) 1px, transparent 0);
+    background-size: 28px 28px;
+    opacity: .5;
+    z-index: 0;
+  }
+
+  /* ── Top HUD bar ───────────────────────────────────────────── */
+  .hud-bar {
+    position: relative; z-index: 10;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px 0 20px;
+  }
+  .hud-left, .hud-right { display: flex; align-items: center; gap: 10px; }
+  .hud-right { justify-content: flex-end; }
+  .hud-center { display: flex; justify-content: center; gap: 10px; }
+
+  .hud-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 999px;
+    padding: 6px 14px; box-shadow: 3px 3px 0 0 var(--ink);
+    font-weight: 700; font-size: 13px;
+  }
+  .hud-pill.dark { background: var(--ink); color: var(--feather); }
+  .hud-pill.accent { background: var(--accent); }
+  .hud-pill.court { background: var(--court); color: var(--feather); border-color: var(--ink); }
+
+  .level-chip {
+    display: inline-flex; align-items: center; gap: 0;
+    border: 3px solid var(--ink); border-radius: 999px;
+    overflow: hidden; box-shadow: 3px 3px 0 0 var(--ink);
+    background: var(--cream);
+  }
+  .level-chip .tag {
+    background: var(--ink); color: var(--accent);
+    padding: 6px 10px; font-size: 10px; letter-spacing: 1.5px;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  }
+  .level-chip .num {
+    padding: 6px 14px; font-weight: 800; font-size: 16px;
+  }
+
+  .xp-wrap {
+    display: flex; flex-direction: column; gap: 4px;
+    min-width: 220px;
+  }
+  .xp-track {
+    height: 14px; background: var(--cream-2);
+    border: 2.5px solid var(--ink); border-radius: 999px;
+    box-shadow: 3px 3px 0 0 var(--ink);
+    overflow: hidden; position: relative;
+  }
+  .xp-fill {
+    height: 100%;
+    background: repeating-linear-gradient(
+      -45deg, var(--accent) 0 6px, var(--accent-2) 6px 12px
+    );
+    border-right: 2.5px solid var(--ink);
+    transition: width .8s cubic-bezier(.34,1.56,.64,1);
+  }
+  .xp-label {
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .turn-indicator {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 12px;
+    box-shadow: 3px 3px 0 0 var(--ink);
+    font-weight: 800; font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .turn-dots { display: flex; gap: 4px; }
+  .turn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cream-2); border: 1.5px solid var(--ink);
+  }
+  .turn-dot.done { background: var(--correct); }
+  .turn-dot.cur { background: var(--accent); box-shadow: 0 0 0 2px var(--cream), 0 0 0 3.5px var(--ink); }
+
+  .timer-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 12px;
+    padding: 6px 12px; box-shadow: 3px 3px 0 0 var(--ink);
+    font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 18px;
+    min-width: 82px; justify-content: center;
+  }
+  .timer-pill.urgent {
+    background: var(--danger); color: var(--feather);
+    animation: timerPulse .6s infinite alternate;
+  }
+  @keyframes timerPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
+  }
+  .timer-pill svg { width: 14px; height: 14px; }
+
+  .score-pill {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    background: var(--accent); border: 3px solid var(--ink); border-radius: 12px;
+    padding: 6px 16px; box-shadow: 4px 4px 0 0 var(--ink);
+    font-weight: 800;
+  }
+  .score-pill .val { font-size: 22px; }
+  .score-pill .unit { font-size: 11px; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
+
+  .combo-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--ink); color: var(--accent);
+    border: 3px solid var(--ink); border-radius: 999px;
+    padding: 5px 12px;
+    font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 13px;
+    letter-spacing: 1px; text-transform: uppercase;
+    box-shadow: 3px 3px 0 0 var(--accent-2);
+    animation: comboShake .4s ease-out;
+  }
+  @keyframes comboShake {
+    0% { transform: scale(1.4) rotate(-4deg); opacity: 0; }
+    60% { transform: scale(0.9) rotate(2deg); }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  .mode-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 10px;
+    padding: 6px 12px; box-shadow: 3px 3px 0 0 var(--ink);
+    font-weight: 700; font-size: 13px;
+  }
+  .mode-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--court); }
+  .mode-chip.attack .dot { background: var(--danger); }
+  .mode-chip.match .dot { background: var(--blue); }
+
+  /* ── Court stage ───────────────────────────────────────────── */
+  .stage-wrap {
+    flex: 1;
+    position: relative;
+    padding: 16px 20px;
+    z-index: 1;
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+  }
+  .side-rail {
+    width: 220px;
+    display: flex; flex-direction: column; gap: 12px;
+    position: relative; z-index: 5;
+  }
+  .stage {
+    flex: 1;
+    position: relative;
+    background: var(--court);
+    border: 4px solid var(--ink);
+    border-radius: 20px;
+    box-shadow: 6px 6px 0 0 var(--ink);
+    overflow: hidden;
+  }
+  .stage::before {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
+      linear-gradient(180deg, var(--court) 0%, var(--court-dark) 100%);
+  }
+  .court-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* Opponent tag (match mode) */
+  .opp-tag {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 12px;
+    padding: 6px 12px 6px 6px; box-shadow: 3px 3px 0 0 var(--ink);
+    z-index: 4;
+  }
+  .opp-tag .av {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--purple); border: 2px solid var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--feather); font-weight: 800; font-size: 14px;
+  }
+  .opp-tag .name { font-weight: 800; font-size: 13px; }
+  .opp-tag .sub { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px; color: var(--ink-soft); text-transform: uppercase; }
+
+  /* Match score scoreboard */
+  .scoreboard {
+    position: absolute; top: 14px; left: 14px;
+    display: flex; align-items: stretch;
+    background: var(--ink); border: 3px solid var(--ink); border-radius: 12px;
+    box-shadow: 3px 3px 0 0 var(--feather);
+    overflow: hidden;
+    z-index: 4;
+  }
+  .scoreboard > div { padding: 6px 14px; text-align: center; min-width: 58px; }
+  .scoreboard .you { background: var(--accent); color: var(--ink); }
+  .scoreboard .them { background: var(--ink); color: var(--feather); }
+  .scoreboard .label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; opacity: .75;
+  }
+  .scoreboard .num { font-weight: 800; font-size: 22px; line-height: 1; margin-top: 2px; }
+  .scoreboard .divider {
+    padding: 6px 8px; background: var(--court-dark); color: var(--feather);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center;
+  }
+
+  /* Mini-map (match mode rally history) */
+  .rally-trail {
+    position: absolute; top: 14px; right: 14px;
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 12px;
+    padding: 10px 12px; box-shadow: 3px 3px 0 0 var(--ink);
+    z-index: 4;
+    min-width: 120px;
+  }
+  .rally-trail .ttl {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .rally-trail .seq { display: flex; gap: 4px; }
+  .rally-trail .sq {
+    flex: 1; height: 18px; border: 2px solid var(--ink); border-radius: 4px;
+    background: var(--cream-2);
+  }
+  .rally-trail .sq.ok { background: var(--correct); }
+  .rally-trail .sq.no { background: var(--danger); }
+
+  /* ── Instruction card ──────────────────────────────────────── */
+  .instr-wrap {
+    position: absolute;
+    left: 50%; bottom: 24px; transform: translateX(-50%);
+    width: min(640px, calc(100% - 48px));
+    z-index: 8;
+  }
+  .instr {
+    background: var(--cream); border: 4px solid var(--ink); border-radius: 20px;
+    box-shadow: 6px 6px 0 0 var(--ink);
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    position: relative;
+    overflow: visible;
+    transition: opacity .25s, transform .25s;
+  }
+  .instr.hidden { opacity: 0; transform: translateY(20px); pointer-events: none; }
+  .instr .badge {
+    width: 56px; height: 56px;
+    background: var(--ink); color: var(--accent);
+    border: 3px solid var(--ink); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .instr .badge svg { width: 28px; height: 28px; }
+  .instr.shot .badge { background: var(--danger); color: var(--feather); }
+  .instr.pos .badge { background: var(--blue); color: var(--feather); }
+
+  .instr .body .label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+  .instr .body .label::before {
+    content: ''; display: inline-block;
+    width: 8px; height: 8px; border-radius: 50%; background: currentColor;
+  }
+  .instr.shot .body .label { color: var(--danger); }
+  .instr.pos .body .label { color: var(--blue); }
+
+  .instr .body .text {
+    font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--ink);
+    text-wrap: pretty;
+  }
+  .instr .body .meta {
+    margin-top: 6px; font-size: 12px; color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .instr .hotkey {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .instr .hotkey .keys { display: flex; gap: 3px; }
+  .instr .hotkey kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 26px; padding: 0 6px;
+    background: var(--cream-2); border: 2px solid var(--ink); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    box-shadow: 2px 2px 0 0 var(--ink);
+  }
+  .instr .hotkey .hlabel {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px;
+    color: var(--ink-soft); text-transform: uppercase;
+  }
+
+  /* shuttlecock tail on instr card */
+  .instr::before {
+    content: ''; position: absolute; left: 30px; top: -10px;
+    width: 24px; height: 10px;
+    background: var(--accent);
+    border: 3px solid var(--ink);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+  }
+
+  /* ── Side rail widgets ─────────────────────────────────────── */
+  .rail-card {
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 14px;
+    box-shadow: 4px 4px 0 0 var(--ink);
+    padding: 12px 14px;
+  }
+  .rail-card .ttl {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+  .rail-card .ttl .ico {
+    width: 20px; height: 20px; background: var(--ink); color: var(--accent);
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  }
+  .rail-card .ttl .ico svg { width: 12px; height: 12px; }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline;
+    padding: 4px 0; border-bottom: 1.5px dashed var(--ink-line); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .k { font-size: 12px; color: var(--ink-soft); }
+  .stat-row .v { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 14px; }
+  .stat-row .v.good { color: var(--correct); }
+  .stat-row .v.bad { color: var(--danger); }
+
+  /* Coach tip card */
+  .coach-card {
+    background: var(--ink); color: var(--feather);
+    border: 3px solid var(--ink); border-radius: 14px;
+    box-shadow: 4px 4px 0 0 var(--accent);
+    padding: 12px 14px;
+    position: relative;
+  }
+  .coach-card .ttl { color: var(--accent); margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .coach-card .tip { font-size: 13px; line-height: 1.4; }
+
+  /* Key legend */
+  .legend { display: flex; flex-direction: column; gap: 6px; }
+  .legend .row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-soft); }
+  .legend .sw { width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 3px; flex-shrink: 0; }
+  .legend .sw.you { background: var(--accent); }
+  .legend .sw.ally { background: var(--blue); }
+  .legend .sw.opp { background: var(--danger); }
+  .legend .sw.shuttle { background: var(--feather); border-radius: 50%; }
+  .legend .sw.target { background: repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--ink) 3px 6px); }
+
+  /* ── Point-result overlay ──────────────────────────────────── */
+  .point-result {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    background: var(--cream); border: 5px solid var(--ink); border-radius: 22px;
+    padding: 20px 36px; box-shadow: 8px 8px 0 0 var(--ink);
+    z-index: 20;
+    min-width: 320px;
+    text-align: center;
+    animation: prPop .32s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes prPop {
+    from { transform: translate(-50%,-50%) scale(0.7) rotate(-3deg); opacity: 0; }
+    to { transform: translate(-50%,-50%) scale(1) rotate(0); opacity: 1; }
+  }
+  .point-result .head { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-soft); }
+  .point-result .big { font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+  .point-result.win .big { color: var(--correct); }
+  .point-result.lose .big { color: var(--danger); }
+  .point-result .sub { font-size: 14px; color: var(--ink-soft); }
+  .point-result .emblem {
+    width: 56px; height: 56px; border: 4px solid var(--ink); border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+    box-shadow: 4px 4px 0 0 var(--ink);
+  }
+  .point-result.win .emblem { background: var(--correct); color: var(--feather); }
+  .point-result.lose .emblem { background: var(--danger); color: var(--feather); }
+
+  /* ── HUD popup (backhand / body) ───────────────────────────── */
+  .hud-popup {
+    position: absolute; top: 90px; right: 24px;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 14px;
+    padding: 10px 14px; box-shadow: 4px 4px 0 0 var(--ink);
+    z-index: 18;
+    animation: popIn .3s ease-out;
+  }
+  @keyframes popIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .hud-popup .ic {
+    width: 40px; height: 40px; border-radius: 10px;
+    border: 2.5px solid var(--ink); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .hud-popup.backhand .ic { background: var(--purple); color: var(--feather); }
+  .hud-popup.body .ic { background: var(--danger); color: var(--feather); }
+  .hud-popup .ttl { font-weight: 800; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .hud-popup .det { font-size: 11px; color: var(--ink-soft); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+  /* ── End-rally screen ─────────────────────────────────────── */
+  .end-overlay {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(15,26,20,0.72);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn .3s;
+    backdrop-filter: blur(4px);
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .end-card {
+    width: min(520px, calc(100% - 40px));
+    background: var(--cream); border: 5px solid var(--ink); border-radius: 24px;
+    box-shadow: 10px 10px 0 0 var(--ink);
+    padding: 24px;
+    animation: prPop .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  .end-card .stars {
+    display: flex; justify-content: center; gap: 6px; margin-bottom: 10px;
+    font-size: 36px; color: var(--accent);
+    filter: drop-shadow(2px 2px 0 var(--ink));
+  }
+  .end-card h2 {
+    text-align: center; font-size: 28px; font-weight: 800;
+    margin-bottom: 4px; letter-spacing: -0.5px;
+  }
+  .end-card .score-big {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 48px;
+    color: var(--court-dark);
+    line-height: 1;
+    margin: 8px 0 16px 0;
+  }
+  .end-card .score-big span { color: var(--ink-soft); font-size: 24px; }
+  .end-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+  }
+  .end-stat {
+    background: var(--cream-2); border: 2.5px solid var(--ink); border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .end-stat .k { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-soft); }
+  .end-stat .v { font-weight: 800; font-size: 20px; margin-top: 2px; }
+  .end-extra {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+    padding: 10px 12px;
+    background: var(--ink); color: var(--feather);
+    border: 2.5px solid var(--ink); border-radius: 12px;
+  }
+  .end-extra .tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 4px;
+    background: var(--court-dark); color: var(--accent);
+  }
+  .end-extra .tag.bad { background: var(--danger); color: var(--feather); }
+  .end-actions { display: flex; gap: 10px; }
+  .end-actions .btn { flex: 1; justify-content: center; }
+
+  /* ── Pause / exit nav ───────────────────────────────────── */
+  .nav-left {
+    display: flex; gap: 8px;
+  }
+  .icon-btn {
+    width: 40px; height: 40px;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 10px;
+    box-shadow: 3px 3px 0 0 var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .1s;
+    color: var(--ink);
+  }
+  .icon-btn:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 0 var(--ink); }
+  .icon-btn:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 0 var(--ink); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ── Tweaks panel ──────────────────────────────────────── */
+  #tweaks {
+    position: fixed; bottom: 16px; right: 16px; z-index: 100;
+    background: var(--cream); border: 3px solid var(--ink); border-radius: 16px;
+    box-shadow: 5px 5px 0 0 var(--ink);
+    padding: 14px; width: 230px;
+    font-size: 12px;
+  }
+  #tweaks h4 { font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; color: var(--ink-soft); }
+  #tweaks .group { margin-bottom: 10px; }
+  #tweaks .group label { display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase; letter-spacing: 1px; color: var(--ink-soft); margin-bottom: 4px; }
+  #tweaks .row { display: flex; flex-wrap: wrap; gap: 4px; }
+  #tweaks .tbtn {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    padding: 4px 8px; border: 2px solid var(--ink); border-radius: 6px;
+    background: var(--cream-2); cursor: pointer; letter-spacing: 0.5px;
+  }
+  #tweaks .tbtn.active { background: var(--accent); box-shadow: 2px 2px 0 0 var(--ink); }
+
+  /* Player dots (static mockup) */
+  .pd {
+    position: absolute; width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--ink); box-shadow: 3px 3px 0 0 rgba(15,26,20,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 11px; color: var(--feather);
+    font-family: 'JetBrains Mono', monospace;
+    transform: translate(-50%, -50%);
+  }
+  .pd.you { background: var(--accent); color: var(--ink); }
+  .pd.ally { background: var(--blue); }
+  .pd.opp { background: var(--danger); }
+  .pd.opp2 { background: var(--danger); }
+
+  .shuttle {
+    position: absolute; width: 14px; height: 14px;
+    background: var(--feather); border: 2.5px solid var(--ink);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 2px 2px 0 0 rgba(15,26,20,0.5);
+  }
+
+  .target-zone {
+    position: absolute; width: 68px; height: 68px;
+    background: repeating-linear-gradient(45deg, rgba(255,210,63,0.55) 0 6px, rgba(15,26,20,0.35) 6px 12px);
+    border: 3px solid var(--accent);
+    border-radius: 10px;
+    transform: translate(-50%, -50%);
+    animation: targetPulse 1.2s infinite alternate;
+  }
+  @keyframes targetPulse {
+    from { transform: translate(-50%,-50%) scale(1); }
+    to { transform: translate(-50%,-50%) scale(1.08); }
+  }
+
+  .reach-circle {
+    position: absolute;
+    border: 2.5px dashed var(--accent);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.75;
+  }
+
+  .trajectory {
+    position: absolute; pointer-events: none;
+    overflow: visible;
+  }
+  .trajectory path {
+    fill: none; stroke: var(--accent); stroke-width: 3;
+    stroke-dasharray: 6 4;
+  }
+
+  /* checkmark/x marker */
+  .marker {
+    position: absolute; width: 32px; height: 32px;
+    border-radius: 50%; border: 3px solid var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    transform: translate(-50%, -50%);
+    box-shadow: 3px 3px 0 0 var(--ink);
+    font-weight: 800; font-size: 18px;
+    z-index: 5;
+  }
+  .marker.ok { background: var(--correct); color: var(--feather); }
+  .marker.bad { background: var(--danger); color: var(--feather); }
+
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+  const { useState, useEffect } = React;
+
+  // ── Icon set ───────────────────────────────────────────────
+  const I = {
+    pause: <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="5" width="3.5" height="14" fill="currentColor" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" fill="currentColor" rx="1"/></svg>,
+    back: <svg viewBox="0 0 24 24" fill="none"><path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    clock: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" strokeWidth="2"/><path d="M12 9V13L14.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M10 4H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
+    target: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="1.8"/><path d="M8 12H16M12 8V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><circle cx="9" cy="15" r="1.4" fill="currentColor"/></svg>,
+    racket: <svg viewBox="0 0 24 24" fill="none"><path d="M7 16.5L12 7L17 16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 5.5V3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="M5.5 20.5H18.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12.4" r="1.5" fill="currentColor"/></svg>,
+    check: <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5L10 17L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    x: <svg viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg>,
+    shuttle: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="16" r="3.5" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8"/><path d="M12 12V4M12 4L7 2M12 4L17 2M12 4L9 0.5M12 4L15 0.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+    coach: <svg viewBox="0 0 24 24" fill="none"><path d="M12 3L3 7V13C3 17.5 7 21 12 22C17 21 21 17.5 21 13V7L12 3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M9 12L11.5 14.5L16 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    stats: <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M10 20V4M16 20V14M22 20H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
+    speaker: <svg viewBox="0 0 24 24" fill="none"><path d="M4 10V14H7L12 18V6L7 10H4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M15 9C16 10 16 14 15 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+  };
+
+  // ── Court SVG (top-down, French court layout) ──────────────
+  function CourtSVG() {
+    // viewBox 100 x 134  (width 100, length 134 ratio ~ 6.1 x 13.4)
+    return (
+      <svg className="court-svg" viewBox="0 0 100 134" preserveAspectRatio="xMidYMid meet">
+        {/* outer boundary */}
+        <rect x="4" y="4" width="92" height="126" fill="none" stroke="#f4ecd8" strokeWidth="0.8"/>
+        {/* sidelines (singles) */}
+        <line x1="9" y1="4" x2="9" y2="130" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.55"/>
+        <line x1="91" y1="4" x2="91" y2="130" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.55"/>
+        {/* net */}
+        <line x1="4" y1="67" x2="96" y2="67" stroke="#0f1a14" strokeWidth="1.6"/>
+        <pattern id="net" width="3" height="3" patternUnits="userSpaceOnUse">
+          <path d="M0 0 L3 3 M0 3 L3 0" stroke="#0f1a14" strokeWidth="0.3" opacity="0.5"/>
+        </pattern>
+        <rect x="4" y="65" width="92" height="4" fill="url(#net)"/>
+        {/* service lines */}
+        <line x1="4" y1="44" x2="96" y2="44" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.7"/>
+        <line x1="4" y1="90" x2="96" y2="90" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.7"/>
+        <line x1="4" y1="24" x2="96" y2="24" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.55"/>
+        <line x1="4" y1="110" x2="96" y2="110" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.55"/>
+        {/* centre line top half */}
+        <line x1="50" y1="4" x2="50" y2="44" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.7"/>
+        <line x1="50" y1="90" x2="50" y2="130" stroke="#f4ecd8" strokeWidth="0.5" opacity="0.7"/>
+
+        {/* subtle shadow ellipse near player halves */}
+        <ellipse cx="50" cy="112" rx="28" ry="10" fill="#000" opacity="0.08"/>
+        <ellipse cx="50" cy="22" rx="28" ry="10" fill="#000" opacity="0.08"/>
+      </svg>
+    );
+  }
+
+  // ── Main in-game screen component ──────────────────────────
+  function GameScreen({ mode, state, showPopup, showEnd }) {
+    // Court layout positions (% within stage)
+    // Top half (opponents): y ~ 15% - 42%
+    // Bottom half (you+ally): y ~ 58% - 85%
+
+    const isShot = state === 'shot' || state === 'feedback-ok' || state === 'feedback-bad';
+    const isPos = state === 'pos';
+    const showFeedback = state === 'feedback-ok' || state === 'feedback-bad';
+    const isWrong = state === 'feedback-bad';
+
+    const instrIcon = isShot ? I.racket : I.target;
+    const instrLabel = isShot ? (mode === 'attack' ? 'Frappe · Attaque' : mode === 'defense' ? 'Frappe · Défense' : 'Frappe · Rally') : 'Placement';
+    const instrText = {
+      pos: "Repositionne-toi après ton clear. Reste dans ton rayon et garde la diagonale avec ton partenaire.",
+      shot: mode === 'attack'
+        ? "Smash le revers de l'adversaire côté gauche. Cherche la pression sur sa main faible."
+        : mode === 'defense'
+        ? "Lift long et haut vers le fond droit. Donne-toi le temps de remonter au filet."
+        : "Drive plat vers le corps. Coupe leur rotation avant le prochain échange.",
+      'feedback-ok': "Beau tir ! Revers ciblé, pression maximale.",
+      'feedback-bad': "Trop central — l'adversaire lit la trajectoire trop vite.",
+    }[state] || "Chargement...";
+
+    const instrMeta = isShot
+      ? "Saisis le volant · tire vers toi · relâche"
+      : "Clique dans ta moitié · reste dans ton rayon";
+
+    return (
+      <div id="app">
+        {/* ── Top HUD ─────────────────────────────────────── */}
+        <div className="hud-bar">
+          <div className="hud-left">
+            <div className="nav-left">
+              <button className="icon-btn" title="Retour">{I.back}</button>
+              <button className="icon-btn" title="Pause">{I.pause}</button>
+            </div>
+            <div className={'mode-chip ' + (mode === 'attack' ? 'attack' : mode === 'match' ? 'match' : '')}>
+              <span className="dot"/>
+              {mode === 'attack' ? 'Attack Training' : mode === 'defense' ? 'Defense Training' : 'Match Mode'}
+            </div>
+            {mode !== 'match' && (
+              <>
+                <div className="level-chip">
+                  <span className="tag">LVL</span>
+                  <span className="num">12</span>
+                </div>
+                <div className="xp-wrap">
+                  <div className="xp-track"><div className="xp-fill" style={{width: '64%'}}/></div>
+                  <div className="xp-label"><span>1,280 XP</span><span>/ 2,000</span></div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="hud-center">
+            {mode !== 'match' && (
+              <div className="turn-indicator">
+                <span>TOUR</span>
+                <span style={{color:'var(--court-dark)'}}>3</span>
+                <span style={{opacity:.4}}>/</span>
+                <span style={{opacity:.6}}>6</span>
+                <span className="turn-dots" style={{marginLeft:6}}>
+                  <span className="turn-dot done"/>
+                  <span className="turn-dot done"/>
+                  <span className="turn-dot cur"/>
+                  <span className="turn-dot"/>
+                  <span className="turn-dot"/>
+                  <span className="turn-dot"/>
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="hud-right">
+            <div className={'timer-pill' + (state === 'urgent' ? ' urgent' : '')}>
+              {I.clock}
+              <span>0:{state === 'urgent' ? '04' : '12'}</span>
+            </div>
+            <div className="score-pill">
+              <span className="val">340</span>
+              <span className="unit">PTS</span>
+            </div>
+            <div className="combo-badge">×3 COMBO</div>
+          </div>
+        </div>
+
+        {/* ── Stage (court + rails) ───────────────────────── */}
+        <div className="stage-wrap">
+          {/* Left rail */}
+          <div className="side-rail">
+            <div className="rail-card">
+              <div className="ttl">
+                <span>Ce tour</span>
+                <span className="ico">{I.stats}</span>
+              </div>
+              <div className="stat-row"><span className="k">Précision</span><span className="v good">82%</span></div>
+              <div className="stat-row"><span className="k">Revers visés</span><span className="v">2 / 3</span></div>
+              <div className="stat-row"><span className="k">Distance ally</span><span className="v">3.1 m</span></div>
+              <div className="stat-row"><span className="k">Bonus</span><span className="v good">+40</span></div>
+            </div>
+
+            <div className="coach-card">
+              <div className="ttl">{I.coach}<span>Coach tip</span></div>
+              <div className="tip">Vise les coins profonds pour forcer l'adversaire à lever — tu auras la balle haute.</div>
+            </div>
+
+            <div className="rail-card">
+              <div className="ttl"><span>Légende</span></div>
+              <div className="legend">
+                <div className="row"><span className="sw you"/> Toi</div>
+                <div className="row"><span className="sw ally"/> Partenaire</div>
+                <div className="row"><span className="sw opp"/> Adversaire</div>
+                <div className="row"><span className="sw shuttle"/> Volant</div>
+                <div className="row"><span className="sw target"/> Cible</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Court stage */}
+          <div className="stage" id="stage">
+            <CourtSVG/>
+
+            {/* Match mode: scoreboard + opp + rally trail */}
+            {mode === 'match' && (
+              <>
+                <div className="scoreboard">
+                  <div className="you">
+                    <div className="label">YOU</div>
+                    <div className="num">14</div>
+                  </div>
+                  <div className="divider">SET 2</div>
+                  <div className="them">
+                    <div className="label">OPP</div>
+                    <div className="num">11</div>
+                  </div>
+                </div>
+                <div className="opp-tag">
+                  <div className="av">M</div>
+                  <div>
+                    <div className="name">Mei · AI</div>
+                    <div className="sub">STYLE · DEFENSIVE</div>
+                  </div>
+                </div>
+                <div className="rally-trail">
+                  <div className="ttl">Last 6 shots</div>
+                  <div className="seq">
+                    <div className="sq ok"/>
+                    <div className="sq ok"/>
+                    <div className="sq no"/>
+                    <div className="sq ok"/>
+                    <div className="sq ok"/>
+                    <div className="sq ok"/>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Reach circle around you (positioning mode) */}
+            {isPos && (
+              <div className="reach-circle" style={{
+                left: '50%', top: '76%', width: '28%', height: '28%'
+              }}/>
+            )}
+
+            {/* Target zone (shot mode) */}
+            {isShot && !showFeedback && (
+              <div className="target-zone" style={{left: '28%', top: '24%'}}/>
+            )}
+
+            {/* Trajectory on feedback */}
+            {showFeedback && (
+              <svg className="trajectory" style={{left:0, top:0, width:'100%', height:'100%'}} preserveAspectRatio="none">
+                <path d={`M 52% 58% Q 42% 30% ${isWrong ? '50%' : '28%'} ${isWrong ? '38%' : '24%'}`} stroke={isWrong ? 'var(--danger)' : 'var(--correct)'}/>
+              </svg>
+            )}
+
+            {/* Players */}
+            <div className="pd opp" style={{left:'34%', top:'22%'}}>O1</div>
+            <div className="pd opp2" style={{left:'66%', top:'22%'}}>O2</div>
+            <div className="pd you" style={{left:'50%', top:'76%'}}>YOU</div>
+            {mode !== 'match' && (
+              <div className="pd ally" style={{left:'22%', top:'72%'}}>AL</div>
+            )}
+
+            {/* Shuttle */}
+            {!showFeedback && (
+              <div className="shuttle" style={{
+                left: isShot ? '50%' : '52%',
+                top: isShot ? '58%' : '44%'
+              }}/>
+            )}
+            {showFeedback && (
+              <div className="marker" style={{
+                left: isWrong ? '50%' : '28%',
+                top: isWrong ? '38%' : '24%'
+              }}>
+                <div style={{color: isWrong ? 'var(--feather)' : 'var(--feather)'}}>
+                  {isWrong ? I.x : I.check}
+                </div>
+              </div>
+            )}
+
+            {/* Point-result pop (match mode, optional) */}
+            {state === 'point' && (
+              <div className={'point-result ' + (mode === 'match' ? 'win' : 'lose')}>
+                <div className="emblem">{mode === 'match' ? I.check : I.x}</div>
+                <div className="head">Rally Result</div>
+                <div className="big">{mode === 'match' ? 'POINT GAGNÉ' : 'POINT PERDU'}</div>
+                <div className="sub">{mode === 'match' ? 'Smash revers · pression maximale' : 'Shuttle au filet'}</div>
+              </div>
+            )}
+
+            {/* HUD popup */}
+            {showPopup === 'backhand' && (
+              <div className="hud-popup backhand">
+                <div className="ic">{I.racket}</div>
+                <div>
+                  <div className="ttl">Revers visé</div>
+                  <div className="det">Bonne pression sur la main faible · +20</div>
+                </div>
+              </div>
+            )}
+            {showPopup === 'body' && (
+              <div className="hud-popup body">
+                <div className="ic">{I.target}</div>
+                <div>
+                  <div className="ttl">Au corps</div>
+                  <div className="det">Adversaire coupé de son espace · +15</div>
+                </div>
+              </div>
+            )}
+
+            {/* Instruction card */}
+            <div className="instr-wrap">
+              <div className={'instr ' + (isShot ? 'shot' : 'pos')}>
+                <div className="badge">{instrIcon}</div>
+                <div className="body">
+                  <div className="label">{instrLabel}</div>
+                  <div className="text">{instrText}</div>
+                  <div className="meta">{instrMeta}</div>
+                </div>
+                <div className="hotkey">
+                  <div className="keys">
+                    {isShot ? <><kbd>Hold</kbd><kbd>Drag</kbd></> : <><kbd>Click</kbd></>}
+                  </div>
+                  <div className="hlabel">Action</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right rail */}
+          <div className="side-rail">
+            <div className="rail-card">
+              <div className="ttl">
+                <span>{mode === 'match' ? 'Momentum' : 'Rally'}</span>
+                <span className="ico">{I.stats}</span>
+              </div>
+              {mode === 'match' ? (
+                <>
+                  <div style={{height: 10, background: 'var(--cream-2)', border: '2px solid var(--ink)', borderRadius: 6, overflow: 'hidden', marginBottom: 10}}>
+                    <div style={{height: '100%', width: '66%', background: 'var(--correct)'}}/>
+                  </div>
+                  <div className="stat-row"><span className="k">Last 5 pts</span><span className="v good">4-1</span></div>
+                  <div className="stat-row"><span className="k">Tendency</span><span className="v">Defensive</span></div>
+                  <div className="stat-row"><span className="k">Rally length</span><span className="v">7 shots</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="stat-row"><span className="k">Score rally</span><span className="v">340</span></div>
+                  <div className="stat-row"><span className="k">Bons tirs</span><span className="v">3 / 4</span></div>
+                  <div className="stat-row"><span className="k">Malus</span><span className="v bad">−10</span></div>
+                </>
+              )}
+            </div>
+
+            <div className="rail-card">
+              <div className="ttl"><span>Adversaires</span></div>
+              <div style={{display:'flex', gap: 10, marginTop: 2}}>
+                <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4, flex:1}}>
+                  <div className="pd opp" style={{position:'relative', transform:'none', left:0, top:0, width:38, height:38}}>O1</div>
+                  <div style={{fontSize:10, fontFamily:'JetBrains Mono,monospace', letterSpacing:1}}>REVERS</div>
+                </div>
+                <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4, flex:1}}>
+                  <div className="pd opp2" style={{position:'relative', transform:'none', left:0, top:0, width:38, height:38}}>O2</div>
+                  <div style={{fontSize:10, fontFamily:'JetBrains Mono,monospace', letterSpacing:1}}>AGRESSIF</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rail-card">
+              <div className="ttl"><span>Shortcuts</span></div>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12}}>
+                  <span>Pause</span><kbd style={{fontFamily:'JetBrains Mono,monospace', border:'2px solid var(--ink)', padding:'2px 6px', borderRadius:4, fontSize:10, fontWeight:700, background:'var(--cream-2)'}}>ESC</kbd>
+                </div>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12}}>
+                  <span>Coup rapide</span><kbd style={{fontFamily:'JetBrains Mono,monospace', border:'2px solid var(--ink)', padding:'2px 6px', borderRadius:4, fontSize:10, fontWeight:700, background:'var(--cream-2)'}}>SPACE</kbd>
+                </div>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12}}>
+                  <span>Légende</span><kbd style={{fontFamily:'JetBrains Mono,monospace', border:'2px solid var(--ink)', padding:'2px 6px', borderRadius:4, fontSize:10, fontWeight:700, background:'var(--cream-2)'}}>L</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* End screen */}
+        {showEnd && (
+          <div className="end-overlay">
+            <div className="end-card">
+              <div className="stars">★ ★ ★</div>
+              <h2>Rally terminé !</h2>
+              <div className="score-big">840 <span>pts</span></div>
+              <div className="end-grid">
+                <div className="end-stat">
+                  <div className="k">Réussite</div>
+                  <div className="v">5 / 6</div>
+                </div>
+                <div className="end-stat">
+                  <div className="k">Tir moyen</div>
+                  <div className="v">78 pts</div>
+                </div>
+                <div className="end-stat">
+                  <div className="k">Placement</div>
+                  <div className="v">84 pts</div>
+                </div>
+                <div className="end-stat">
+                  <div className="k">Combo max</div>
+                  <div className="v">×4</div>
+                </div>
+              </div>
+              <div className="end-extra">
+                <span className="tag">+120 BONUS</span>
+                <span className="tag">REVERS ×3</span>
+                <span className="tag">AU CORPS ×1</span>
+                <span className="tag bad">−10 MALUS</span>
+              </div>
+              <div className="end-actions">
+                <button className="btn">Menu</button>
+                <button className="btn primary">Rejouer</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Root with tweaks ───────────────────────────────────────
+  function App() {
+    const [mode, setMode] = useState('attack'); // attack | defense | match
+    const [state, setState] = useState('shot'); // pos | shot | feedback-ok | feedback-bad | point | urgent
+    const [popup, setPopup] = useState(null); // null | backhand | body
+    const [showEnd, setShowEnd] = useState(false);
+
+    return (
+      <>
+        <GameScreen mode={mode} state={state} showPopup={popup} showEnd={showEnd}/>
+        <div id="tweaks">
+          <h4>TWEAKS</h4>
+          <div className="group">
+            <label>Mode</label>
+            <div className="row">
+              {['attack','defense','match'].map(m => (
+                <button key={m} className={'tbtn' + (mode===m?' active':'')} onClick={()=>setMode(m)}>{m}</button>
+              ))}
+            </div>
+          </div>
+          <div className="group">
+            <label>Turn state</label>
+            <div className="row">
+              {[['pos','Placement'],['shot','Frappe'],['feedback-ok','Réussi'],['feedback-bad','Raté'],['urgent','Timer!'],['point','Rally end']].map(([k,l]) => (
+                <button key={k} className={'tbtn' + (state===k?' active':'')} onClick={()=>setState(k)}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="group">
+            <label>Popup</label>
+            <div className="row">
+              <button className={'tbtn' + (!popup?' active':'')} onClick={()=>setPopup(null)}>none</button>
+              <button className={'tbtn' + (popup==='backhand'?' active':'')} onClick={()=>setPopup('backhand')}>revers</button>
+              <button className={'tbtn' + (popup==='body'?' active':'')} onClick={()=>setPopup('body')}>corps</button>
+            </div>
+          </div>
+          <div className="group">
+            <label>End screen</label>
+            <div className="row">
+              <button className={'tbtn' + (!showEnd?' active':'')} onClick={()=>setShowEnd(false)}>off</button>
+              <button className={'tbtn' + (showEnd?' active':'')} onClick={()=>setShowEnd(true)}>on</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
