@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import Database from 'better-sqlite3';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
@@ -11,7 +13,7 @@ import {
 } from './progression.js';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-const MIGRATIONS_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'migrations');
+const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 
 const DRILL_CATALOG = Object.freeze([
   { id: 'd1', title: 'Cross-court smash', category: 'Attack', workshop: 'attack', difficulty: 2 },
