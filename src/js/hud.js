@@ -15,30 +15,36 @@
 
 export class HUD {
   constructor() {
-    this._scoreEl   = document.getElementById('hud-score');
-    this._turnEl    = document.getElementById('hud-turn');
-    this._comboEl   = document.getElementById('hud-combo');
-    this._timerEl   = document.getElementById('hud-timer');
-    this._instrEl   = document.getElementById('instruction');
-    this._labelEl   = document.getElementById('instr-label');
-    this._textEl    = document.getElementById('instr-text');
-    this._xpBarEl   = document.getElementById('hud-xp-bar');
-    this._xpWrapEl  = document.getElementById('hud-xp-wrap');
+    this._scoreEl    = document.getElementById('hud-score');
+    this._turnCurEl  = document.getElementById('hud-turn-cur');
+    this._turnTotEl  = document.getElementById('hud-turn-total');
+    this._turnDotsEl = document.getElementById('hud-turn-dots');
+    this._comboEl    = document.getElementById('hud-combo');
+    this._timerEl    = document.getElementById('hud-timer');
+    this._instrEl    = document.getElementById('instruction');
+    this._badgeEl    = document.getElementById('instr-badge');
+    this._labelEl    = document.getElementById('instr-label');
+    this._textEl     = document.getElementById('instr-text');
+    this._metaEl     = document.getElementById('instr-meta');
+    this._xpBarEl    = document.getElementById('hud-xp-bar');
+    this._xpTrackEl  = this._xpBarEl?.parentElement ?? null;
     this._levelNumEl = document.getElementById('hud-level-num');
-    this._prevScore = 0;
-    this._popupEl = null;
+    this._prevScore  = 0;
+    this._popupEl    = null;
   }
 
   // ─── Visibility ──────────────────────────────────────────────────────────────
 
   /** Show the entire HUD bar. */
   show() {
-    this._scoreEl.closest('#hud').style.display = 'flex';
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = '';
   }
 
   /** Hide the entire HUD bar (e.g., during menu screens). */
   hide() {
-    this._scoreEl.closest('#hud').style.display = 'none';
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = 'none';
   }
 
   /** @returns {HTMLElement|null} Timer display element used by ExerciseTimer. */
@@ -56,32 +62,56 @@ export class HUD {
    * @param {number} combo      Current combo streak
    */
   update(score, turnIndex, totalTurns, combo) {
-    // Animate score change
     if (score !== this._prevScore) {
-      this._scoreEl.textContent = `${score} pts`;
+      this._scoreEl.textContent = score;
       this._scoreEl.classList.remove('score-pop');
-      void this._scoreEl.offsetWidth; // reflow to restart animation
+      void this._scoreEl.offsetWidth;
       this._scoreEl.classList.add('score-pop');
       this._prevScore = score;
     }
 
-    this._turnEl.textContent =
-      turnIndex < totalTurns
-        ? `Tour ${turnIndex + 1} / ${totalTurns}`
-        : 'Fin du rally';
+    const cur = turnIndex < totalTurns ? turnIndex + 1 : totalTurns;
+    if (this._turnCurEl)  this._turnCurEl.textContent  = cur;
+    if (this._turnTotEl)  this._turnTotEl.textContent  = totalTurns;
+    this._renderTurnDots(turnIndex, totalTurns);
 
-    const hadCombo = this._comboEl.textContent !== '';
-    const newCombo = combo >= 2 ? `×${combo} COMBO` : '';
-    this._comboEl.textContent = newCombo;
+    const hadCombo = !this._comboEl.hidden;
+    if (combo >= 2) {
+      this._comboEl.textContent = `×${combo} COMBO`;
+      this._comboEl.hidden = false;
+      if (!hadCombo) {
+        this._comboEl.classList.remove('pop');
+        void this._comboEl.offsetWidth;
+        this._comboEl.classList.add('pop');
+      }
+    } else {
+      this._comboEl.hidden = true;
+      this._comboEl.textContent = '';
+    }
+  }
 
-    if (newCombo && !hadCombo) {
-      this._comboEl.classList.remove('pop');
-      void this._comboEl.offsetWidth;
-      this._comboEl.classList.add('pop');
+  _renderTurnDots(currentIndex, total) {
+    if (!this._turnDotsEl) return;
+    this._turnDotsEl.innerHTML = '';
+    const visible = Math.min(total, 8);
+    for (let i = 0; i < visible; i++) {
+      const dot = document.createElement('span');
+      if (i < currentIndex)        dot.className = 'turn-dot done';
+      else if (i === currentIndex) dot.className = 'turn-dot cur';
+      else                         dot.className = 'turn-dot';
+      this._turnDotsEl.appendChild(dot);
     }
   }
 
   // ─── Instruction card ─────────────────────────────────────────────────────
+
+  static get _SHOT_ICON() {
+    return `<svg viewBox="0 0 24 24" fill="none" width="28" height="28"><path d="M7 16.5L12 7L17 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 5.5V3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5.5 20.5H18.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12.4" r="1.5" fill="currentColor"/></svg>`;
+  }
+
+  static get _POS_ICON() {
+    return `<svg viewBox="0 0 24 24" fill="none" width="28" height="28"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8"/><path d="M8 12H16M12 8V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="1.4" fill="currentColor"/></svg>`;
+  }
 
   /**
    * Show the instruction card for a turn.
@@ -89,10 +119,24 @@ export class HUD {
    */
   setInstruction(turn) {
     this._instrEl.classList.remove('hidden');
+    this._instrEl.dataset.type = turn.type;
+
+    const isShot = turn.type === 'shot';
+    this._labelEl.className   = `instr-label ${isShot ? 'shot' : 'pos'}`;
     this._labelEl.textContent = turn.label;
-    this._labelEl.className   = `label ${turn.type === 'shot' ? 'shot' : 'pos'}`;
     this._textEl.textContent  = turn.text;
     this._textEl.style.color  = '';
+
+    if (this._badgeEl) {
+      this._badgeEl.innerHTML = isShot ? HUD._SHOT_ICON : HUD._POS_ICON;
+      this._badgeEl.className = `instr-badge ${isShot ? 'shot' : 'pos'}`;
+    }
+
+    if (this._metaEl) {
+      this._metaEl.textContent = isShot
+        ? 'Saisis le volant · tire · relâche'
+        : 'Clique dans ta moitié · reste dans ton rayon';
+    }
   }
 
   /** Hide the instruction card. */
@@ -175,12 +219,13 @@ export class HUD {
    */
   setXP(current, max) {
     const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
-    if (this._xpBarEl) {
-      this._xpBarEl.style.width = `${pct}%`;
-    }
-    if (this._xpWrapEl) {
-      this._xpWrapEl.setAttribute('aria-valuenow', pct);
-    }
+    if (this._xpBarEl) this._xpBarEl.style.width = `${pct}%`;
+    if (this._xpTrackEl) this._xpTrackEl.setAttribute('aria-valuenow', pct);
+
+    const curEl = document.getElementById('hud-xp-current');
+    const maxEl = document.getElementById('hud-xp-max');
+    if (curEl) curEl.textContent = `${current} XP`;
+    if (maxEl) maxEl.textContent = `/ ${max}`;
   }
 
   /**
