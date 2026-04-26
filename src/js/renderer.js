@@ -16,38 +16,45 @@
 
 import { snapToGrid } from './snap.js';
 
-// ─── Visual constants ──────────────────────────────────────────────────────────
+// ── Player colors — Rally design ───────────────────────────────────────────
 
-// Player radius as a fraction of the court width
-const PLAYER_RADIUS_RATIO = 0.038;   // ~3.8 % of court width
+// YOU (ally1 with label "YOU") — amber accent
+const YOU_FILL    = '#ffd23f';
+const YOU_STROKE  = '#0f1a14';
+const YOU_LABEL   = '#0f1a14';
 
-// Player colours
-const ALLY_FILL     = '#2563eb';    // blue-600
-const ALLY_STROKE   = '#1d4ed8';    // blue-700
-const OPP_FILL      = '#dc2626';    // red-600
-const OPP_STROKE    = '#b91c1c';    // red-700
-const GHOST_ALPHA   = 0.25;
+// Ally (partner) — blue
+const ALLY_FILL   = '#2e6fc5';
+const ALLY_STROKE = '#0f1a14';
+const ALLY_LABEL  = '#fff8e1';
 
-// Glow (active player)
-const GLOW_COLOUR   = 'rgba(255, 255, 255, 0.55)';
-const GLOW_BLUR     = 14;           // shadow blur in CSS px
+// Opponents — danger red
+const OPP_FILL    = '#e85d3c';
+const OPP_STROKE  = '#0f1a14';
+const OPP_LABEL   = '#fff8e1';
+
+// Ghost (movingTo preview)
+const GHOST_ALPHA = 0.30;
+
+// Glow (active player) — amber
+const GLOW_COLOUR = 'rgba(255, 210, 63, 0.70)';
+const GLOW_BLUR   = 18;
 
 // Label
-const LABEL_FONT_RATIO = 0.45;      // font-size relative to player radius
-const LABEL_COLOUR  = '#ffffff';
+const LABEL_FONT_RATIO = 0.45;
+const PLAYER_RADIUS_RATIO = 0.038;
 
-// Shuttlecock
-const SHUTTLE_RADIUS_RATIO = 0.022; // fraction of court width
-const SHUTTLE_FILL   = '#fbbf24';   // amber-400
-const SHUTTLE_STROKE = '#b45309';   // amber-700
+// Shuttlecock — feather white with ink border
+const SHUTTLE_RADIUS_RATIO = 0.022;
+const SHUTTLE_FILL   = '#fff8e1';
+const SHUTTLE_STROKE = '#0f1a14';
 const CORK_RADIUS_RATIO = 0.008;
 
-// Trajectory
-const TRAJ_COLOUR   = 'rgba(251, 191, 36, 0.45)';
-const TRAJ_DASH     = [4, 6];       // [dash, gap] in CSS px
-const TRAJ_WIDTH    = 1.5;
+// Trajectory — ink dashes
+const TRAJ_COLOUR = 'rgba(15, 26, 20, 0.40)';
+const TRAJ_DASH   = [5, 5];
+const TRAJ_WIDTH  = 1.5;
 
-// Speed → trail segment count mapping
 const TRAIL_SEGMENTS = { slow: 3, medium: 6, fast: 10 };
 
 // ─── Renderer class ───────────────────────────────────────────────────────────
@@ -157,9 +164,12 @@ export class Renderer {
       const label    = data.label ?? this._defaultLabel(id);
       const hand     = this._resolveHand(equipment, id);
 
+      const isYou        = label === 'YOU';
+      const resolvedFill = isYou ? YOU_FILL : isAlly ? ALLY_FILL : OPP_FILL;
+
       if (data.movingTo) {
-        this._drawMovementArrow(data, data.movingTo, isAlly);
-        this._drawGhostPlayer(data.movingTo, isAlly);
+        this._drawMovementArrow(data, data.movingTo, resolvedFill);
+        this._drawGhostPlayer(data.movingTo, resolvedFill);
       }
 
       this._drawPlayer(data, isAlly, label, isActive, hand);
@@ -168,35 +178,35 @@ export class Renderer {
 
   _drawPlayer(pos, isAlly, label, isActive, hand = null) {
     const { ctx, court } = this;
-    const snapped       = snapToGrid(pos.x, pos.y);
-    const { x, y }      = court.toCanvas(snapped.x, snapped.y);
-    const r         = court.courtW * PLAYER_RADIUS_RATIO;
-    const fill      = isAlly ? ALLY_FILL   : OPP_FILL;
-    const stroke    = isAlly ? ALLY_STROKE : OPP_STROKE;
+    const snapped = snapToGrid(pos.x, pos.y);
+    const { x, y } = court.toCanvas(snapped.x, snapped.y);
+    const r = court.courtW * PLAYER_RADIUS_RATIO;
+
+    const isYou = label === 'YOU';
+    const fill       = isYou ? YOU_FILL   : isAlly ? ALLY_FILL   : OPP_FILL;
+    const stroke     = isYou ? YOU_STROKE : isAlly ? ALLY_STROKE : OPP_STROKE;
+    const labelColor = isYou ? YOU_LABEL  : isAlly ? ALLY_LABEL  : OPP_LABEL;
 
     ctx.save();
 
-    // Active player glow
     if (isActive) {
       ctx.shadowColor = GLOW_COLOUR;
       ctx.shadowBlur  = GLOW_BLUR;
     }
 
-    // Circle
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle   = fill;
     ctx.fill();
     ctx.strokeStyle = stroke;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth   = 3;
     ctx.stroke();
 
-    ctx.shadowBlur  = 0;
+    ctx.shadowBlur = 0;
 
-    // Label
     const fontSize = Math.round(r * LABEL_FONT_RATIO * 2);
-    ctx.font        = `bold ${fontSize}px system-ui, sans-serif`;
-    ctx.fillStyle   = LABEL_COLOUR;
+    ctx.font        = `800 ${fontSize}px 'JetBrains Mono', monospace`;
+    ctx.fillStyle   = labelColor;
     ctx.textAlign   = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, x, y);
@@ -207,10 +217,13 @@ export class Renderer {
       const by = y - r * 0.7;
       ctx.beginPath();
       ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
-      ctx.fillStyle = '#fbbf24';
+      ctx.fillStyle = '#ffd23f';
       ctx.fill();
-      ctx.fillStyle = '#000000';
-      ctx.font = `bold ${Math.round(r * 0.3)}px system-ui, sans-serif`;
+      ctx.strokeStyle = '#0f1a14';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#0f1a14';
+      ctx.font = `bold ${Math.round(r * 0.3)}px 'JetBrains Mono', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(hand === 'left' ? 'L' : 'R', bx, by);
@@ -231,12 +244,11 @@ export class Renderer {
     return null;
   }
 
-  _drawGhostPlayer(pos, isAlly) {
+  _drawGhostPlayer(pos, fill) {
     const { ctx, court } = this;
     const snapped  = snapToGrid(pos.x, pos.y);
     const { x, y } = court.toCanvas(snapped.x, snapped.y);
     const r        = court.courtW * PLAYER_RADIUS_RATIO;
-    const fill     = isAlly ? ALLY_FILL : OPP_FILL;
 
     ctx.save();
     ctx.globalAlpha = GHOST_ALPHA;
@@ -247,7 +259,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  _drawMovementArrow(from, to, isAlly) {
+  _drawMovementArrow(from, to, fill) {
     const { ctx, court } = this;
     const sf = snapToGrid(from.x, from.y);
     const st = snapToGrid(to.x,   to.y);
@@ -269,10 +281,8 @@ export class Renderer {
     const ex = b.x - ux * (r + 2);
     const ey = b.y - uy * (r + 2);
 
-    const colour = isAlly ? ALLY_FILL : OPP_FILL;
-
     ctx.save();
-    ctx.strokeStyle = colour;
+    ctx.strokeStyle = fill;
     ctx.lineWidth   = 1.5;
     ctx.setLineDash([5, 4]);
     ctx.globalAlpha = 0.7;
@@ -321,7 +331,7 @@ export class Renderer {
     // Feather skirt (outer circle, slightly transparent)
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle   = 'rgba(251, 191, 36, 0.25)';
+    ctx.fillStyle   = 'rgba(255, 248, 225, 0.25)';  // SHUTTLE_FILL at 25% alpha
     ctx.fill();
     ctx.strokeStyle = SHUTTLE_STROKE;
     ctx.lineWidth   = 1.2;
