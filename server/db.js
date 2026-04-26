@@ -427,7 +427,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     });
   }
 
-  function getState(userId) {
+  function getState(userId, referenceDate) {
     const user = getUser(userId);
     const profile = mapProfile(getProfileRow.get(userId));
     const preferences = mapPreferences(getPreferencesRow.get(userId));
@@ -445,7 +445,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         startedDrills: drills.filter(drill => drill.started).map(drill => drill.id),
         bestScores,
       },
-      dailyBonus: mapDailyBonus(statsRow),
+      dailyBonus: mapDailyBonus(statsRow, referenceDate),
       controls,
       stats: mapStats(statsRow),
       drills,
@@ -603,7 +603,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
       });
     });
     tx();
-    return getState(userId);
+    return getState(userId, completedAt);
   }
 
   function sessionsForPeriod(userId, period = 'weekly') {
