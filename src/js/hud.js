@@ -16,6 +16,7 @@
 export class HUD {
   constructor() {
     this._scoreEl    = document.getElementById('hud-score');
+    this._scorePillEl = this._scoreEl?.parentElement ?? null;
     this._turnCurEl  = document.getElementById('hud-turn-cur');
     this._turnTotEl  = document.getElementById('hud-turn-total');
     this._turnDotsEl = document.getElementById('hud-turn-dots');
@@ -28,8 +29,11 @@ export class HUD {
     this._metaEl     = document.getElementById('instr-meta');
     this._xpBarEl    = document.getElementById('hud-xp-bar');
     this._xpTrackEl  = this._xpBarEl?.parentElement ?? null;
+    this._levelChipEl = document.getElementById('hud-level-num')?.parentElement ?? null;
     this._levelNumEl = document.getElementById('hud-level-num');
     this._prevScore  = 0;
+    this._prevLevel  = null;
+    this._lastCombo  = 0;
     this._popupEl    = null;
   }
 
@@ -63,31 +67,48 @@ export class HUD {
    */
   update(score, turnIndex, totalTurns, combo) {
     if (score !== this._prevScore) {
+      const delta = score - this._prevScore;
+
       this._scoreEl.textContent = score;
       this._scoreEl.classList.remove('score-pop');
       void this._scoreEl.offsetWidth;
       this._scoreEl.classList.add('score-pop');
+
+      if (this._scorePillEl && delta !== 0) {
+        const cls = delta > 0 ? 'gain' : 'gain-bad';
+        this._scorePillEl.classList.remove('gain', 'gain-bad');
+        void this._scorePillEl.offsetWidth;
+        this._scorePillEl.classList.add(cls);
+      }
+
       this._prevScore = score;
     }
 
     const cur = turnIndex < totalTurns ? turnIndex + 1 : totalTurns;
-    if (this._turnCurEl)  this._turnCurEl.textContent  = cur;
-    if (this._turnTotEl)  this._turnTotEl.textContent  = totalTurns;
+    if (this._turnCurEl) this._turnCurEl.textContent = cur;
+    if (this._turnTotEl) this._turnTotEl.textContent = totalTurns;
     this._renderTurnDots(turnIndex, totalTurns);
 
     const hadCombo = !this._comboEl.hidden;
     if (combo >= 2) {
       this._comboEl.textContent = `×${combo} COMBO`;
       this._comboEl.hidden = false;
+
       if (!hadCombo) {
         this._comboEl.classList.remove('pop');
         void this._comboEl.offsetWidth;
         this._comboEl.classList.add('pop');
       }
+
+      if (combo >= 3) this._comboEl.classList.add('hot');
+      else            this._comboEl.classList.remove('hot');
     } else {
       this._comboEl.hidden = true;
       this._comboEl.textContent = '';
+      this._comboEl.classList.remove('hot');
     }
+
+    this._lastCombo = combo;
   }
 
   _renderTurnDots(currentIndex, total) {
@@ -233,9 +254,14 @@ export class HUD {
    * @param {number} level
    */
   setLevel(level) {
-    if (this._levelNumEl) {
-      this._levelNumEl.textContent = level;
+    if (this._levelNumEl) this._levelNumEl.textContent = level;
+
+    if (this._levelChipEl && this._prevLevel !== null && level > this._prevLevel) {
+      this._levelChipEl.classList.remove('level-up');
+      void this._levelChipEl.offsetWidth;
+      this._levelChipEl.classList.add('level-up');
     }
+    this._prevLevel = level;
   }
 
   // ─── Mode chip / back button ──────────────────────────────────────────────
