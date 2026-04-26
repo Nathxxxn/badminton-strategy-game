@@ -2,7 +2,7 @@
   {
     "id": "MATCH_ATTACK_001",
     "workshop": "attack",
-    "title": "Atelier Attaque",
+    "title": "Attack Workshop",
     "rally": [
       {
         "turn": 1,
@@ -33,7 +33,7 @@
   {
     "id": "MATCH_DEFENSE_001",
     "workshop": "defense",
-    "title": "Atelier Defense",
+    "title": "Defense Workshop",
     "rally": [
       {
         "turn": 1,

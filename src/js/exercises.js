@@ -36,17 +36,17 @@ async function fetchJson(path) {
   try {
     response = await fetch(path, { cache: 'no-store' });
   } catch (error) {
-    throw new CatalogLoadError(`Impossible de charger ${path}`, { cause: error });
+    throw new CatalogLoadError(`Unable to load ${path}`, { cause: error });
   }
 
   if (!response.ok) {
-    throw new CatalogLoadError(`Impossible de charger ${path} (${response.status})`);
+    throw new CatalogLoadError(`Unable to load ${path} (${response.status})`);
   }
 
   try {
     return await response.json();
   } catch (error) {
-    throw new CatalogValidationError(`JSON invalide dans ${path}`, { cause: error });
+    throw new CatalogValidationError(`Invalid JSON in ${path}`, { cause: error });
   }
 }
 
@@ -56,43 +56,43 @@ function fail(message) {
 
 function assertObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    fail(`${label} doit etre un objet`);
+    fail(`${label} must be an object`);
   }
 }
 
 function assertArray(value, label) {
   if (!Array.isArray(value)) {
-    fail(`${label} doit etre un tableau`);
+    fail(`${label} must be an array`);
   }
 }
 
 function assertString(value, label) {
   if (typeof value !== 'string' || value.trim() === '') {
-    fail(`${label} doit etre une chaine non vide`);
+    fail(`${label} must be a non-empty string`);
   }
 }
 
 function assertBoolean(value, label) {
   if (typeof value !== 'boolean') {
-    fail(`${label} doit etre un booleen`);
+    fail(`${label} must be a boolean`);
   }
 }
 
 function assertNumber(value, label, { min = -Infinity, max = Infinity, integer = false } = {}) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    fail(`${label} doit etre un nombre`);
+    fail(`${label} must be a number`);
   }
   if (value < min || value > max) {
-    fail(`${label} doit etre compris entre ${min} et ${max}`);
+    fail(`${label} must be between ${min} and ${max}`);
   }
   if (integer && !Number.isInteger(value)) {
-    fail(`${label} doit etre un entier`);
+    fail(`${label} must be an integer`);
   }
 }
 
 function assertEnum(value, allowed, label) {
   if (!allowed.has(value)) {
-    fail(`${label} doit valoir ${Array.from(allowed).join(', ')}`);
+    fail(`${label} must be one of ${Array.from(allowed).join(', ')}`);
   }
 }
 
@@ -199,7 +199,7 @@ function validatePositioningScenario(exercise, label) {
 
 function validateExerciseCollection(exercises, label) {
   assertArray(exercises, label);
-  if (exercises.length === 0) fail(`${label} doit contenir au moins un scenario`);
+  if (exercises.length === 0) fail(`${label} must contain at least one scenario`);
   const byId = new Map();
 
   exercises.forEach((exercise, index) => {
@@ -209,7 +209,7 @@ function validateExerciseCollection(exercises, label) {
     else validateScenarioCommon(exercise, itemLabel);
 
     if (byId.has(exercise.id)) {
-      fail(`Scenario duplique: ${exercise.id}`);
+      fail(`Duplicate scenario: ${exercise.id}`);
     }
     byId.set(exercise.id, exercise);
   });
@@ -246,16 +246,16 @@ function validateRallyTurn(turn, index, matchLabel, exercisesById) {
 
   const exercise = exercisesById.get(turn.exerciseRef);
   if (!exercise) {
-    fail(`${label}.exerciseRef reference un scenario inconnu: ${turn.exerciseRef}`);
+    fail(`${label}.exerciseRef references an unknown scenario: ${turn.exerciseRef}`);
   }
   if (turn.type && turn.type !== exercise.type) {
-    fail(`${label}.type ne correspond pas au scenario ${turn.exerciseRef}`);
+    fail(`${label}.type does not match scenario ${turn.exerciseRef}`);
   }
 }
 
 function validateMatches(matches, exercisesById, label) {
   assertArray(matches, label);
-  if (matches.length === 0) fail(`${label} doit contenir au moins un match`);
+  if (matches.length === 0) fail(`${label} must contain at least one match`);
   const seenIds = new Set();
 
   matches.forEach((match, index) => {
@@ -268,12 +268,12 @@ function validateMatches(matches, exercisesById, label) {
     validateTimePressure(match.timePressure, `${matchLabel}.timePressure`);
 
     if (seenIds.has(match.id)) {
-      fail(`Match duplique: ${match.id}`);
+      fail(`Duplicate match: ${match.id}`);
     }
     seenIds.add(match.id);
 
     if (match.rally.length === 0) {
-      fail(`${matchLabel}.rally doit contenir au moins un tour`);
+      fail(`${matchLabel}.rally must contain at least one turn`);
     }
 
     match.rally.forEach((turn, rallyIndex) => {
@@ -299,7 +299,7 @@ function buildFallbackCatalog() {
     {
       id: 'MATCH_ATTACK_FALLBACK',
       workshop: 'attack',
-      title: 'Atelier Attaque',
+      title: 'Attack Workshop',
       rally: MOCK_RALLIES.attack.map((exercise, index) => ({
         turn: index + 1,
         type: exercise.type,
@@ -310,7 +310,7 @@ function buildFallbackCatalog() {
     {
       id: 'MATCH_DEFENSE_FALLBACK',
       workshop: 'defense',
-      title: 'Atelier Defense',
+      title: 'Defense Workshop',
       rally: MOCK_RALLIES.defense.map((exercise, index) => ({
         turn: index + 1,
         type: exercise.type,
@@ -348,7 +348,7 @@ export async function loadScenarioCatalog({ forceRefresh = false } = {}) {
         return await loadCatalogFromDataFiles();
       } catch (error) {
         if (error instanceof CatalogLoadError) {
-          console.warn('exercises.js: fallback sur les mocks locaux', error);
+          console.warn('exercises.js: falling back to local mocks', error);
           return buildFallbackCatalog();
         }
         catalogPromise = null;
@@ -369,13 +369,13 @@ export async function loadWorkshopRally(workshop) {
   const match = catalog.matches.find(entry => entry.workshop === workshop);
 
   if (!match) {
-    throw new Error(`Aucun rally defini pour l'atelier "${workshop}"`);
+    throw new Error(`No rally defined for workshop "${workshop}"`);
   }
 
   return match.rally.map(turn => {
     const exercise = catalog.exercisesById.get(turn.exerciseRef);
     if (!exercise) {
-      throw new Error(`Scenario introuvable: ${turn.exerciseRef}`);
+      throw new Error(`Scenario not found: ${turn.exerciseRef}`);
     }
 
     return {

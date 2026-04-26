@@ -9,7 +9,7 @@ export class TacticalEngine {
       return {
         type: user.type ?? null,
         score: 0,
-        message: 'Type de coup inconnu',
+        message: 'Unknown shot type',
         isReversTargeted: false,
         isBodyHit: false,
         isTooClose: false,
@@ -64,7 +64,7 @@ export class TacticalEngine {
       return {
         type: user.type,
         score: 0,
-        message: 'Aucun adversaire fourni',
+        message: 'No opponent provided',
         isReversTargeted: false,
         isBodyHit: false,
         isTooClose: false,
@@ -170,7 +170,7 @@ export class TacticalEngine {
         type: bestPossible.type,
         endPos: bestPossible.endPos,
         score: bestPossible.score,
-        message: `Le meilleur coup était un ${bestPossible.type}`,
+        message: `The best shot was ${bestPossible.type}`,
       },
     };
   }

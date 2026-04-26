@@ -668,7 +668,7 @@ export class ScreenManager {
         event.stopPropagation();
         const mode = button.closest('.mode-card')?.dataset.mode;
         if (button.dataset.available !== 'true') {
-          this._showFeedback(menu, 'Match Mode arrive bientot. Les ateliers Attaque et Defense restent jouables pour l’instant.');
+          this._showFeedback(menu, 'Match Mode is coming soon. Attack and Defense workshops are still playable for now.');
           return;
         }
         if (mode === 'attack' || mode === 'defense') {
@@ -692,12 +692,12 @@ export class ScreenManager {
           ${MODES.filter(mode => mode.available).map(mode => `
             <button class="workshop-card" type="button" data-workshop="${mode.id}" style="--mode-color:${mode.color}">
               <span class="workshop-icon">${modeIcon(mode.id)}</span>
-              <span class="workshop-title">${mode.id === 'attack' ? 'Attaque' : 'Défense'}</span>
+              <span class="workshop-title">${mode.id === 'attack' ? 'Attack' : 'Defense'}</span>
               <span class="workshop-desc">${mode.id === 'attack' ? 'Rotation, smash, net kill' : 'Side-by-side, lift, block'}</span>
             </button>
           `).join('')}
         </div>
-        <button id="btn-back-menu" class="btn" type="button">← Retour</button>
+        <button id="btn-back-menu" class="btn" type="button">← Back</button>
       </div>
     `);
     workshop.querySelectorAll('.workshop-card').forEach(card => {
@@ -797,7 +797,7 @@ export class ScreenManager {
       password: formData.get('password'),
     });
     if (!payload?.state) {
-      this._showFeedback(auth, 'Login impossible. Verifie ton email et ton mot de passe.', 'error');
+      this._showFeedback(auth, 'Login failed. Check your email and password.', 'error');
       return;
     }
     await this._acceptAuthPayload(payload);
@@ -806,7 +806,7 @@ export class ScreenManager {
   async _submitSignup(auth, form) {
     const formData = new FormData(form);
     if (formData.get('password') !== formData.get('confirmPassword')) {
-      this._showFeedback(auth, 'Les mots de passe ne correspondent pas.', 'error');
+      this._showFeedback(auth, 'Passwords do not match.', 'error');
       return;
     }
     const payload = await signupAsync({
@@ -816,7 +816,7 @@ export class ScreenManager {
       country: formData.get('country'),
     });
     if (!payload?.state) {
-      this._showFeedback(auth, 'Creation de compte impossible. Utilise un email unique et un mot de passe de 6 caracteres minimum.', 'error');
+      this._showFeedback(auth, 'Account creation failed. Use a unique email and a password of at least 6 characters.', 'error');
       return;
     }
     await this._acceptAuthPayload(payload);
@@ -891,7 +891,7 @@ export class ScreenManager {
         const workshop = card.dataset.workshop;
         const drill = DRILLS_LIST.find(entry => entry.id === card.dataset.drill);
         if (card.classList.contains('locked')) {
-          this._showFeedback(menu, `${drill?.title ?? 'This drill'} est verrouille pour l’instant. Continue les ateliers disponibles pour le debloquer.`);
+          this._showFeedback(menu, `${drill?.title ?? 'This drill'} is locked for now. Keep playing the available workshops to unlock it.`);
           return;
         }
         if (card.dataset.playable === 'true' && (workshop === 'attack' || workshop === 'defense')) {
@@ -899,7 +899,7 @@ export class ScreenManager {
           this._emit('workshop:select', { workshop });
           return;
         }
-        this._showFeedback(menu, 'Ce drill n’est pas jouable pour l’instant.');
+        this._showFeedback(menu, 'This drill is not playable yet.');
       });
     });
   }
@@ -950,13 +950,13 @@ export class ScreenManager {
       const currentPassword = menu.querySelector('input[name="currentPassword"]')?.value ?? '';
       const newPassword = menu.querySelector('input[name="newPassword"]')?.value ?? '';
       const ok = await changePasswordAsync({ currentPassword, newPassword });
-      this._showFeedback(menu, ok ? 'Mot de passe modifie.' : 'Mot de passe actuel invalide ou nouveau mot de passe trop court.', ok ? 'success' : 'error');
+      this._showFeedback(menu, ok ? 'Password updated.' : 'Current password is invalid or the new password is too short.', ok ? 'success' : 'error');
     });
 
     menu.querySelector('.signout-account')?.addEventListener('click', async () => {
       const ok = await logoutAsync();
       if (!ok) {
-        this._showFeedback(menu, 'Deconnexion impossible pour le moment.', 'error');
+        this._showFeedback(menu, 'Sign out is unavailable right now.', 'error');
         return;
       }
       this._authenticated = false;

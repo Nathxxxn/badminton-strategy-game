@@ -156,8 +156,8 @@ export class HUD {
 
     if (this._metaEl) {
       this._metaEl.textContent = isShot
-        ? 'Saisis le volant · tire · relâche'
-        : 'Clique dans ta moitié · reste dans ton rayon';
+        ? 'Grab the shuttle · pull · release'
+        : 'Click in your half · stay within your range';
     }
   }
 
@@ -238,7 +238,7 @@ export class HUD {
         });
         document.body.appendChild(this._popupEl);
       }
-      this._popupEl.textContent = type === 'backhand' ? '⬅ REVERS' : '⚠ AU CORPS';
+      this._popupEl.textContent = type === 'backhand' ? '⬅ BACKHAND' : '⚠ BODY SHOT';
       this._popupEl.style.background = type === 'backhand' ? '#7c3aed' : '#dc2626';
       this._popupEl.style.display = 'block';
       this._popupEl.style.opacity = '1';
@@ -311,10 +311,10 @@ export class HUD {
     }
     if (label) {
       label.textContent =
-        workshop === 'attack'  ? 'Attaque' :
-        workshop === 'defense' ? 'Défense' :
+        workshop === 'attack'  ? 'Attack' :
+        workshop === 'defense' ? 'Defense' :
         workshop === 'match'   ? 'Match'   :
-                                 'Entraînement';
+                                 'Training';
     }
   }
 }

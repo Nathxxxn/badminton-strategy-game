@@ -227,7 +227,7 @@ function constrainPlacementPos(turn, pos) {
 }
 
 function buildScoreLines(totalScore, messages = []) {
-  const list = [`Score : ${totalScore}/100`];
+  const list = [`Score: ${totalScore}/100`];
   if (Array.isArray(messages)) return list.concat(messages.filter(Boolean));
   if (messages) list.push(messages);
   return list;
@@ -323,7 +323,7 @@ async function resolvePositioningTimeout(turn) {
     },
   );
 
-  const timeoutLines = ['Temps ecoule : ta position initiale a ete conservee.'];
+  const timeoutLines = ['Time expired: your starting position was kept.'];
   if (feedback.message) timeoutLines.push(feedback.message);
 
   await hud.showMessages(
@@ -353,7 +353,7 @@ async function resolveShotTimeout(turn) {
 
   await showPointResult({ winner, reason: 'TIME' });
   await hud.showMessages(
-    buildScoreLines(0, ['Temps ecoule : le volant tombe au sol avant ta frappe.']),
+    buildScoreLines(0, ['Time expired: the shuttle drops before your shot.']),
     '#f87171',
     2200,
   );
@@ -433,7 +433,7 @@ async function onPositionClick(e) {
   if (point.y < 0.5) {
     renderBase(turn, { showVeil: true, reachMode: 'idle' });
     zones.drawWrongZones([getZoneAt(point.x, point.y)].filter(Boolean));
-    await hud.showExplanation('⚠ Clique sur ta moitié du terrain !', '#f97316', 1200);
+    await hud.showExplanation('⚠ Click on your half of the court!', '#f97316', 1200);
     canvas.addEventListener('pointerup', onPositionClick, { once: true });
     canvas.style.cursor = 'crosshair';
     return;
@@ -625,14 +625,14 @@ function showPointResult(signal) {
 
   let text, bg;
   if (signal.winner === 'player') {
-    text = signal.reason === 'TIME' ? '✓ Temps ecoule, point gagne' : '✓ Point gagne !';
+    text = signal.reason === 'TIME' ? '✓ Time expired, point won' : '✓ Point won!';
     bg = '#16a34a';
   } else {
     bg = '#dc2626';
-    text = signal.reason === 'NET'   ? '✗ Filet'
-         : signal.reason === 'OUT'   ? '✗ Dehors'
-         : signal.reason === 'TIME'  ? '✗ Temps ecoule'
-         : '✗ Faute';
+    text = signal.reason === 'NET'   ? '✗ Net'
+         : signal.reason === 'OUT'   ? '✗ Out'
+         : signal.reason === 'TIME'  ? '✗ Time expired'
+         : '✗ Fault';
   }
   el.textContent = text;
   el.style.background = bg;
@@ -686,18 +686,18 @@ function showEndScreen() {
   const avgTactical   = countTactical   > 0 ? Math.round(scoreTacticalSum  / countTactical)   : '—';
   const avgPlacement  = countPlacement  > 0 ? Math.round(scorePlacementSum / countPlacement)  : '—';
 
-  document.getElementById('end-title').textContent  = `${stars}  Fin du rally !`;
-  document.getElementById('end-score').textContent  = `Score : ${score} pts`;
+  document.getElementById('end-title').textContent  = `${stars}  Rally complete!`;
+  document.getElementById('end-score').textContent  = `Score: ${score} pts`;
 
   const details = [
-    `${correct} / ${currentRally.length} bonnes réponses`,
-    `Tir : ${avgTactical !== '—' ? avgTactical + ' pts' : '—'}  |  Placement : ${avgPlacement !== '—' ? avgPlacement + ' pts' : '—'}`,
-    ...(totalBonus  > 0 ? [`Bonus : +${totalBonus}`]    : []),
-    ...(totalMalus  > 0 ? [`Malus : -${totalMalus}`]    : []),
-    ...(countBackhand > 0 ? [`Revers visés : ${countBackhand}`] : []),
-    ...(countBody     > 0 ? [`Au corps : ${countBody}`]          : []),
-    ...(countTooClose > 0 ? [`Trop près du partenaire : ${countTooClose}`] : []),
-    ...(countTooFar   > 0 ? [`Trop loin du partenaire : ${countTooFar}`]   : []),
+    `${correct} / ${currentRally.length} correct answers`,
+    `Shot: ${avgTactical !== '—' ? avgTactical + ' pts' : '—'}  |  Positioning: ${avgPlacement !== '—' ? avgPlacement + ' pts' : '—'}`,
+    ...(totalBonus  > 0 ? [`Bonus: +${totalBonus}`]     : []),
+    ...(totalMalus  > 0 ? [`Penalty: -${totalMalus}`]   : []),
+    ...(countBackhand > 0 ? [`Backhands targeted: ${countBackhand}`] : []),
+    ...(countBody     > 0 ? [`Body shots: ${countBody}`]             : []),
+    ...(countTooClose > 0 ? [`Too close to partner: ${countTooClose}`] : []),
+    ...(countTooFar   > 0 ? [`Too far from partner: ${countTooFar}`]   : []),
   ];
   document.getElementById('end-detail').style.whiteSpace = 'pre-line';
   document.getElementById('end-detail').textContent = details.join('\n');
@@ -745,7 +745,7 @@ async function startGame(workshop) {
   hud.setMode(workshop);
   hud.setLevel(DEFAULT_PLAYER_PROFILE.level);
   hud.setXP(DEFAULT_PLAYER_PROFILE.points, 100);
-  hud.setInstruction({ type: 'positioning', label: 'Chargement', text: 'Chargement des scenarios...' });
+  hud.setInstruction({ type: 'positioning', label: 'Loading', text: 'Loading scenarios...' });
   hud.update(score, 0, 1, 0);
   court.draw();
 
@@ -754,9 +754,9 @@ async function startGame(workshop) {
     if (requestId !== startRequestId) return;
     currentRally = rally.map(prepareTurnForRuntime);
   } catch (error) {
-    console.error('Impossible de charger le rally', error);
+    console.error('Unable to load rally', error);
     if (requestId !== startRequestId) return;
-    const message = error instanceof Error ? error.message : 'Erreur de chargement des scenarios.';
+    const message = error instanceof Error ? error.message : 'Unable to load scenarios.';
     await hud.showExplanation(message, '#f87171', 2200);
     resetAndShowMenu();
     return;
@@ -878,7 +878,7 @@ court.draw();
 hud.hide();
 screens.show('menu');
 void warmScenarioCatalog().catch(error => {
-  console.error('Prechargement des scenarios impossible', error);
+  console.error('Unable to preload scenarios', error);
 });
 
 window.addEventListener('resize', () => {

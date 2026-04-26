@@ -3,10 +3,10 @@
     "id": "SHOT_ATK_001",
     "type": "shot",
     "workshop": "attack",
-    "label": "Tir",
-    "text": "Le volant flotte haut devant toi au filet. B1 et B2 sont en défense côte à côte. Frappe dans le trou !",
+    "label": "Shot",
+    "text": "The shuttle floats high in front of you at the net. B1 and B2 are defending side by side. Hit the gap!",
     "passingScore": 70,
-    "explanation": "Le trou central entre B1 et B2 est la cible optimale — ni l'un ni l'autre ne sait qui prend le volant.",
+    "explanation": "The central gap between B1 and B2 is the optimal target. Neither player knows who should take the shuttle.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -57,10 +57,10 @@
     "id": "SHOT_ATK_002",
     "type": "shot",
     "workshop": "attack",
-    "label": "Tir",
-    "text": "B1 a renvoyé un drive en ligne. Le volant arrive vite sur ta droite. Contre-attaque en fond de court !",
+    "label": "Shot",
+    "text": "B1 returned a straight drive. The shuttle is coming fast to your right. Counterattack deep!",
     "passingScore": 55,
-    "explanation": "Contre en fond de court à gauche pour forcer B1 à reculer et briser leur position offensive.",
+    "explanation": "Counter deep to the left to force B1 back and break their attacking shape.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -111,10 +111,10 @@
     "id": "SHOT_ATK_003",
     "type": "shot",
     "workshop": "attack",
-    "label": "Tir",
-    "text": "Tu es en fond de court gauche avec le volant haut. B2 est seul côté droit. Smash vers le coin libre !",
+    "label": "Shot",
+    "text": "You are in the back-left court with a high shuttle. B2 is alone on the right. Smash into the open corner!",
     "passingScore": 70,
-    "explanation": "Smash croisé vers le fond droit — B2 est trop centré et B1 est à l'opposé, le coin droit est ouvert.",
+    "explanation": "Cross smash deep to the right. B2 is too central and B1 is on the opposite side, so the right corner is open.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -165,10 +165,10 @@
     "id": "SHOT_DEF_001",
     "type": "shot",
     "workshop": "defense",
-    "label": "Tir",
-    "text": "B1 smash fort sur toi. Tu es en défense côte à côte. Dégage en fond de court pour reprendre le temps !",
+    "label": "Shot",
+    "text": "B1 smashes hard at you. You are defending side by side. Clear deep to buy time!",
     "passingScore": 70,
-    "explanation": "Dégage haut et profond dans le fond adverse pour sortir de la pression et te repositionner.",
+    "explanation": "Clear high and deep into the back court to escape pressure and reposition.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -219,10 +219,10 @@
     "id": "SHOT_DEF_002",
     "type": "shot",
     "workshop": "defense",
-    "label": "Tir",
-    "text": "B2 attaque depuis le mi-terrain. Le volant arrive sur ta gauche. Drive en ligne pour contre-attaquer !",
+    "label": "Shot",
+    "text": "B2 attacks from mid-court. The shuttle is coming to your left. Drive straight to counterattack!",
     "passingScore": 60,
-    "explanation": "Drive en ligne vers B1 pour le forcer à reculer et rééquilibrer la formation adverse.",
+    "explanation": "Drive straight toward B1 to force them back and rebalance the opponents' formation.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -273,10 +273,10 @@
     "id": "SHOT_DEF_003",
     "type": "shot",
     "workshop": "defense",
-    "label": "Tir",
-    "text": "B1 est au filet à bout portant. Bloque au filet en cross pour contourner sa pression !",
+    "label": "Shot",
+    "text": "B1 is right on top of the net. Block cross-court at the net to escape the pressure!",
     "passingScore": 70,
-    "explanation": "Bloc doux en cross au filet : le volant tombe côté B2 qui est loin, B1 ne peut pas intercepter.",
+    "explanation": "A soft cross-court net block drops the shuttle near B2, who is far away, and B1 cannot intercept it.",
     "equipment": {
       "player": {
         "hand": "right"

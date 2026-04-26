@@ -28,7 +28,7 @@
     <div id="hud" aria-live="polite">
       <div class="hud-left">
         <div class="nav-left">
-          <button class="icon-btn" id="hud-back-btn" title="Retour" aria-label="Retour">
+          <button class="icon-btn" id="hud-back-btn" title="Back" aria-label="Back">
             <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
               <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -42,7 +42,7 @@
         </div>
         <div class="mode-chip" id="hud-mode-chip">
           <span class="mode-dot"></span>
-          <span id="hud-mode-label">Entraînement</span>
+          <span id="hud-mode-label">Training</span>
         </div>
         <div class="level-chip">
           <span class="level-tag">LVL</span>
@@ -61,7 +61,7 @@
 
       <div id="hud-center">
         <div class="turn-indicator">
-          <span class="turn-label">TOUR</span>
+          <span class="turn-label">TURN</span>
           <span id="hud-turn-cur" class="turn-cur">1</span>
           <span class="turn-sep">/</span>
           <span id="hud-turn-total" class="turn-tot">4</span>
@@ -97,9 +97,9 @@
           </svg>
         </div>
         <div class="instr-body">
-          <div class="instr-label pos" id="instr-label">Placement</div>
-          <div class="instr-text" id="instr-text">Chargement…</div>
-          <div class="instr-meta" id="instr-meta">Clique dans ta moitié · reste dans ton rayon</div>
+          <div class="instr-label pos" id="instr-label">Positioning</div>
+          <div class="instr-text" id="instr-text">Loading...</div>
+          <div class="instr-meta" id="instr-meta">Click in your half · stay within your range</div>
         </div>
       </div>
 
@@ -108,15 +108,15 @@
       <aside class="side-rail side-rail-left" aria-hidden="true">
         <div class="rail-card">
           <div class="rail-ttl">
-            <span>Ce tour</span>
+            <span>This turn</span>
             <span class="rail-ico">
               <svg viewBox="0 0 24 24" fill="none" width="12" height="12">
                 <path d="M4 20V10M10 20V4M16 20V14M22 20H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
             </span>
           </div>
-          <div class="stat-row"><span class="stat-k">Précision</span><span class="stat-v good">82%</span></div>
-          <div class="stat-row"><span class="stat-k">Revers visés</span><span class="stat-v">2 / 3</span></div>
+          <div class="stat-row"><span class="stat-k">Accuracy</span><span class="stat-v good">82%</span></div>
+          <div class="stat-row"><span class="stat-k">Backhands targeted</span><span class="stat-v">2 / 3</span></div>
           <div class="stat-row"><span class="stat-k">Distance ally</span><span class="stat-v">3.1 m</span></div>
           <div class="stat-row"><span class="stat-k">Bonus</span><span class="stat-v good">+40</span></div>
         </div>
@@ -129,17 +129,17 @@
             </svg>
             <span>Coach tip</span>
           </div>
-          <div class="coach-tip">Vise les coins profonds pour forcer l'adversaire à lever — tu auras la balle haute.</div>
+          <div class="coach-tip">Aim for the deep corners to force the opponent to lift, then attack the high return.</div>
         </div>
 
         <div class="rail-card">
-          <div class="rail-ttl"><span>Légende</span></div>
+          <div class="rail-ttl"><span>Legend</span></div>
           <div class="legend">
-            <div class="legend-row"><span class="legend-sw you"></span> Toi</div>
-            <div class="legend-row"><span class="legend-sw ally"></span> Partenaire</div>
-            <div class="legend-row"><span class="legend-sw opp"></span> Adversaire</div>
-            <div class="legend-row"><span class="legend-sw shuttle"></span> Volant</div>
-            <div class="legend-row"><span class="legend-sw target"></span> Cible</div>
+            <div class="legend-row"><span class="legend-sw you"></span> You</div>
+            <div class="legend-row"><span class="legend-sw ally"></span> Partner</div>
+            <div class="legend-row"><span class="legend-sw opp"></span> Opponent</div>
+            <div class="legend-row"><span class="legend-sw shuttle"></span> Shuttle</div>
+            <div class="legend-row"><span class="legend-sw target"></span> Target</div>
           </div>
         </div>
       </aside>
@@ -167,20 +167,20 @@
             </span>
           </div>
           <div class="stat-row"><span class="stat-k">Score rally</span><span class="stat-v">340</span></div>
-          <div class="stat-row"><span class="stat-k">Bons tirs</span><span class="stat-v">3 / 4</span></div>
-          <div class="stat-row"><span class="stat-k">Malus</span><span class="stat-v bad">−10</span></div>
+          <div class="stat-row"><span class="stat-k">Good shots</span><span class="stat-v">3 / 4</span></div>
+          <div class="stat-row"><span class="stat-k">Penalty</span><span class="stat-v bad">−10</span></div>
         </div>
 
         <div class="rail-card">
-          <div class="rail-ttl"><span>Adversaires</span></div>
+          <div class="rail-ttl"><span>Opponents</span></div>
           <div class="opp-grid">
             <div class="opp-cell">
               <span class="opp-dot opp1">O1</span>
-              <span class="opp-tag">REVERS</span>
+              <span class="opp-tag">BACKHAND</span>
             </div>
             <div class="opp-cell">
               <span class="opp-dot opp2">O2</span>
-              <span class="opp-tag">AGRESSIF</span>
+              <span class="opp-tag">AGGRESSIVE</span>
             </div>
           </div>
         </div>
@@ -203,9 +203,9 @@
       <div class="pause-card">
         <div class="pause-eyebrow">EN PAUSE</div>
         <h2 class="pause-title">Rally suspendu</h2>
-        <p class="pause-hint">Reprends ton souffle. Appuie sur <kbd>ESC</kbd> ou clique sur Reprendre quand tu es prêt.</p>
+        <p class="pause-hint">Take a breath. Press <kbd>ESC</kbd> or click Resume when you are ready.</p>
         <div class="pause-actions">
-          <button id="pause-resume-btn" class="btn-rally btn-rally-primary" type="button">Reprendre</button>
+          <button id="pause-resume-btn" class="btn-rally btn-rally-primary" type="button">Resume</button>
           <button id="pause-menu-btn"   class="btn-rally" type="button">Quitter au menu</button>
         </div>
       </div>
@@ -216,7 +216,7 @@
     <h2 id="end-title">Fin du rally !</h2>
     <p  id="end-score"></p>
     <p  id="end-detail"></p>
-    <button id="end-btn" class="btn-primary">Rejouer</button>
+    <button id="end-btn" class="btn-primary">Play again</button>
   </div>
 
   <script type="module" src="src/js/main.js"></script>

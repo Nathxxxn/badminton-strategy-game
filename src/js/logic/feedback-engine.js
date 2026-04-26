@@ -3,9 +3,9 @@ export class FeedbackEngine {
     let partnerMessage = '';
 
     if (results.realDistance < 2.5) {
-      partnerMessage = 'Attention, tu es trop proche de ton partenaire !';
+      partnerMessage = 'Careful, you are too close to your partner!';
     } else if (results.realDistance > 3.5) {
-      partnerMessage = 'Attention, tu es trop loin de ton partenaire !';
+      partnerMessage = 'Careful, you are too far from your partner!';
     }
 
     return {
@@ -26,22 +26,22 @@ export class FeedbackEngine {
 
     if (player.message) messages.push(player.message);
     if (player.isReversTargeted && player.type === 'CLEAR') {
-      messages.push('Bien joue ! Revers adverse vise.');
+      messages.push('Well played! Opponent backhand targeted.');
     }
     if (player.isBodyHit) {
-      messages.push('Excellent ! Smash ou kill au corps.');
+      messages.push('Excellent! Body smash or kill.');
     }
     if (player.isTooClose) {
-      messages.push("Mauvais clear : le volant est trop proche de l'adversaire.");
+      messages.push('Poor clear: the shuttle is too close to the opponent.');
     }
     if (player.isTooShort) {
-      messages.push("Mauvais clear : le volant n'est pas assez profond.");
+      messages.push('Poor clear: the shuttle is not deep enough.');
     }
     if (messages.length === 0) {
       messages.push(
         player.score >= 80
-          ? 'Bonne decision tactique.'
-          : `Coup jouable, mais ${best.type.toLowerCase()} aurait ete meilleur.`,
+          ? 'Good tactical decision.'
+          : `Playable shot, but ${best.type.toLowerCase()} would have been better.`,
       );
     }
 

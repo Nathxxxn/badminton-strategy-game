@@ -14,8 +14,8 @@ const POS_ATK_001 = {
   type: 'positioning',
   workshop: 'attack',
   scenario: { playedShotType: 'NET_DROP', isHitter: true },
-  label: 'Placement',
-  text: 'Ton partenaire (A2) vient de smasher en cross depuis le fond droit. Où dois-tu te positionner pour couvrir le retour ?',
+  label: 'Positioning',
+  text: 'Your partner (A2) just cross-smashed from the back-right court. Where should you position yourself to cover the return?',
   players: {
     ally1:     { x: 0.50, y: 0.65, label: 'YOU' },
     ally2:     { x: 0.70, y: 0.85, movingTo: { x: 0.60, y: 0.78 } },
@@ -29,7 +29,7 @@ const POS_ATK_001 = {
   },
   correctZones:    ['ally-front-center', 'ally-front-left'],
   optimalPosition: { x: 0.40, y: 0.56 },
-  explanation: 'Avance vers le filet pour intercepter le retour faible de B1. Ton partenaire glisse vers le centre-arrière.',
+  explanation: "Move toward the net to intercept B1's weak return. Your partner slides back toward the center.",
 };
 
 const POS_ATK_002 = {
@@ -37,8 +37,8 @@ const POS_ATK_002 = {
   type: 'positioning',
   workshop: 'attack',
   scenario: { playedShotType: 'SMASH', isHitter: false },
-  label: 'Placement',
-  text: "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper depuis le fond. Où te places-tu ?",
+  label: 'Positioning',
+  text: 'Opponent B2 cleared high to the back court. Your partner will hit from the back. Where do you position yourself?',
   players: {
     ally1:     { x: 0.45, y: 0.55, label: 'YOU' },
     ally2:     { x: 0.50, y: 0.88, movingTo: { x: 0.50, y: 0.82 } },
@@ -52,7 +52,7 @@ const POS_ATK_002 = {
   },
   correctZones:    ['ally-mid-center', 'ally-mid-left', 'ally-mid-right'],
   optimalPosition: { x: 0.50, y: 0.70 },
-  explanation: 'Reste en mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque depuis le fond.',
+  explanation: 'Stay in mid-court to cover your half while your partner attacks from the back.',
 };
 
 const POS_ATK_003 = {
@@ -60,8 +60,8 @@ const POS_ATK_003 = {
   type: 'positioning',
   workshop: 'attack',
   scenario: { playedShotType: 'NET_DROP', isHitter: true },
-  label: 'Placement',
-  text: "Ton partenaire vient de driver en cross. Tu es au milieu du terrain. Monte vers le filet pour attaquer !",
+  label: 'Positioning',
+  text: 'Your partner just played a cross drive. You are in the middle of the court. Move up to the net to attack!',
   players: {
     ally1:     { x: 0.50, y: 0.72, label: 'YOU' },
     ally2:     { x: 0.30, y: 0.80, movingTo: { x: 0.35, y: 0.75 } },
@@ -75,7 +75,7 @@ const POS_ATK_003 = {
   },
   correctZones:    ['ally-front-right', 'ally-front-center'],
   optimalPosition: { x: 0.65, y: 0.58 },
-  explanation: 'Monte vers le filet côté droit pour intercepter la contre-attaque de B1 en cross.',
+  explanation: "Move up to the right side of the net to intercept B1's cross-court counterattack.",
 };
 
 const POS_ATK_004 = {
@@ -83,8 +83,8 @@ const POS_ATK_004 = {
   type: 'positioning',
   workshop: 'attack',
   scenario: { playedShotType: 'DROP', isHitter: false },
-  label: 'Placement',
-  text: "Ton partenaire a joué un amorti au filet. B1 est en difficulté. Positionne-toi pour finir le point !",
+  label: 'Positioning',
+  text: 'Your partner played a net drop. B1 is under pressure. Position yourself to finish the point!',
   players: {
     ally1:     { x: 0.50, y: 0.68, label: 'YOU' },
     ally2:     { x: 0.50, y: 0.55, movingTo: { x: 0.45, y: 0.52 } },
@@ -98,7 +98,7 @@ const POS_ATK_004 = {
   },
   correctZones:    ['ally-mid-center', 'ally-mid-left', 'ally-mid-right'],
   optimalPosition: { x: 0.55, y: 0.68 },
-  explanation: "Reste en mi-terrain légèrement décalé, prêt à smasher le retour lift de B1. Ton partenaire garde le filet.",
+  explanation: "Stay slightly offset in mid-court, ready to smash B1's lifted return. Your partner holds the net.",
 };
 
 // ─── Attack — Shot ────────────────────────────────────────────────────────────
@@ -108,8 +108,8 @@ const SHOT_ATK_001 = {
   type: 'shot',
   workshop: 'attack',
   scenario: { incomingShotType: 'NET_DROP' },
-  label: 'Tir',
-  text: 'Le volant flotte haut devant toi au filet. B1 et B2 sont en défense côte à côte. Frappe dans le trou !',
+  label: 'Shot',
+  text: 'The shuttle floats high in front of you at the net. B1 and B2 are defending side by side. Hit the gap!',
   players: {
     ally1:     { x: 0.50, y: 0.55, label: 'YOU' },
     ally2:     { x: 0.50, y: 0.82 },
@@ -123,7 +123,7 @@ const SHOT_ATK_001 = {
     speed: 'slow', height: 'high',
   },
   correctZones: ['opponent-front-center'],
-  explanation:  'Le trou central entre B1 et B2 est la cible optimale — ni l\'un ni l\'autre ne sait qui prend le volant.',
+  explanation:  'The central gap between B1 and B2 is the optimal target. Neither player knows who should take the shuttle.',
 };
 
 const SHOT_ATK_002 = {
@@ -132,8 +132,8 @@ const SHOT_ATK_002 = {
   workshop: 'attack',
   scenario: { incomingShotType: 'DRIVE' },
   passingScore: 55,
-  label: 'Tir',
-  text: "B1 a renvoyé un drive en ligne. Le volant arrive vite sur ta droite. Contre-attaque en fond de court !",
+  label: 'Shot',
+  text: 'B1 returned a straight drive. The shuttle is coming fast to your right. Counterattack deep!',
   players: {
     ally1:     { x: 0.70, y: 0.60, label: 'YOU' },
     ally2:     { x: 0.30, y: 0.75 },
@@ -147,7 +147,7 @@ const SHOT_ATK_002 = {
     speed: 'fast', height: 'normal',
   },
   correctZones: ['opponent-back-left', 'opponent-back-center'],
-  explanation:  'Contre en fond de court à gauche pour forcer B1 à reculer et briser leur position offensive.',
+  explanation:  'Counter deep to the left to force B1 back and break their attacking shape.',
 };
 
 const SHOT_ATK_003 = {
@@ -155,8 +155,8 @@ const SHOT_ATK_003 = {
   type: 'shot',
   workshop: 'attack',
   scenario: { incomingShotType: 'CLEAR' },
-  label: 'Tir',
-  text: "Tu es en fond de court gauche avec le volant haut. B2 est seul côté droit. Smash vers le coin libre !",
+  label: 'Shot',
+  text: 'You are in the back-left court with a high shuttle. B2 is alone on the right. Smash into the open corner!',
   players: {
     ally1:     { x: 0.20, y: 0.82, label: 'YOU' },
     ally2:     { x: 0.55, y: 0.60 },
@@ -170,7 +170,7 @@ const SHOT_ATK_003 = {
     speed: 'slow', height: 'high',
   },
   correctZones: ['opponent-back-right', 'opponent-mid-right'],
-  explanation:  'Smash croisé vers le fond droit — B2 est trop centré et B1 est à l\'opposé, le coin droit est ouvert.',
+  explanation:  'Cross smash deep to the right. B2 is too central and B1 is on the opposite side, so the right corner is open.',
 };
 
 // ─── Defense — Positioning ────────────────────────────────────────────────────
@@ -180,8 +180,8 @@ const POS_DEF_001 = {
   type: 'positioning',
   workshop: 'defense',
   scenario: { playedShotType: 'SMASH', isHitter: false },
-  label: 'Placement',
-  text: "B1 smash depuis le fond gauche adverse. Tu es au mi-terrain. Adopte la formation défensive côte à côte !",
+  label: 'Positioning',
+  text: "B1 smashes from the opponent's back-left court. You are in mid-court. Move into a side-by-side defensive shape!",
   players: {
     ally1:     { x: 0.60, y: 0.68, label: 'YOU' },
     ally2:     { x: 0.40, y: 0.65, movingTo: { x: 0.30, y: 0.72 } },
@@ -195,7 +195,7 @@ const POS_DEF_001 = {
   },
   correctZones:    ['ally-mid-right', 'ally-back-right'],
   optimalPosition: { x: 0.65, y: 0.72 },
-  explanation: 'Formation côte à côte : recule vers le fond et couvre ta moitié droite. Ton partenaire prend la gauche.',
+  explanation: 'Side-by-side formation: drop back and cover your right half. Your partner takes the left.',
 };
 
 const POS_DEF_002 = {
@@ -203,8 +203,8 @@ const POS_DEF_002 = {
   type: 'positioning',
   workshop: 'defense',
   scenario: { playedShotType: 'CLEAR', isHitter: false },
-  label: 'Placement',
-  text: "Après ton lift défensif en fond gauche, B1 va attaquer. Repositionne-toi pour défendre ta moitié !",
+  label: 'Positioning',
+  text: 'After your defensive lift to the back-left court, B1 is about to attack. Reposition to defend your half!',
   players: {
     ally1:     { x: 0.20, y: 0.88, label: 'YOU' },
     ally2:     { x: 0.70, y: 0.72, movingTo: { x: 0.65, y: 0.78 } },
@@ -218,7 +218,7 @@ const POS_DEF_002 = {
   },
   correctZones:    ['ally-mid-left', 'ally-back-left'],
   optimalPosition: { x: 0.30, y: 0.75 },
-  explanation: 'Glisse vers le mi-terrain gauche pour intercepter le smash croisé de B1. Ton partenaire couvre la droite.',
+  explanation: "Slide toward the left mid-court to intercept B1's cross smash. Your partner covers the right.",
 };
 
 const POS_DEF_003 = {
@@ -226,8 +226,8 @@ const POS_DEF_003 = {
   type: 'positioning',
   workshop: 'defense',
   scenario: { playedShotType: 'KILL', isHitter: true },
-  label: 'Placement',
-  text: "B2 est au filet et joue un amorti. Tu es trop loin. Recule pour te repositionner défensivement !",
+  label: 'Positioning',
+  text: 'B2 is at the net and plays a drop. You are too far forward. Drop back into a defensive position!',
   players: {
     ally1:     { x: 0.50, y: 0.55, label: 'YOU' },
     ally2:     { x: 0.50, y: 0.80, movingTo: { x: 0.45, y: 0.78 } },
@@ -241,7 +241,7 @@ const POS_DEF_003 = {
   },
   correctZones:    ['ally-mid-center', 'ally-mid-left', 'ally-mid-right'],
   optimalPosition: { x: 0.50, y: 0.68 },
-  explanation: 'Recule vers le mi-terrain pour avoir le temps de voir le lift adverse et défendre correctement.',
+  explanation: "Drop back toward mid-court so you have time to read the opponent's lift and defend properly.",
 };
 
 // ─── Defense — Shot ───────────────────────────────────────────────────────────
@@ -251,8 +251,8 @@ const SHOT_DEF_001 = {
   type: 'shot',
   workshop: 'defense',
   scenario: { incomingShotType: 'SMASH' },
-  label: 'Tir',
-  text: "B1 smash fort sur toi. Tu es en défense côte à côte. Dégage en fond de court pour reprendre le temps !",
+  label: 'Shot',
+  text: 'B1 smashes hard at you. You are defending side by side. Clear deep to buy time!',
   players: {
     ally1:     { x: 0.65, y: 0.75, label: 'YOU' },
     ally2:     { x: 0.30, y: 0.75 },
@@ -266,7 +266,7 @@ const SHOT_DEF_001 = {
     speed: 'fast', height: 'low',
   },
   correctZones: ['opponent-back-left', 'opponent-back-center', 'opponent-back-right'],
-  explanation:  'Dégage haut et profond dans le fond adverse pour sortir de la pression et te repositionner.',
+  explanation:  'Clear high and deep into the back court to escape pressure and reposition.',
 };
 
 const SHOT_DEF_002 = {
@@ -275,8 +275,8 @@ const SHOT_DEF_002 = {
   workshop: 'defense',
   scenario: { incomingShotType: 'DRIVE' },
   passingScore: 60,
-  label: 'Tir',
-  text: "B2 attaque depuis le mi-terrain. Le volant arrive sur ta gauche. Drive en ligne pour contre-attaquer !",
+  label: 'Shot',
+  text: 'B2 attacks from mid-court. The shuttle is coming to your left. Drive straight to counterattack!',
   players: {
     ally1:     { x: 0.25, y: 0.70, label: 'YOU' },
     ally2:     { x: 0.70, y: 0.70 },
@@ -290,7 +290,7 @@ const SHOT_DEF_002 = {
     speed: 'medium', height: 'normal',
   },
   correctZones: ['opponent-mid-left', 'opponent-back-left'],
-  explanation:  'Drive en ligne vers B1 pour le forcer à reculer et rééquilibrer la formation adverse.',
+  explanation:  "Drive straight toward B1 to force them back and rebalance the opponents' formation.",
 };
 
 const SHOT_DEF_003 = {
@@ -298,8 +298,8 @@ const SHOT_DEF_003 = {
   type: 'shot',
   workshop: 'defense',
   scenario: { incomingShotType: 'KILL' },
-  label: 'Tir',
-  text: "B1 est au filet à bout portant. Bloque au filet en cross pour contourner sa pression !",
+  label: 'Shot',
+  text: 'B1 is right on top of the net. Block cross-court at the net to escape the pressure!',
   players: {
     ally1:     { x: 0.45, y: 0.58, label: 'YOU' },
     ally2:     { x: 0.60, y: 0.80 },
@@ -313,7 +313,7 @@ const SHOT_DEF_003 = {
     speed: 'slow', height: 'low',
   },
   correctZones: ['opponent-front-left', 'opponent-front-center'],
-  explanation:  'Bloc doux en cross au filet : le volant tombe côté B2 qui est loin, B1 ne peut pas intercepter.',
+  explanation:  'A soft cross-court net block drops the shuttle near B2, who is far away, and B1 cannot intercept it.',
 };
 
 // ─── Rally sequences ──────────────────────────────────────────────────────────

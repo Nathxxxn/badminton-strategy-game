@@ -86,13 +86,13 @@
   </div>
 
   <div id="intro-screen">
-    <div id="intro-title">Mini Échange</div>
-    <div id="intro-sub">Déplacement · Tir · Réactivité</div>
+    <div id="intro-title">Mini Rally</div>
+    <div id="intro-sub">Movement · Shot · Reaction</div>
   </div>
 
   <div id="overlay">
     <div id="point-text">Point !</div>
-    <button id="replay-btn">Rejouer</button>
+    <button id="replay-btn">Play again</button>
   </div>
 
   <script>
@@ -460,7 +460,7 @@
       drawPlayer(S.playerNorm);
       drawShuttle(S.shuttleNorm);
       drawLandingEffect(le.norm,el,le.col);
-      if(el>520) { S.landingEffect=null; setHint('Déplace-toi pour recevoir !'); goPhase('player_move'); }
+      if(el>520) { S.landingEffect=null; setHint('Move to receive!'); goPhase('player_move'); }
     }
 
     // ── DRAW: movement radius circle ─────────────────────────────────────────

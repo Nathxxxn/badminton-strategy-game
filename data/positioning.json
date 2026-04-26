@@ -3,10 +3,10 @@
     "id": "POS_ATK_001",
     "type": "positioning",
     "workshop": "attack",
-    "label": "Placement",
-    "text": "Ton partenaire (A2) vient de smasher en cross depuis le fond droit. Où dois-tu te positionner pour couvrir le retour ?",
+    "label": "Positioning",
+    "text": "Your partner (A2) just cross-smashed from the back-right court. Where should you position yourself to cover the return?",
     "passingScore": 70,
-    "explanation": "Avance vers le filet pour intercepter le retour faible de B1. Ton partenaire glisse vers le centre-arrière.",
+    "explanation": "Move toward the net to intercept B1's weak return. Your partner slides back toward the center.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -84,10 +84,10 @@
     "id": "POS_ATK_002",
     "type": "positioning",
     "workshop": "attack",
-    "label": "Placement",
-    "text": "L'adversaire B2 a dégagé haut en fond de court. Ton partenaire va frapper depuis le fond. Où te places-tu ?",
+    "label": "Positioning",
+    "text": "Opponent B2 cleared high to the back court. Your partner will hit from the back. Where do you position yourself?",
     "passingScore": 70,
-    "explanation": "Reste en mi-terrain pour couvrir la moitié du court pendant que ton partenaire attaque depuis le fond.",
+    "explanation": "Stay in mid-court to cover your half while your partner attacks from the back.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -165,10 +165,10 @@
     "id": "POS_ATK_003",
     "type": "positioning",
     "workshop": "attack",
-    "label": "Placement",
-    "text": "Ton partenaire vient de driver en cross. Tu es au milieu du terrain. Monte vers le filet pour attaquer !",
+    "label": "Positioning",
+    "text": "Your partner just played a cross drive. You are in the middle of the court. Move up to the net to attack!",
     "passingScore": 70,
-    "explanation": "Monte vers le filet côté droit pour intercepter la contre-attaque de B1 en cross.",
+    "explanation": "Move up to the right side of the net to intercept B1's cross-court counterattack.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -242,10 +242,10 @@
     "id": "POS_ATK_004",
     "type": "positioning",
     "workshop": "attack",
-    "label": "Placement",
-    "text": "Ton partenaire a joué un amorti au filet. B1 est en difficulté. Positionne-toi pour finir le point !",
+    "label": "Positioning",
+    "text": "Your partner played a net drop. B1 is under pressure. Position yourself to finish the point!",
     "passingScore": 70,
-    "explanation": "Reste en mi-terrain légèrement décalé, prêt à smasher le retour lift de B1. Ton partenaire garde le filet.",
+    "explanation": "Stay slightly offset in mid-court, ready to smash B1's lifted return. Your partner holds the net.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -319,10 +319,10 @@
     "id": "POS_DEF_001",
     "type": "positioning",
     "workshop": "defense",
-    "label": "Placement",
-    "text": "B1 smash depuis le fond gauche adverse. Tu es au mi-terrain. Adopte la formation défensive côte à côte !",
+    "label": "Positioning",
+    "text": "B1 smashes from the opponent's back-left court. You are in mid-court. Move into a side-by-side defensive shape!",
     "passingScore": 70,
-    "explanation": "Formation côte à côte : recule vers le fond et couvre ta moitié droite. Ton partenaire prend la gauche.",
+    "explanation": "Side-by-side formation: drop back and cover your right half. Your partner takes the left.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -396,10 +396,10 @@
     "id": "POS_DEF_002",
     "type": "positioning",
     "workshop": "defense",
-    "label": "Placement",
-    "text": "Après ton lift défensif en fond gauche, B1 va attaquer. Repositionne-toi pour défendre ta moitié !",
+    "label": "Positioning",
+    "text": "After your defensive lift to the back-left court, B1 is about to attack. Reposition to defend your half!",
     "passingScore": 70,
-    "explanation": "Glisse vers le mi-terrain gauche pour intercepter le smash croisé de B1. Ton partenaire couvre la droite.",
+    "explanation": "Slide toward the left mid-court to intercept B1's cross smash. Your partner covers the right.",
     "equipment": {
       "player": {
         "hand": "right"
@@ -473,10 +473,10 @@
     "id": "POS_DEF_003",
     "type": "positioning",
     "workshop": "defense",
-    "label": "Placement",
-    "text": "B2 est au filet et joue un amorti. Tu es trop loin. Recule pour te repositionner défensivement !",
+    "label": "Positioning",
+    "text": "B2 is at the net and plays a drop. You are too far forward. Drop back into a defensive position!",
     "passingScore": 70,
-    "explanation": "Recule vers le mi-terrain pour avoir le temps de voir le lift adverse et défendre correctement.",
+    "explanation": "Drop back toward mid-court so you have time to read the opponent's lift and defend properly.",
     "equipment": {
       "player": {
         "hand": "right"
