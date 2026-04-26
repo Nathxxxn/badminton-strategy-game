@@ -29,26 +29,73 @@
   </div>
 
   <div id="hud" aria-live="polite">
-    <div id="hud-level">Niv. <span id="hud-level-num">1</span></div>
-    <div id="hud-center">
-      <div id="hud-turn">Tour 1 / 4</div>
-      <div id="hud-xp-wrap" role="progressbar" aria-label="XP" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-        <div id="hud-xp-bar"></div>
+    <div class="hud-left">
+      <div class="nav-left">
+        <button class="icon-btn" id="hud-back-btn" title="Retour" aria-label="Retour">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
+            <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="mode-chip" id="hud-mode-chip">
+        <span class="mode-dot"></span>
+        <span id="hud-mode-label">Entraînement</span>
+      </div>
+      <div class="level-chip">
+        <span class="level-tag">LVL</span>
+        <span id="hud-level-num">1</span>
+      </div>
+      <div class="xp-wrap">
+        <div class="xp-track" role="progressbar" aria-label="XP" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+          <div id="hud-xp-bar" class="xp-fill" style="width:0%"></div>
+        </div>
+        <div class="xp-label">
+          <span id="hud-xp-current">0 XP</span>
+          <span id="hud-xp-max">/ 500</span>
+        </div>
       </div>
     </div>
-    <div id="hud-right">
-      <div id="hud-timer-wrap" aria-live="polite">
-        <span id="hud-timer-label">Timer</span>
-        <span id="hud-timer"></span>
+
+    <div id="hud-center">
+      <div class="turn-indicator">
+        <span class="turn-label">TOUR</span>
+        <span id="hud-turn-cur" class="turn-cur">1</span>
+        <span class="turn-sep">/</span>
+        <span id="hud-turn-total" class="turn-tot">4</span>
+        <div class="turn-dots" id="hud-turn-dots"></div>
       </div>
-      <div id="hud-score">0 pts</div>
-      <div id="hud-combo"></div>
+    </div>
+
+    <div id="hud-right">
+      <div class="timer-pill" id="hud-timer-wrap">
+        <svg viewBox="0 0 24 24" fill="none" width="14" height="14" aria-hidden="true">
+          <circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 9V13L14.5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M10 4H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span id="hud-timer">--</span>
+      </div>
+      <div class="score-pill">
+        <span class="score-val" id="hud-score">0</span>
+        <span class="score-unit">pts</span>
+      </div>
+      <div class="combo-badge" id="hud-combo" hidden></div>
     </div>
   </div>
 
-  <div id="instruction">
-    <div class="label" id="instr-label">Placement</div>
-    <div class="text"  id="instr-text">Chargement…</div>
+  <div id="instruction" class="instr hidden">
+    <div class="instr-badge pos" id="instr-badge">
+      <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
+        <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M8 12H16M12 8V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="9" cy="15" r="1.4" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="instr-body">
+      <div class="instr-label pos" id="instr-label">Placement</div>
+      <div class="instr-text" id="instr-text">Chargement…</div>
+      <div class="instr-meta" id="instr-meta">Clique dans ta moitié · reste dans ton rayon</div>
+    </div>
   </div>
 
   <div id="end-screen">
