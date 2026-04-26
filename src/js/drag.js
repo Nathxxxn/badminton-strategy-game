@@ -258,15 +258,15 @@ export class DragShooter {
     const len = Math.hypot(dx, dy);
 
     // Power: deadzone clears any drag below DEADZONE_PX, then we re-normalize
-    // the remaining range so the curve still spans 0..1, then we apply
-    // an ease-in-out (sine) curve so the middle of the pull feels softer
-    // and the last 30% feels heavier — matches the "rope tightening" feel.
+    // the remaining range so the curve still spans 0..1, then we apply a
+    // symmetric cosine ease-in-out so the engage and the ceiling both feel
+    // soft while the mid-pull is the steepest — matches "rope tightening".
     let power;
     if (len <= DEADZONE_PX) {
       power = 0;
     } else {
       const tRaw = Math.min(1, (len - DEADZONE_PX) / (MAX_DRAG_PX - DEADZONE_PX));
-      // Ease-in-out (cosine): soft start, steep end
+      // Ease-in-out (cosine): slow start, fast middle, slow finish.
       power = 0.5 - 0.5 * Math.cos(Math.PI * tRaw);
     }
 
@@ -277,6 +277,7 @@ export class DragShooter {
     // Aim direction is therefore the OPPOSITE of the drag delta.
     let aimNorm;
     if (len < 1) {
+      // No movement — default aim to the shuttlecock position.
       aimNorm = { ...this._shuttleNorm };
     } else {
       const aimCanvasX = this._origin.x - dx;
