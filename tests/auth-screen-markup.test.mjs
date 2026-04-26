@@ -8,5 +8,5 @@ test('auth screen exposes distinct sign in and create tabs with expected fields'
   assert.match(source, /data-auth-tab="login">Sign in<\/button>/);
   assert.match(source, /data-auth-tab="signup">Create<\/button>/);
   assert.match(source, /data-auth-form="login"[\s\S]*name="email"[\s\S]*name="password"/);
-  assert.match(source, /data-auth-form="signup"[\s\S]*name="name"[\s\S]*name="email"[\s\S]*name="password"[\s\S]*name="confirmPassword"[\s\S]*name="country"/);
+  assert.match(source, /data-auth-form="signup"[\s\S]*name="name"[\s\S]*name="email"[\s\S]*name="password"[\s\S]*name="confirmPassword"[\s\S]*<select class="settings-input country-select" name="country"/);
 });

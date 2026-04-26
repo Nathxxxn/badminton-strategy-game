@@ -9,7 +9,7 @@ import { createPlayerStore } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DRILL_FILTERS = new Set(['All', 'Attack', 'Defense', 'Strategy']);
+const DRILL_FILTERS = new Set(['All', 'Attack', 'Defense']);
 const LEADERBOARD_PERIODS = new Set(['weekly', 'all-time']);
 const SESSION_COOKIE = 'rally_session';
 const PASSWORD_MIN_LENGTH = 6;

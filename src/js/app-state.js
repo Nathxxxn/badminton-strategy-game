@@ -54,6 +54,11 @@ export const DEFAULT_APP_STATE = Object.freeze({
     startedDrills: Object.freeze([]),
     bestScores: Object.freeze({}),
   }),
+  dailyBonus: Object.freeze({
+    available: true,
+    multiplier: 2,
+    lastClaimedDate: null,
+  }),
   controls: DEFAULT_CONTROLS,
 });
 

@@ -92,6 +92,8 @@ test('signup creates user, profile, preferences and stats, then sets a session c
     assert.equal(body.state.profile.losses, 0);
     assert.equal(body.state.profile.streak, 0);
     assert.equal(body.state.preferences.leaderboardPeriod, 'weekly');
+    assert.equal(body.state.dailyBonus.available, true);
+    assert.equal(body.state.dailyBonus.multiplier, 2);
     assert.equal(body.state.stats.sessionsPlayed, 0);
     assert.deepEqual(body.state.progression.startedDrills, []);
   });
@@ -216,6 +218,20 @@ test('PUT /api/player/preferences rejects invalid leaderboard period', async () 
   });
 });
 
+test('PUT /api/player/preferences rejects removed Strategy drill filter', async () => {
+  await withServer(async ({ baseUrl }) => {
+    const { cookie } = await signup(baseUrl);
+    const { response, body } = await requestJson(baseUrl, '/api/player/preferences', {
+      method: 'PUT',
+      headers: { cookie },
+      body: JSON.stringify({ drillFilter: 'Strategy' }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, 'Invalid preferences');
+  });
+});
+
 test('POST /api/player/drills/:drillId/start does not duplicate drills', async () => {
   await withServer(async ({ baseUrl }) => {
     const { cookie } = await signup(baseUrl);
@@ -268,6 +284,55 @@ test('POST /api/game-sessions records a competitive win with rating, XP, best sc
     assert.equal(body.leaderboard.sessions[0].result, 'W');
     assert.ok(body.leaderboard.sessions[0].ratingDelta > 0);
     assert.equal(body.leaderboard.sessions[0].accuracy, 75);
+    assert.equal(body.leaderboard.sessions[0].dailyBonusApplied, true);
+    assert.equal(body.leaderboard.sessions[0].xpMultiplier, 2);
+    assert.equal(body.leaderboard.sessions[0].xpGained, 620);
+    assert.equal(body.dailyBonus.available, false);
+    assert.equal(body.dailyBonus.lastClaimedDate, '2026-04-25');
+  });
+});
+
+test('daily bonus doubles XP only for the first completed session of the local day', async () => {
+  await withServer(async ({ baseUrl }) => {
+    const { cookie } = await signup(baseUrl);
+
+    const first = await requestJson(baseUrl, '/api/game-sessions', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({
+        drillId: 'd1',
+        workshop: 'attack',
+        score: 320,
+        correct: 3,
+        totalTurns: 4,
+        durationSeconds: 180,
+        completedAt: '2026-04-25T08:00:00.000Z',
+      }),
+    });
+    const second = await requestJson(baseUrl, '/api/game-sessions', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({
+        drillId: 'd1',
+        workshop: 'attack',
+        score: 320,
+        correct: 3,
+        totalTurns: 4,
+        durationSeconds: 180,
+        completedAt: '2026-04-25T18:00:00.000Z',
+      }),
+    });
+
+    const firstSession = first.body.leaderboard.sessions.find(session => session.completedAt === '2026-04-25T08:00:00.000Z');
+    const secondSession = second.body.leaderboard.sessions.find(session => session.completedAt === '2026-04-25T18:00:00.000Z');
+    assert.equal(first.response.status, 201);
+    assert.equal(second.response.status, 201);
+    assert.equal(firstSession.dailyBonusApplied, true);
+    assert.equal(firstSession.xpGained, 620);
+    assert.equal(secondSession.dailyBonusApplied, false);
+    assert.equal(secondSession.xpMultiplier, 1);
+    assert.equal(secondSession.xpGained, 310);
+    assert.equal(second.body.dailyBonus.available, false);
   });
 });
 
@@ -384,6 +449,8 @@ test('reset progression clears sessions and drill progress but keeps account and
     assert.equal(reset.body.profile.losses, 0);
     assert.equal(reset.body.profile.streak, 0);
     assert.equal(reset.body.stats.sessionsPlayed, 0);
+    assert.equal(reset.body.dailyBonus.available, true);
+    assert.equal(reset.body.dailyBonus.lastClaimedDate, null);
     assert.deepEqual(reset.body.progression.startedDrills, []);
     assert.equal(reset.body.drills.find(drill => drill.id === 'd1').attempts, 0);
   });

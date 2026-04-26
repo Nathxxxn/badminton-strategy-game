@@ -122,11 +122,32 @@ const DRILLS_LIST = Object.freeze([
   { id: 'd6', title: 'Smash block timing', category: 'Defense', difficulty: 3, duration: '10 min', xp: 100, best: 65, attempts: 7, locked: false, color: '#1f8a4c', workshop: 'defense' },
   { id: 'd7', title: 'Counter-attack lifts', category: 'Defense', difficulty: 3, duration: '9 min', xp: 90, best: 71, attempts: 11, locked: false, color: '#1f8a4c', workshop: 'defense' },
   { id: 'd8', title: 'Deceptive block to net', category: 'Defense', difficulty: 4, duration: '11 min', xp: 130, best: null, attempts: 0, locked: true, color: '#1f8a4c', workshop: 'defense' },
-  { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', difficulty: 3, duration: '15 min', xp: 150, best: 59, attempts: 5, locked: false, color: '#2e6fc5', workshop: null },
-  { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', difficulty: 4, duration: '18 min', xp: 180, best: null, attempts: 0, locked: true, color: '#2e6fc5', workshop: null },
 ]);
 
 const SETTINGS_AVATAR_COLORS = Object.freeze(['#ffd23f', '#e85d3c', '#1f8a4c', '#2e6fc5', '#0f1a14']);
+
+const COUNTRY_CODES = Object.freeze(`
+  AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ
+  CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO
+  FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE
+  JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO
+  MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW
+  PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM
+  TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW
+`.trim().split(/\s+/));
+
+const COUNTRY_NAME_FORMATTER = typeof Intl !== 'undefined' && Intl.DisplayNames
+  ? new Intl.DisplayNames(['en'], { type: 'region' })
+  : null;
+
+const COUNTRY_OPTIONS = Object.freeze(COUNTRY_CODES.map(code => [code, COUNTRY_NAME_FORMATTER?.of(code) ?? code]));
+
+function countryOptionsMarkup(selected = PLAYER.country) {
+  const selectedCountry = String(selected || PLAYER.country).toUpperCase();
+  return COUNTRY_OPTIONS.map(([code, label]) => `
+    <option value="${code}" ${code === selectedCountry ? 'selected' : ''}>${label} · ${code}</option>
+  `).join('');
+}
 
 const SVG_SHUTTLE = `
 <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -236,8 +257,8 @@ function drillCardMarkup(drill) {
 
 function renderDrillsPage(state) {
   const dailyDrill = DRILLS_LIST[0];
-  const categories = ['All', 'Attack', 'Defense', 'Strategy'];
-  const activeFilter = state.preferences.drillFilter;
+  const categories = ['All', 'Attack', 'Defense'];
+  const activeFilter = categories.includes(state.preferences.drillFilter) ? state.preferences.drillFilter : 'All';
   const progressById = new Map((state.drills ?? []).map(drill => [drill.id, drill]));
   const drills = DRILLS_LIST.map(drill => {
     const progress = progressById.get(drill.id);
@@ -274,6 +295,15 @@ function renderDrillsPage(state) {
     </section>
     <div class="drill-grid">
       ${drills.map(drillCardMarkup).join('')}
+    </div>`;
+}
+
+function dailyBonusMarkup(state) {
+  const dailyBonus = state.dailyBonus ?? DEFAULT_APP_STATE.dailyBonus;
+  const available = dailyBonus.available !== false;
+  return `
+    <div class="daily-bonus ${available ? 'available' : 'used'}" data-daily-bonus-status="${available ? 'available' : 'used'}">
+      <span></span> Daily Bonus · ${available ? `${dailyBonus.multiplier ?? 2}x XP ready` : 'used today'}
     </div>`;
 }
 
@@ -371,7 +401,9 @@ function renderSettingsPage(state) {
             </label>
             <label>
               <span>Region</span>
-              <input class="settings-input" type="text" name="country" value="${escapeHtml(profile.country)}" maxlength="2">
+              <select class="settings-input country-select" name="country">
+                ${countryOptionsMarkup(profile.country)}
+              </select>
             </label>
             <label>
               <span>Rank</span>
@@ -464,7 +496,9 @@ function renderAuthScreen() {
         </label>
         <label>
           <span>Country</span>
-          <input class="settings-input" type="text" name="country" placeholder="FR" maxlength="2" value="FR">
+          <select class="settings-input country-select" name="country">
+            ${countryOptionsMarkup('FR')}
+          </select>
         </label>
         <button class="btn primary block" type="submit">Create</button>
       </form>
@@ -523,7 +557,7 @@ export class ScreenManager {
             <button class="nav-pill" type="button" data-page="leaderboard">Leaderboard</button>
             <button class="nav-pill" type="button" data-page="settings">Settings</button>
           </nav>
-          <div class="player-pill" aria-label="Profil joueur">
+          <div class="player-pill" data-player-pill aria-label="Profil joueur" style="--avatar-color:${profile.avatarColor}">
             <span class="player-avatar" data-player-initials>${initials}</span>
             <span>
               <span class="player-name" data-player-name>${escapeHtml(profile.name)}</span>
@@ -542,7 +576,7 @@ export class ScreenManager {
                 <p class="page-eyebrow">▸ CHOOSE YOUR COURT</p>
                 <h1 data-home-greeting>Ready to play, ${escapeHtml(firstName)}?</h1>
               </div>
-              <div class="daily-bonus"><span></span> DAILY BONUS · 2× XP</div>
+              ${dailyBonusMarkup(this._state)}
             </div>
             <div class="mode-grid">
               ${MODES.map(mode => `
@@ -865,7 +899,7 @@ export class ScreenManager {
           this._emit('workshop:select', { workshop });
           return;
         }
-        this._showFeedback(menu, 'Les drills Strategy sont prevus pour une prochaine passe. Aucun nouvel ingame n’est lance.');
+        this._showFeedback(menu, 'Ce drill n’est pas jouable pour l’instant.');
       });
     });
   }
@@ -896,14 +930,16 @@ export class ScreenManager {
       button.addEventListener('click', () => {
         const avatar = menu.querySelector('.settings-avatar');
         if (avatar) avatar.style.setProperty('--avatar-color', button.dataset.avatarColor);
+        this._applyAvatarColor(menu, button.dataset.avatarColor);
         menu.querySelectorAll('.avatar-swatch').forEach(swatch => swatch.classList.toggle('active', swatch === button));
         menu.querySelector('.profile-card')?.setAttribute('data-avatar-color', button.dataset.avatarColor);
         this._markProfileDirty(menu);
       });
     });
 
-    menu.querySelectorAll('.profile-fields input[name]').forEach(input => {
+    menu.querySelectorAll('.profile-fields input[name], .profile-fields select[name]').forEach(input => {
       input.addEventListener('input', () => this._markProfileDirty(menu));
+      input.addEventListener('change', () => this._markProfileDirty(menu));
     });
 
     menu.querySelector('.save-profile')?.addEventListener('click', () => {
@@ -949,9 +985,9 @@ export class ScreenManager {
 
   async _saveProfileFromDom(menu) {
     const nameInput = menu.querySelector('.profile-fields input[name="name"]');
-    const countryInput = menu.querySelector('.profile-fields input[name="country"]');
+    const countryInput = menu.querySelector('.profile-fields select[name="country"]');
     const nextName = nameInput?.value.trim() || PLAYER.name;
-    const nextCountry = (countryInput?.value.trim() || PLAYER.country).slice(0, 2).toUpperCase();
+    const nextCountry = (countryInput?.value || PLAYER.country).slice(0, 2).toUpperCase();
     const avatarColor = menu.querySelector('.profile-card')?.getAttribute('data-avatar-color') ?? this._state.profile.avatarColor;
     this._state = await saveAppStateAsync({ profile: { name: nextName, country: nextCountry, avatarColor } });
     this._syncProfileDom(menu);
@@ -980,6 +1016,15 @@ export class ScreenManager {
     if (playerRank) playerRank.textContent = `LVL ${profile.level} · ${profile.rank.toUpperCase()} · ${profile.rating ?? 600}`;
     const greeting = menu.querySelector('[data-home-greeting]');
     if (greeting) greeting.textContent = `Ready to play, ${firstName}?`;
+    this._applyAvatarColor(menu, profile.avatarColor);
+    const dailyBonus = menu.querySelector('.daily-bonus');
+    if (dailyBonus) dailyBonus.outerHTML = dailyBonusMarkup(this._state);
+  }
+
+  _applyAvatarColor(menu, color) {
+    menu.querySelectorAll('[data-player-pill], .settings-avatar').forEach(el => {
+      el.style.setProperty('--avatar-color', color);
+    });
   }
 
   /**
@@ -1045,6 +1090,7 @@ export class ScreenManager {
    * @param {HTMLElement} el
    */
   _showEl(el) {
+    document.getElementById('game-canvas')?.style.setProperty('visibility', 'hidden');
     el.style.display = 'flex';
     requestAnimationFrame(() => {
       requestAnimationFrame(() => el.classList.add('active'));
@@ -1061,7 +1107,10 @@ export class ScreenManager {
       el.removeEventListener('transitionend', onEnd);
     };
     el.addEventListener('transitionend', onEnd);
-    setTimeout(() => { el.style.display = 'none'; }, 400);
+    setTimeout(() => {
+      el.style.display = 'none';
+      document.getElementById('game-canvas')?.style.setProperty('visibility', 'visible');
+    }, 400);
   }
 
   /**

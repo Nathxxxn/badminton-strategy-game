@@ -22,12 +22,22 @@ const DRILL_CATALOG = Object.freeze([
   { id: 'd6', title: 'Smash block timing', category: 'Defense', workshop: 'defense', difficulty: 3 },
   { id: 'd7', title: 'Counter-attack lifts', category: 'Defense', workshop: 'defense', difficulty: 3 },
   { id: 'd8', title: 'Deceptive block to net', category: 'Defense', workshop: 'defense', difficulty: 4 },
-  { id: 'd9', title: 'Rally pattern recognition', category: 'Strategy', workshop: null, difficulty: 3 },
-  { id: 'd10', title: 'Opponent tendency read', category: 'Strategy', workshop: null, difficulty: 4 },
 ]);
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function localDateKey(value = nowIso()) {
+  const date = new Date(value);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(Number.isNaN(date.getTime()) ? new Date() : date);
+  const byType = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
 function hashToken(token) {
@@ -107,7 +117,7 @@ function mapProfile(row) {
 
 function mapPreferences(row) {
   return {
-    drillFilter: row.drill_filter,
+    drillFilter: row.drill_filter === 'Strategy' ? 'All' : row.drill_filter,
     leaderboardPeriod: row.leaderboard_period,
   };
 }
@@ -133,6 +143,16 @@ function mapStats(row) {
   };
 }
 
+function mapDailyBonus(row, referenceDate = nowIso()) {
+  const today = localDateKey(referenceDate);
+  const lastClaimedDate = row?.last_daily_bonus_date ?? null;
+  return {
+    available: lastClaimedDate !== today,
+    multiplier: 2,
+    lastClaimedDate,
+  };
+}
+
 function mapSession(row) {
   return {
     id: row.id,
@@ -151,6 +171,8 @@ function mapSession(row) {
     ratingAfter: row.rating_after,
     ratingDelta: row.rating_delta,
     xpGained: row.xp_gained,
+    dailyBonusApplied: Boolean(row.daily_bonus_applied),
+    xpMultiplier: row.xp_multiplier ?? 1,
     completedAt: row.completed_at,
   };
 }
@@ -283,11 +305,11 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     INSERT INTO game_sessions (
       id, user_id, drill_id, workshop, match_id, score, correct, total_turns, duration_seconds,
       tactical_average, placement_average, result, accuracy, rating_before, rating_after,
-      rating_delta, xp_gained, completed_at, created_at
+      rating_delta, xp_gained, daily_bonus_applied, xp_multiplier, completed_at, created_at
     )
     VALUES (@id, @userId, @drillId, @workshop, @matchId, @score, @correct, @totalTurns, @durationSeconds,
       @tacticalAverage, @placementAverage, @result, @accuracy, @ratingBefore, @ratingAfter,
-      @ratingDelta, @xpGained, @completedAt, @createdAt)
+      @ratingDelta, @xpGained, @dailyBonusApplied, @xpMultiplier, @completedAt, @createdAt)
   `);
   const updateStats = db.prepare(`
     UPDATE player_stats
@@ -303,6 +325,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
       best_streak = @bestStreak,
       rating = @rating,
       peak_rating = @peakRating,
+      last_daily_bonus_date = @lastDailyBonusDate,
       last_played_at = @completedAt
     WHERE user_id = @userId
   `);
@@ -313,7 +336,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     SET sessions_played = 0, total_score = 0, total_correct = 0, total_turns = 0,
       total_duration_seconds = 0, best_score = 0, wins = 0, losses = 0,
       current_streak = 0, best_streak = 0, rating = 600, peak_rating = 600,
-      last_played_at = NULL
+      last_daily_bonus_date = NULL, last_played_at = NULL
     WHERE user_id = ?
   `);
 
@@ -411,6 +434,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     const controls = getControlsRows.all(userId).map(row => ({ action: row.action, key: row.key_value }));
     const drills = getDrillProgress(userId);
     const bestScores = Object.fromEntries(drills.filter(drill => drill.bestScore !== null).map(drill => [drill.id, drill.bestScore]));
+    const statsRow = getStatsRow.get(userId);
 
     return {
       user: publicUser(user),
@@ -421,8 +445,9 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         startedDrills: drills.filter(drill => drill.started).map(drill => drill.id),
         bestScores,
       },
+      dailyBonus: mapDailyBonus(statsRow),
       controls,
-      stats: mapStats(getStatsRow.get(userId)),
+      stats: mapStats(statsRow),
       drills,
       leaderboard: sessionsForPeriod(userId, preferences.leaderboardPeriod),
     };
@@ -484,6 +509,10 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     const drillId = payload.drillId ? String(payload.drillId) : defaultDrillForWorkshop(workshop);
     const drill = DRILL_CATALOG.find(entry => entry.id === drillId);
     const profileRow = getProfileRow.get(userId);
+    const statsRow = getStatsRow.get(userId);
+    const sessionDate = localDateKey(completedAt);
+    const dailyBonusApplied = statsRow?.last_daily_bonus_date !== sessionDate;
+    const xpMultiplier = dailyBonusApplied ? 2 : 1;
     const progression = calculateProgression({
       current: {
         level: profileRow.level,
@@ -503,6 +532,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         totalTurns,
         durationSeconds,
         difficulty: drill?.difficulty ?? 2,
+        xpMultiplier,
       },
     });
     const completed = progression.session.result === 'W' ? 1 : 0;
@@ -525,6 +555,8 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         ratingAfter: progression.session.ratingAfter,
         ratingDelta: progression.session.ratingDelta,
         xpGained: progression.session.xpGained,
+        dailyBonusApplied: progression.session.dailyBonusApplied ? 1 : 0,
+        xpMultiplier: progression.session.xpMultiplier,
         completedAt,
         createdAt: nowIso(),
       });
@@ -552,6 +584,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         bestStreak: progression.profile.bestStreak,
         rating: progression.profile.rating,
         peakRating: progression.profile.peakRating,
+        lastDailyBonusDate: dailyBonusApplied ? sessionDate : statsRow?.last_daily_bonus_date ?? null,
       });
       updateProfileStatsStatement.run({
         userId,

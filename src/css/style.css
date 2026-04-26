@@ -655,7 +655,7 @@ body::after {
   border-radius: 16px;
   background: var(--rally-ink);
   color: var(--rally-cream);
-  box-shadow: 4px 4px 0 0 var(--rally-accent);
+  box-shadow: 4px 4px 0 0 var(--avatar-color, var(--rally-accent));
 }
 
 .player-avatar {
@@ -664,7 +664,7 @@ body::after {
   display: grid;
   place-items: center;
   border-radius: 10px;
-  background: var(--rally-accent);
+  background: var(--avatar-color, var(--rally-accent));
   color: var(--rally-ink);
   font-size: 18px;
   font-weight: 800;
@@ -824,6 +824,12 @@ body::after {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.daily-bonus.used {
+  box-shadow: 4px 4px 0 0 var(--rally-ink-soft);
+  opacity: 0.78;
 }
 
 .daily-bonus span {
@@ -837,13 +843,14 @@ body::after {
 .mode-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: 18px;
   padding: 0 36px 32px;
 }
 
 .mode-card {
-  align-self: start;
+  align-self: stretch;
+  min-height: 410px;
   overflow: hidden;
   cursor: pointer;
   transition: opacity 350ms ease, transform 350ms cubic-bezier(.2,.9,.3,1.2), box-shadow 150ms ease, background 350ms ease;
@@ -878,6 +885,7 @@ body::after {
 
 .mode-body {
   min-height: 100%;
+  height: 100%;
   padding: 22px 24px 24px;
   display: flex;
   flex-direction: column;
@@ -1616,6 +1624,17 @@ body::after {
   background: var(--rally-feather);
   color: var(--rally-ink);
   font: 600 16px/1.2 var(--font-rally);
+}
+
+.country-select {
+  min-height: 48px;
+  padding-right: 38px;
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--rally-ink) 50%) calc(100% - 20px) 50% / 8px 8px no-repeat,
+    linear-gradient(135deg, var(--rally-ink) 50%, transparent 50%) calc(100% - 14px) 50% / 8px 8px no-repeat,
+    var(--rally-feather);
+  cursor: pointer;
 }
 
 .save-profile {

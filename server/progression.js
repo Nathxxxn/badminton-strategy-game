@@ -44,6 +44,7 @@ export function calculateProgression({ current, session }) {
   const correct = clamp(Math.round(numberOr(session.correct, 0)), 0, totalTurns);
   const durationSeconds = Math.max(0, Math.round(numberOr(session.durationSeconds, 0)));
   const difficulty = clamp(Math.round(numberOr(session.difficulty, 2)), 1, 4);
+  const xpMultiplier = clamp(Math.round(numberOr(session.xpMultiplier, 1)), 1, 2);
   const accuracy = Math.round((correct / totalTurns) * 100);
   const won = accuracy >= WIN_ACCURACY_THRESHOLD;
 
@@ -62,7 +63,8 @@ export function calculateProgression({ current, session }) {
   const bestStreak = Math.max(Math.max(0, Math.round(numberOr(current.bestStreak, 0))), streak);
   const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
-  const xpGained = Math.max(20, Math.round(score * 0.25 + accuracy * 2 + difficulty * 15 + (won ? 50 : 10)));
+  const baseXpGained = Math.max(20, Math.round(score * 0.25 + accuracy * 2 + difficulty * 15 + (won ? 50 : 10)));
+  const xpGained = baseXpGained * xpMultiplier;
   let level = Math.max(1, Math.round(numberOr(current.level, STARTING_LEVEL)));
   let xp = Math.max(0, Math.round(numberOr(current.xp, STARTING_XP))) + xpGained;
   let xpMax = Math.max(1, Math.round(numberOr(current.xpMax, xpMaxForLevel(level))));
@@ -80,6 +82,8 @@ export function calculateProgression({ current, session }) {
       ratingAfter,
       ratingDelta,
       xpGained,
+      xpMultiplier,
+      dailyBonusApplied: xpMultiplier > 1,
     },
     profile: {
       level,
