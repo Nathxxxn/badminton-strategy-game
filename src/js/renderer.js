@@ -14,7 +14,6 @@
  * This module is purely visual — it does not own game state.
  */
 
-import { snapToGrid } from './snap.js';
 
 // ── Player colors — Rally design ───────────────────────────────────────────
 
@@ -86,18 +85,51 @@ export class Renderer {
     if (shuttlecock) this._drawShuttlecock(shuttlecock);
   }
 
-  drawReachCircle(playerPos, reachMetres, strokeStyle = 'rgba(255,255,255,0.4)') {
+  drawReachCircle(playerPos, reachMetres, strokeStyle = 'rgba(15,26,20,0.55)', mode = 'idle') {
     const { ctx, court } = this;
     const reachPx = reachMetres / 6.1 * court.courtW;
     const { x, y } = court.toCanvas(playerPos.x, playerPos.y);
     ctx.save();
     ctx.beginPath();
     ctx.arc(x, y, reachPx, 0, Math.PI * 2);
-    ctx.setLineDash([6, 5]);
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1.5;
+    if (mode === 'hover-out') {
+      ctx.strokeStyle = '#ffd23f';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = 'rgba(255, 210, 63, 0.6)';
+      ctx.shadowBlur = 12;
+    } else {
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = 1.5;
+    }
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  /**
+   * Dim the area outside the move-radius to make the allowed zone read as a
+   * "window" of light. The veil is clipped to the court rect so it doesn't
+   * bleed over the canvas padding.
+   *
+   * @param {{ x: number, y: number }} playerPos    normalized player position
+   * @param {number}                   reachMetres  radius in metres
+   */
+  drawOutOfReachVeil(playerPos, reachMetres) {
+    const { ctx, court } = this;
+    const reachPx = reachMetres / 6.1 * court.courtW;
+    const { x: cx, y: cy } = court.toCanvas(playerPos.x, playerPos.y);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(court.courtX, court.courtY, court.courtW, court.courtH);
+    ctx.clip();
+
+    ctx.beginPath();
+    ctx.rect(court.courtX, court.courtY, court.courtW, court.courtH);
+    ctx.arc(cx, cy, reachPx, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(15, 26, 20, 0.28)';
+    ctx.fill('evenodd');
     ctx.restore();
   }
 
@@ -155,6 +187,107 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * Draw the choice-vs-optimal feedback:
+   *  - choice marker (color reflects scoring tier: good/near/wrong)
+   *  - optimal marker (yellow accent star/diamond, ink ring)
+   *  - dashed ink line between them with the distance in metres
+   *
+   * @param {{x:number,y:number}} choice
+   * @param {{x:number,y:number}} optimal
+   * @param {'good'|'near'|'wrong'} [tier='wrong']
+   */
+  drawChoiceVsOptimal(choice, optimal, tier = 'wrong') {
+    if (!choice || !optimal) return;
+
+    const { ctx, court } = this;
+    const c = court.toCanvas(choice.x, choice.y);
+    const o = court.toCanvas(optimal.x, optimal.y);
+
+    const ink    = '#0f1a14';
+    const cream  = '#f4ecd8';
+    const accent = '#ffd23f';
+    const choiceColor =
+      tier === 'good'  ? '#22c55e' :
+      tier === 'near'  ? '#fb923c' :
+                         '#e85d3c';
+
+    // Court is 13.4 m long (y) × 6.1 m wide (x)
+    const dxM = (choice.x - optimal.x) * 6.1;
+    const dyM = (choice.y - optimal.y) * 13.4;
+    const distM = Math.hypot(dxM, dyM);
+
+    ctx.save();
+
+    // ─── Dashed ink line between choice and optimal ─────────────────────
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(o.x, o.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ─── Optimal marker — yellow accent disc with ink ring + star ───────
+    const optR = Math.max(8, court.courtW * 0.022);
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, optR + 2, 0, Math.PI * 2);
+    ctx.fillStyle = ink;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, optR, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+    // Inner star/dot
+    ctx.fillStyle = ink;
+    ctx.font = `bold ${Math.round(optR * 1.3)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★', o.x, o.y + 1);
+
+    // ─── Choice marker — colored disc with ink ring ─────────────────────
+    const chR = Math.max(7, court.courtW * 0.018);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, chR + 2, 0, Math.PI * 2);
+    ctx.fillStyle = ink;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, chR, 0, Math.PI * 2);
+    ctx.fillStyle = choiceColor;
+    ctx.fill();
+
+    // ─── Distance label (cream pill on ink) at the line midpoint ────────
+    const mx = (c.x + o.x) / 2;
+    const my = (c.y + o.y) / 2;
+    const distText = distM < 10
+      ? `${distM.toFixed(1)} m`
+      : `${Math.round(distM)} m`;
+    ctx.font = `bold ${Math.round(court.courtW * 0.026)}px ` +
+               `"JetBrains Mono", ui-monospace, monospace`;
+    const padX = 8, padY = 4;
+    const textW = ctx.measureText(distText).width;
+    const pillW = textW + padX * 2;
+    const pillH = Math.round(court.courtW * 0.026) + padY * 2;
+
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.roundRect(mx - pillW / 2, my - pillH / 2, pillW, pillH, 6);
+    ctx.fill();
+    ctx.fillStyle = cream;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(distText, mx, my + 1);
+
+    // ─── "OPTIMAL" caption above the star ───────────────────────────────
+    ctx.font = `bold ${Math.round(court.courtW * 0.020)}px ` +
+               `"JetBrains Mono", ui-monospace, monospace`;
+    ctx.fillStyle = ink;
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('OPTIMAL', o.x, o.y - optR - 6);
+
+    ctx.restore();
+  }
+
   // ─── Players ───────────────────────────────────────────────────────────────
 
   _drawPlayers(players, activePlayerId, equipment = null) {
@@ -178,8 +311,7 @@ export class Renderer {
 
   _drawPlayer(pos, isAlly, label, isActive, hand = null) {
     const { ctx, court } = this;
-    const snapped = snapToGrid(pos.x, pos.y);
-    const { x, y } = court.toCanvas(snapped.x, snapped.y);
+    const { x, y } = court.toCanvas(pos.x, pos.y);
     const r = court.courtW * PLAYER_RADIUS_RATIO;
 
     const isYou = label === 'YOU';
@@ -246,8 +378,7 @@ export class Renderer {
 
   _drawGhostPlayer(pos, fill) {
     const { ctx, court } = this;
-    const snapped  = snapToGrid(pos.x, pos.y);
-    const { x, y } = court.toCanvas(snapped.x, snapped.y);
+    const { x, y } = court.toCanvas(pos.x, pos.y);
     const r        = court.courtW * PLAYER_RADIUS_RATIO;
 
     ctx.save();
@@ -261,10 +392,8 @@ export class Renderer {
 
   _drawMovementArrow(from, to, fill) {
     const { ctx, court } = this;
-    const sf = snapToGrid(from.x, from.y);
-    const st = snapToGrid(to.x,   to.y);
-    const a  = court.toCanvas(sf.x, sf.y);
-    const b  = court.toCanvas(st.x, st.y);
+    const a  = court.toCanvas(from.x, from.y);
+    const b  = court.toCanvas(to.x,   to.y);
     const r = court.courtW * PLAYER_RADIUS_RATIO;
 
     // Direction unit vector
@@ -318,8 +447,7 @@ export class Renderer {
   _drawShuttlecock(shuttlecock) {
     const { ctx, court } = this;
     const { position, height } = shuttlecock;
-    const snapped  = snapToGrid(position.x, position.y);
-    const { x, y } = court.toCanvas(snapped.x, snapped.y);
+    const { x, y } = court.toCanvas(position.x, position.y);
 
     // Radius scales with height ('high' = larger)
     const baseR  = court.courtW * SHUTTLE_RADIUS_RATIO;
@@ -354,10 +482,7 @@ export class Renderer {
     if (!trajectory || trajectory.length < 2) return;
 
     const { ctx, court } = this;
-    const points = trajectory.map(p => {
-      const s = snapToGrid(p.x, p.y);
-      return court.toCanvas(s.x, s.y);
-    });
+    const points = trajectory.map(p => court.toCanvas(p.x, p.y));
 
     // Number of trail dots based on speed
     const segments = TRAIL_SEGMENTS[speed] ?? TRAIL_SEGMENTS.medium;

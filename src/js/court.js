@@ -79,17 +79,52 @@ export class Court {
 
     this._resize();
 
-    // Keep a reference so we can remove the listener in destroy()
+    // Geometry-change subscribers. Use onGeometryChange() to register a
+    // callback that redraws the full scene (court + players + shuttle) when
+    // the canvas is resized.
+    this._geometryListeners = new Set();
+
     this._onResize = () => {
       this._resize();
-      this.draw();
+      this._geometryListeners.forEach(cb => cb());
     };
     window.addEventListener('resize', this._onResize);
+
+    // Also react to layout changes that don't fire window.resize — e.g. the
+    // instruction banner expanding/collapsing, the workshop screen becoming
+    // active, side rails appearing. Without this, courtY/courtH go stale and
+    // clicks register at the wrong point on the court.
+    if (typeof ResizeObserver !== 'undefined') {
+      // Skip the first synchronous callback (initial observe) since the
+      // constructor already called _resize() above.
+      let initial = true;
+      this._resizeObserver = new ResizeObserver(() => {
+        if (initial) { initial = false; return; }
+        this._onResize();
+      });
+      this._resizeObserver.observe(canvas);
+    }
+  }
+
+  /**
+   * Register a callback fired after the canvas is resized and the court
+   * geometry has been recomputed. Use this to redraw the full scene.
+   * @param {() => void} cb
+   * @returns {() => void} unsubscribe function
+   */
+  onGeometryChange(cb) {
+    this._geometryListeners.add(cb);
+    return () => this._geometryListeners.delete(cb);
   }
 
   /** Call when the court is no longer needed to release the resize listener. */
   destroy() {
     window.removeEventListener('resize', this._onResize);
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    this._geometryListeners?.clear();
   }
 
   // ─── Coordinate conversion ──────────────────────────────────────────────────
@@ -139,7 +174,8 @@ export class Court {
 
     ctx.clearRect(0, 0, cssW, cssH);
 
-    this._drawPageBackground(cssW, cssH);  // cream
+    // The stage container (CSS) now provides the green/cream background
+    // around the court — the canvas itself stays transparent.
     this._drawCourtShadow();               // ink offset shadow
     this._drawSurface();                   // green halves (clipped)
     this._drawCourtLines();                // cream lines
@@ -148,11 +184,6 @@ export class Court {
   }
 
   // ─── Private drawing helpers ────────────────────────────────────────────────
-
-  _drawPageBackground(w, h) {
-    this.ctx.fillStyle = COLOUR.pageBg;
-    this.ctx.fillRect(0, 0, w, h);
-  }
 
   _drawCourtShadow() {
     const { ctx, courtX, courtY, courtW, courtH } = this;
