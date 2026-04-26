@@ -74,7 +74,7 @@ export class HUD {
       void this._scoreEl.offsetWidth;
       this._scoreEl.classList.add('score-pop');
 
-      if (this._scorePillEl && delta !== 0) {
+      if (this._scorePillEl && delta !== 0 && score !== 0) {
         const cls = delta > 0 ? 'gain' : 'gain-bad';
         this._scorePillEl.classList.remove('gain', 'gain-bad');
         void this._scorePillEl.offsetWidth;
