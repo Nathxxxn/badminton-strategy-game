@@ -11,7 +11,7 @@ const SHOT_PARAMS = {
     CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
 };
 
-export class TacticalEngine {
+class TacticalEngine {
     constructor() {
         this.HALF_LENGTH = 6.70; 
         this.WIDTH = 6.10;       
@@ -37,7 +37,7 @@ export class TacticalEngine {
         }
 
         // KILL sur CLEAR : Seulement si le Clear adverse est court (1er tiers)
-        if (user.type === 'KILL' && incoming.type === 'CLEAR' && incoming.endPos?.y > this.FIRST_THIRD) {
+        if (user.type === 'KILL' && incoming.type === 'CLEAR' && incoming.endPos.y > this.FIRST_THIRD) {
             return { score: 0, message: "IMPOSSIBLE : On ne kill pas un clear long !" };
         }
 
@@ -67,10 +67,6 @@ export class TacticalEngine {
                 targetOpponent = opp;
             }
         });
-
-        if (!targetOpponent) {
-             return { score: 0, message: "Aucun adversaire ! (Erreur Scénario)", reachMeters: rules.reach, details: { placement: 0, bonus: 0 } };
-        }
 
         let distanceScore = Math.min(90, (minDistanceMeters / 4.0) * 90);
         let totalScore = 0;
@@ -190,7 +186,6 @@ export class TacticalEngine {
             best: {
                 type: bestPossible.type,
                 endPos: bestPossible.endPos,
-                score: bestPossible.score,
                 message: `Le meilleur coup était un ${bestPossible.type}`
             }
         };

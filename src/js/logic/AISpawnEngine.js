@@ -1,7 +1,7 @@
 /**
  * AISpawnEngine - Version Corrigée
  */
-export class AISpawnEngine {
+class AISpawnEngine {
     constructor(tacticalEngine, placementEngine,kinematicEngine) {
         this.tactical = tacticalEngine;
         this.placement = placementEngine;
@@ -151,8 +151,16 @@ export class AISpawnEngine {
     /**
      * CALCUL DU POINT D'IMPACT (Méthode par échantillonnage)
      */
-    getValidImpactPoint(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType) {
+    getValidImpactPoint(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
         const windows = this.SHOT_WINDOWS[shotType];
+        
+        // La fatigue réduit la fenêtre de frappe (on est moins précis/rapide)
+        const fatigueFactor = 1 / fatigue; 
+        const adjustedWindows = windows.map(w => ({
+            start: w.start + (1 - fatigueFactor) * 0.1, // La fenêtre rétrécit
+            end: w.end - (1 - fatigueFactor) * 0.1
+        }));
+
         if (!windows) return null;
 
         const validPoints = [];

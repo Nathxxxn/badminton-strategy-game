@@ -2,7 +2,7 @@
  * Gère les capacités de déplacement (Rayon de mouvement autorisé)
  * après un coup joué par notre équipe.
  */
-export class KinematicEngine {
+class KinematicEngine {
     constructor() {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;
@@ -19,12 +19,12 @@ export class KinematicEngine {
             CLEAR: 3     // COURT : exception, on doit se fixer car on attend un smash
         };
         this.SHOT_PARAMS = {
-            SMASH:      { id: 'SMASH',reach: 2.0, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
-            KILL:       { id: 'KILL', reach: 2.0, allowed: ['NET_DROP'] },
-            DRIVE:      { id: 'DRIVE',  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
-            DROP:       { id: 'DROP',  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
-            NET_DROP:   { id: 'NET_DROP',  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE', 'KILL'] },
-            CLEAR:      { id: 'CLEAR',  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
+            SMASH:      { id: 'SMASH',      bonus: 10, reach: 2.0, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
+            KILL:       { id: 'KILL',       bonus: 10, reach: 2.0, allowed: ['NET_DROP','DRIVE','CLEAR'] },
+            DRIVE:      { id: 'DRIVE',      bonus: 3,  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
+            DROP:       { id: 'DROP',       bonus: 7,  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
+            NET_DROP:   { id: 'NET_DROP',   bonus: 4,  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE'] },
+            CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
         };
     }
 

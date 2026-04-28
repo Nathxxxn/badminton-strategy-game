@@ -3,7 +3,7 @@
  * Évaluation du placement d'un joueur en fonction du partenaire et du volant
  */
 
-export class PlacementEngine {
+class PlacementEngine {
     constructor() {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;
@@ -278,9 +278,11 @@ export class PlacementEngine {
                 formation: formationScore
             },
             realDistance: this.calculateDistMeters(playerPos, partnerPos).toFixed(2),
-            ideal : {
-                x : idealPos.x,
-                y : idealPos.y,
+            ideal : { 
+                pos :{
+                    x : idealPos.x,
+                    y : idealPos.y,
+                },
             },
         };
     }

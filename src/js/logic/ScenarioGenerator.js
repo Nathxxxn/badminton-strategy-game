@@ -1,7 +1,7 @@
 /**
  * Générateur de Scénarios Tactiques et Placement
  */
-export class ScenarioGenerator {
+class ScenarioGenerator {
     constructor(tactical, placement, aiSpawn) {
         this.tactical = tactical;
         this.placement = placement;
