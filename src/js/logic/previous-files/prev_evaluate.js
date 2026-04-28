@@ -1,7 +1,12 @@
-import { KinematicEngine } from './logic/KinematicEngine.js';
-import { PlacementEngine } from './logic/PlacementEngine.js';
-import { TacticalEngine } from './logic/TacticalEngine.js';
-import { FeedbackEngine } from './logic/FeedbackEngine.js';
+import {
+  COURT_WIDTH_M,
+  HALF_COURT_LENGTH_M,
+  KinematicEngine,
+  SHOT_PROFILES,
+} from './logic/previous-files/kinematic-engine.js';
+import { PlacementEngine } from './logic/previous-files/placement-engine.js';
+import { TacticalEngine } from './logic/previous-files/tactical-engine.js';
+import { FeedbackEngine } from './logic/previous-files/feedback-engine.js';
 import {
   adaptExercise,
   toFullCourtAlly,
@@ -82,8 +87,8 @@ function derivePartnerMovement(turn) {
 }
 
 function metricDistanceHalfCourt(a, b) {
-  const dx = (a.x - b.x) * kinematicEngine.WIDTH;
-  const dy = (a.y - b.y) * kinematicEngine.HALF_LENGTH;
+  const dx = (a.x - b.x) * COURT_WIDTH_M;
+  const dy = (a.y - b.y) * HALF_COURT_LENGTH_M;
   return Math.hypot(dx, dy);
 }
 
@@ -97,7 +102,7 @@ function inferPlacementContext(turn, positions) {
 
   let best = { score: Infinity, playedShotType: 'DRIVE', isHitter: false };
 
- Object.keys(kinematicEngine.SHOT_PARAMS).forEach(shotType => {
+  Object.keys(SHOT_PROFILES).forEach(shotType => {
     [false, true].forEach(isHitter => {
       const result = placementEngine.evaluateGlobalPlacement(
         positions.player,
@@ -140,11 +145,11 @@ export function prepareTurnForRuntime(rawTurn) {
   if (prepared.type === 'shot') {
     const incomingShotType = prepared.incomingShuttle?.type ?? scenario.incomingShotType ?? 'DRIVE';
     const incomingShuttle = prepared.incomingShuttle ?? deriveIncomingShuttle(prepared, incomingShotType);
-    const shotCaps = kinematicEngine.shotPossibility(incomingShotType);
+    const shotCaps = kinematicEngine.getShotCapabilities(incomingShotType);
 
     return {
       ...prepared,
-      label: prepared.label ?? 'Tir',
+      label: prepared.label ?? 'Shot',
       incomingShuttle,
       playerReach: prepared.playerReach ?? shotCaps.allowedReach,
     };
@@ -161,11 +166,11 @@ export function prepareTurnForRuntime(rawTurn) {
 
     return {
       ...prepared,
-      label: prepared.label ?? 'Placement',
+      label: prepared.label ?? 'Positioning',
       playedShuttle,
       partnerMovement,
       isHitter,
-      moveRadius: prepared.moveRadius ?? scenario.moveRadius ?? kinematicEngine.movementPossibility(playedShotType).allowedRadius,
+      moveRadius: prepared.moveRadius ?? scenario.moveRadius ?? kinematicEngine.getMovementRadius(playedShotType),
     };
   }
 
@@ -183,9 +188,7 @@ export function evaluateTacticalTurn(turn, logicPayload) {
     logicPayload.opponentsPos?.opp2 ? { ...logicPayload.opponentsPos.opp2, hand: logicPayload.oppHands?.opp2 ?? DEFAULT_HAND } : null,
   ].filter(Boolean);
 
-  const impactPoint = logicPayload.impactPoint ?? { x: 0.5, y: 0.5 };
-  const analysis = tacticalEngine.getCompleteAnalysis(incoming, user, opponents, impactPoint);
-
+  const analysis = tacticalEngine.getCompleteAnalysis(incoming, user, opponents);
   const feedback = feedbackEngine.getTacticalFeedback(analysis);
 
   return {
@@ -199,7 +202,6 @@ export function evaluateTacticalTurn(turn, logicPayload) {
     },
   };
 }
-
 
 export function evaluatePlacementTurn(turn, logicPayload) {
   const result = placementEngine.evaluateGlobalPlacement(
@@ -222,5 +224,5 @@ export function evaluatePlacementTurn(turn, logicPayload) {
 }
 
 export function getMoveRadiusForShot(shotType) {
-  return kinematicEngine.movementPossibility(shotType).allowedRadius;
+  return kinematicEngine.getMovementRadius(shotType);
 }

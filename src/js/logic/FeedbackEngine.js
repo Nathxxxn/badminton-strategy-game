@@ -2,7 +2,7 @@
  * Moteur de Feedback - Badminton
  * Interprète les résultats des moteurs logiques pour l'interface utilisateur (UI)
  */
-class FeedbackEngine {
+export class FeedbackEngine {
     /**
      * Prépare l'affichage complet pour un exercice de placement
      * @param {Object} results - Sortie de PlacementEngine.evaluateGlobalPlacement

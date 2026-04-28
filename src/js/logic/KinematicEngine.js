@@ -2,7 +2,7 @@
  * Gère les capacités de déplacement (Rayon de mouvement autorisé)
  * après un coup joué par notre équipe.
  */
-class KinematicEngine {
+export class KinematicEngine {
     constructor() {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;

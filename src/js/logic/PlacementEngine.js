@@ -3,7 +3,7 @@
  * Évaluation du placement d'un joueur en fonction du partenaire et du volant
  */
 
-class PlacementEngine {
+export class PlacementEngine {
     constructor() {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;

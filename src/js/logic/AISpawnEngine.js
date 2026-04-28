@@ -1,7 +1,7 @@
 /**
  * AISpawnEngine - Version Corrigée
  */
-class AISpawnEngine {
+export class AISpawnEngine {
     constructor(tacticalEngine, placementEngine,kinematicEngine) {
         this.tactical = tacticalEngine;
         this.placement = placementEngine;
