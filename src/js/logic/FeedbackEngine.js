@@ -55,7 +55,7 @@ class FeedbackEngine {
         }
 
         return {
-            totalScore: player.score,
+            totalScore: analysis.score,
             correction: {
                 type: best.type,
                 endPos: best.endPos,

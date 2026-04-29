@@ -212,6 +212,28 @@ class PlacementEngine {
     }
 
     /**
+     * Recherche la meilleure position possible sur le demi-terrain
+     * en maximisant le score combiné (Partenaire + Formation).
+     */
+    findBestPlacementExhaustive(partnerPos, shuttleEndPos, shotType, isHitter) {
+        let best = { x: 0.5, y: 0.5, score: -1 };
+        
+        // Pas de 50cm environ pour la recherche
+        const stepX = 0.5 / this.WIDTH;
+        const stepY = 0.5 / this.HALF_LENGTH;
+
+        for (let x = 0.05; x <= 0.95; x += stepX) {
+            for (let y = 0.05; y <= 0.95; y += stepY) {
+                const res = this.evaluateGlobalPlacement({ x, y }, partnerPos, shuttleEndPos, shotType, isHitter);
+                if (res.total > best.score) {
+                    best = { x, y, score: res.total };
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
      * Déduit le rôle et la position initiale du joueur évalué
      * @param {Array} teamPlayers - Liste des 2 joueurs [{id, startX, startY}, ...]
      * @param {number} playerId - L'ID du joueur qu'on évalue
@@ -221,9 +243,12 @@ class PlacementEngine {
 
     evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter) {
         const partnerScore = this.getPartnerDistanceScore(playerPos, partnerPos);
-        
+        const bestPlacement = this.findBestPlacementExhaustive(partnerPos, shuttleEndPos, shotType, isHitter);
+
         const shotType = shotContext.type;
         const shuttleEndPos = shotContext.endPos;
+
+        const bestScore = bestPlacement.score;
 
         let idealPos;
         const isPlayerLeft = (playerPos.x < partnerPos.x);
@@ -271,11 +296,13 @@ class PlacementEngine {
         const formationScore = this.calculateFormationScore(playerPos, idealPos, tolX, tolY);
         const finalScore = (partnerScore * 0.3) + (formationScore * 0.7);
 
+        const ratio = bestScore > 0 ? 100 / bestScore : 1;
+
         return {
-            total: Math.round(finalScore),
+            total: Math.ceil(finalScore*ratio),
             breakdown: {
-                partner: partnerScore,
-                formation: formationScore
+                partner: Math.ceil(partnerScore*ratio),
+                formation: Math.ceil(formationScore*ratio)
             },
             realDistance: this.calculateDistMeters(playerPos, partnerPos).toFixed(2),
             ideal : { 

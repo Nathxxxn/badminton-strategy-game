@@ -174,20 +174,41 @@ class TacticalEngine {
      * @param {Array} opponents - [{x, y, hand}]
      * @param {Object} impactPos - {x, y} Point où le joueur a frappé
      */
+    // TacticalEngine.js
+
     getCompleteAnalysis(incoming, user, opponents, impactPos) {
-        // 1. Évaluer la qualité du coup réel du joueur
-        const playerAnalysis = this.evaluateSituation(incoming, user, opponents, impactPos);
+    const playerAnalysis = this.evaluateSituation(incoming, user, opponents, impactPos);
+    const bestPossible = this.findBestShotExhaustive(incoming, opponents, impactPos);
+    
+    const bestScore = bestPossible.score;
+    // Si le bestScore est 0 (cas improbable mais par sécurité), on évite la division par zéro
+    const ratio = bestScore > 0 ? 100 / bestScore : 1;
 
-        // 2. Chercher la meilleure option théorique depuis ce MÊME point d'impact
-        const bestPossible = this.findBestShotExhaustive(incoming, opponents, impactPos);
+    // Application de la normalisation et arrondi à l'entier supérieur
+    const scoreFinal = Math.ceil(playerAnalysis.score * ratio);
+    
+    // placementFinal = placement * ratio + (ratio - 1) * bonus
+    const placementOriginal = playerAnalysis.details.placement;
+    const bonusOriginal = playerAnalysis.details.bonus;
+    const placementFinal = Math.ceil(placementOriginal * ratio + (ratio - 1) * bonusOriginal);
 
-        return {
-            player: playerAnalysis,
-            best: {
-                type: bestPossible.type,
-                endPos: bestPossible.endPos,
-                message: `Le meilleur coup était un ${bestPossible.type}`
+    return {
+        player: {
+            ...playerAnalysis,
+            score: scoreFinal,
+            details: {
+                ...playerAnalysis.details.bonus,
+                placement: placementFinal,
+                // Le bonus reste identique en valeur absolue pour l'affichage
             }
-        };
-    }
+        },
+        // On ne renvoie plus le bestScore brut au Dev A comme demandé,
+        // mais on peut renvoyer la correction normalisée à 100
+        best: {
+            type: bestPossible.type,
+            endPos: bestPossible.endPos,
+            score: 100 
+        }
+    };
 }
+    }
