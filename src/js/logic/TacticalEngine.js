@@ -8,7 +8,8 @@ const SHOT_PARAMS = {
     DRIVE:      { id: 'DRIVE',      bonus: 3,  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
     DROP:       { id: 'DROP',       bonus: 7,  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
     NET_DROP:   { id: 'NET_DROP',   bonus: 4,  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE'] },
-    CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
+    CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'DROP', 'DRIVE', 'CLEAR'] },
+    NET_CLEAR:  { id: 'NET_CLEAR',  bonus:-5, reach: 3.0, allowed: ['KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
 };
 
 export class TacticalEngine {
@@ -32,14 +33,19 @@ export class TacticalEngine {
         // 1. VÉRIFICATION DES FAUTES DE "ZONE" (NOUVEAU)
         
         // KILL : Autorisé seulement dans le 1er tiers
-        if (user.type === 'KILL' && impactPos.y > this.FIRST_THIRD) {
-            return { score: 0, message: "FAUTE : Trop loin pour un Kill !" };
+
+        if (user.type === 'KILL' && user.endPos.y > 0.65) {
+            user.type = 'DRIVE';
+        }
+        // KILL sur CLEAR : Seulement si le Clear adverse est court (1er tiers)
+        if (user.type === 'KILL' && incoming.type === 'NET_CLEAR' && incoming.endPos.y > this.FIRST_THIRD) {
+            return { score: 0, message: "IMPOSSIBLE : On ne kill pas un long volant !" };
         }
 
-        // KILL sur CLEAR : Seulement si le Clear adverse est court (1er tiers)
-        if (user.type === 'KILL' && incoming.type === 'CLEAR' && incoming.endPos.y > this.FIRST_THIRD) {
-            return { score: 0, message: "IMPOSSIBLE : On ne kill pas un clear long !" };
+        if (user.type === 'KILL' && user.endPos.y < 0.25) {
+            return { score: 0, message: "FAULT : In the net !" };
         }
+        
 
         // SMASH : Interdit dans le 1er tiers (risque de filet ou trajectoire impossible)
         if (user.type === 'SMASH' && impactPos.y < this.FIRST_THIRD) {
@@ -91,7 +97,7 @@ export class TacticalEngine {
                          (targetOpponent.hand === 'left' && isRightSide);
 
         // Réalisme NET_DROP : Malus si ça tombe après la ligne de service
-        if (user.type === 'NET_DROP') {
+        if (user.type === 'NET_DROP' || user.type === 'NET_CLEAR') {
             if (user.endPos.y > this.RIVIERE_LIMITE) {
                 const penalty = (user.endPos.y - this.RIVIERE_LIMITE) * 150; 
                 totalScore -= penalty; // Décroît très vite après 1.98m
