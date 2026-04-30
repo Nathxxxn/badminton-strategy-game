@@ -11,7 +11,7 @@ const SHOT_PARAMS = {
     CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
 };
 
-class TacticalEngine {
+export class TacticalEngine {
     constructor() {
         this.HALF_LENGTH = 6.70; 
         this.WIDTH = 6.10;       
@@ -197,7 +197,7 @@ class TacticalEngine {
             ...playerAnalysis,
             score: scoreFinal,
             details: {
-                ...playerAnalysis.details.bonus,
+                ...playerAnalysis.details,
                 placement: placementFinal,
                 // Le bonus reste identique en valeur absolue pour l'affichage
             }
