@@ -25,6 +25,7 @@ import {
   signupAsync,
 } from './app-state.js';
 import { showToast } from './ui-feedback.js';
+import { RATING_THRESHOLDS } from './logic/MatchEngine.js';
 
 const INK = '#0f1a14';
 
@@ -51,49 +52,59 @@ function getProfile(state) {
   return state?.profile ?? PLAYER;
 }
 
-function homeStats(profile) {
+function recentWinRate(sessions, n = 5) {
+  const matchSessions = sessions.filter(s => s.workshop === 'match');
+  const slice = matchSessions.slice(0, n);
+  if (slice.length === 0) return null;
+  const wins = slice.filter(s => (s.result ?? '').toLowerCase() === 'win').length;
+  return Math.round((wins / slice.length) * 100);
+}
+
+function homeStats(profile, state = null) {
   const rating = profile.rating ?? 600;
   const peakRating = profile.peakRating ?? rating;
   const wins = profile.wins ?? 0;
   const losses = profile.losses ?? 0;
   const winRate = profile.winRate ?? 0;
   const xpRatio = profile.xpMax > 0 ? profile.xp / profile.xpMax : 0;
+  const sessions = state?.leaderboard?.sessions ?? [];
+  const recent5 = recentWinRate(sessions, 5);
 
   return [
-    { label: 'RANK', value: profile.rank, hint: `${rating.toLocaleString()} rating · PEAK ${peakRating.toLocaleString()}` },
+    { label: 'RANK', value: profile.rank, hint: `${rating.toLocaleString()} pts · PEAK ${peakRating.toLocaleString()}` },
     { label: 'LEVEL', value: String(profile.level), hint: `${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP`, bar: xpRatio },
-    { label: 'RECORD', value: `${wins}-${losses}`, hint: `${winRate}% win rate` },
-    { label: 'STREAK', value: String(profile.streak), hint: `personal best: ${profile.bestStreak}` },
-    { label: 'TRAINED', value: profile.trained, hint: 'total time' },
+    { label: 'RECORD', value: `${wins}-${losses}`, hint: `lifetime ${winRate}% WR` },
+    { label: '5 DERNIERS', value: recent5 !== null ? `${recent5}%` : '—', hint: `lifetime ${winRate}%` },
+    { label: 'STREAK', value: String(profile.streak), hint: `best: ${profile.bestStreak}` },
   ];
 }
 
 const MODES = Object.freeze([
   {
     id: 'attack',
-    title: 'Attack Training',
-    tagline: 'Level up your offense',
-    blurb: 'Master smashes, drops, and clears. Learn to read openings and finish rallies with precision aggression.',
+    title: 'Tactic Training',
+    tagline: 'Build your tactical eye',
+    blurb: 'Choose the right shot at the right time. Read gaps, exploit weaknesses, and control rally tempo with intent and precision.',
     color: '#e85d3c',
     difficulty: 2,
     duration: '10-15 min',
     rewards: '+120 XP',
-    drills: ['Smash placement', 'Drop-shot deception', 'Net kill reflex', 'Attack combinations'],
-    statLabel: 'Smash accuracy',
+    drills: ['Gap identification', 'Smash & drop decisions', 'Shot deception', 'Tempo control'],
+    statLabel: 'Shot accuracy',
     statValue: '78%',
     available: true,
   },
   {
     id: 'defense',
-    title: 'Defense Training',
-    tagline: 'Become a wall at the back',
-    blurb: 'Read your opponent, block smashes, and counter-attack from the baseline. Turn defense into your offense.',
+    title: 'Placement Training',
+    tagline: 'Be in the right place',
+    blurb: 'Master court positioning for doubles. Anticipate returns, rotate with your partner, and cover every corner without overreaching.',
     color: '#1f8a4c',
     difficulty: 2,
     duration: '10-15 min',
     rewards: '+120 XP',
-    drills: ['Smash blocks', 'Lift placement', 'Court recovery', 'Counter-attack timing'],
-    statLabel: 'Blocks landed',
+    drills: ['Return coverage', 'Partner rotation', 'Court recovery', 'Anticipation drills'],
+    statLabel: 'Positioning score',
     statValue: '64%',
     available: true,
   },
@@ -101,7 +112,7 @@ const MODES = Object.freeze([
     id: 'match',
     title: 'Match Mode',
     tagline: 'Put it all on the line',
-    blurb: 'Full ranked match flow is not wired into this prototype yet. The current game interface stays focused on attack and defense workshops.',
+    blurb: 'Play a compact ranked match loop with live sets, points, fatigue, and a dynamic shot clock.',
     color: '#2e6fc5',
     difficulty: 3,
     duration: '20-30 min',
@@ -109,7 +120,7 @@ const MODES = Object.freeze([
     drills: ['Ranked flow preview', 'Opponent analysis', 'Shot-clock concept', 'Post-match summary'],
     statLabel: 'Win rate',
     statValue: '61%',
-    available: false,
+    available: true,
   },
 ]);
 
@@ -213,6 +224,23 @@ function flagBadge(country) {
   return `<span class="flag-badge" aria-label="${country}">${country}</span>`;
 }
 
+// ─── FFBAD rank color system ──────────────────────────────────────────────────
+// Gris (NC) · Jaune (P) · Vert (D) · Bleu (R) · Rouge (N)
+function rankColor(rank) {
+  if (!rank) return '#9ca3af';
+  const letter = String(rank)[0].toUpperCase();
+  if (letter === 'P') return '#facc15';
+  if (letter === 'D') return '#4ade80';
+  if (letter === 'R') return '#60a5fa';
+  if (letter === 'N') return '#f87171';
+  return '#9ca3af'; // NC / unknown
+}
+
+function rankBadge(rank) {
+  const color = rankColor(rank);
+  return `<span class="rank-badge" style="--rank-color:${color}">${escapeHtml(String(rank ?? 'NC').toUpperCase())}</span>`;
+}
+
 function pageTitleMarkup({ eyebrow, title, right = '' }) {
   return `
     <div class="page-title-row">
@@ -283,6 +311,39 @@ function renderDrillsPage(state) {
           `).join('')}
         </div>`,
     })}
+    <details class="tutorial-card card">
+      <summary class="tutorial-summary">
+        <span class="tutorial-icon">📖</span>
+        <span>
+          <strong>Tutoriel</strong>
+          <span class="tutorial-sub">Déplacements · Coups · Spin · Exemples de coups ratés</span>
+        </span>
+        <span class="tutorial-chevron">▸</span>
+      </summary>
+      <div class="tutorial-body">
+        <div class="tutorial-section">
+          <p class="tutorial-label">DÉPLACEMENTS</p>
+          <p>En exercice de <em>placement</em>, clique dans ta moitié de terrain pour indiquer où tu veux te positionner. La zone de portée (cercle pointillé) limite tes déplacements réalistes.</p>
+        </div>
+        <div class="tutorial-section">
+          <p class="tutorial-label">COUPS — DRAG TO SHOOT</p>
+          <p>En exercice de <em>tactique</em>, maintiens et fais glisser depuis la volant pour viser. <strong>Longueur du glisser = puissance</strong> (court = touche, long = smash). La trajectoire prévisualisée s'adapte au type de coup sélectionné.</p>
+        </div>
+        <div class="tutorial-section">
+          <p class="tutorial-label">SPIN / EFFET</p>
+          <p>Un glisser légèrement courbé ajoute de l'effet. La courbe du trait indique le sens : <em>incurvé à gauche</em> = slice gauche, <em>à droite</em> = slice droit. L'indicateur de trajectoire affiche des boucles quand le spin est détecté.</p>
+        </div>
+        <div class="tutorial-section">
+          <p class="tutorial-label">COUPS RATÉS — EXEMPLES FRÉQUENTS</p>
+          <ul class="tutorial-list">
+            <li><strong>Filet</strong> : puissance trop faible sur un smash depuis le fond, ou trajectoire trop rasante.</li>
+            <li><strong>Trop long</strong> : clear avec trop de puissance depuis la moitié de terrain.</li>
+            <li><strong>Mauvaise zone</strong> : attaquer en milieu de terrain au lieu des coins — les adversaires récupèrent facilement.</li>
+            <li><strong>Amortie sur bonne hauteur</strong> : une drop trop lente sur une bonne position adverse donne une interception facile.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
     <section class="daily-drill" style="--drill-color:${dailyDrill.color}">
       <div class="daily-shuttle">${SVG_SHUTTLE}</div>
       <div class="daily-copy">
@@ -300,35 +361,85 @@ function renderDrillsPage(state) {
 
 function dailyBonusMarkup(state) {
   const dailyBonus = state.dailyBonus ?? DEFAULT_APP_STATE.dailyBonus;
-  const available = dailyBonus.available !== false;
+  const bonusAvail = dailyBonus.available !== false;
+
+  const today = new Date().toDateString();
+  const interclubAvail = (state.interclubLastDate ?? '') !== today;
+
   return `
-    <div class="daily-bonus ${available ? 'available' : 'used'}" data-daily-bonus-status="${available ? 'available' : 'used'}">
-      <span></span> Daily Bonus · ${available ? `${dailyBonus.multiplier ?? 2}x XP ready` : 'used today'}
+    <div class="daily-actions-group">
+      <div class="daily-bonus ${bonusAvail ? 'available' : 'used'}" data-daily-bonus-status="${bonusAvail ? 'available' : 'used'}">
+        <span></span> Daily Bonus · ${bonusAvail ? `${dailyBonus.multiplier ?? 2}× XP ready` : 'used today'}
+      </div>
+      <button
+        class="btn interclub-btn ${interclubAvail ? 'available' : 'used'}"
+        type="button"
+        data-interclub
+        ${!interclubAvail ? 'disabled' : ''}
+        title="1 match par jour contre un duo de classement supérieur. Peu à perdre, beaucoup à gagner !"
+      >
+        ${interclubAvail ? '⚡ Interclubs' : '✓ Interclubs joué'}
+      </button>
     </div>`;
 }
 
+function leaderboardSessionRow(session, index, profile) {
+  const delta = session.ratingDelta ?? 0;
+  const acc = session.accuracy ?? (session.totalTurns > 0 ? Math.round((session.correct / session.totalTurns) * 100) : 0);
+  const weekDelta = session.weekDelta ?? null;
+  return `
+    <article class="standings-row">
+      <span class="rank-cell">#${index + 1}</span>
+      <span class="player-cell">
+        <span class="player-avatar">${playerInitials(profile.name)}</span>
+        <span>
+          <strong>${escapeHtml(session.matchId ?? 'Training rally')}</strong>
+          <small>${escapeHtml(session.workshop ?? '')} · ${new Date(session.completedAt).toLocaleDateString()}</small>
+        </span>
+      </span>
+      <span class="tier">${session.result ?? '—'}</span>
+      <span class="wins">${session.score}</span>
+      <span class="wr">${acc}%</span>
+      <span class="xp ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}">${delta > 0 ? '+' : ''}${delta}</span>
+      <span class="weekly-delta ${weekDelta === null ? 'na' : weekDelta > 0 ? 'positive' : weekDelta < 0 ? 'negative' : ''}">${weekDelta === null ? '—' : (weekDelta > 0 ? '+' : '') + weekDelta}</span>
+    </article>`;
+}
+
 function renderLeaderboardPage(state) {
-  const period = state.preferences.leaderboardPeriod;
+  const activeTab = state.preferences.leaderboardTab ?? 'rating';
   const profile = getProfile(state);
   const leaderboard = state.leaderboard ?? { summary: { sessionsPlayed: 0, bestScore: 0, averageScore: 0 }, sessions: [] };
-  const sessions = leaderboard.sessions ?? [];
+  const allSessions = leaderboard.sessions ?? [];
   const summary = leaderboard.summary ?? {};
+
+  const placementSessions = allSessions.filter(s => s.workshop === 'defense' || s.workshop === 'placement');
+  const tacticalSessions  = allSessions.filter(s => s.workshop === 'attack'  || s.workshop === 'tactic');
+
+  const sessions =
+    activeTab === 'placement' ? placementSessions :
+    activeTab === 'tactical'  ? tacticalSessions  :
+    allSessions;
+
+  const headLabel =
+    activeTab === 'placement' ? 'PLACEMENT' :
+    activeTab === 'tactical'  ? 'TACTICAL'  :
+    'RATING Δ';
 
   return `
     ${pageTitleMarkup({
       eyebrow: 'PERSONAL STANDINGS',
       title: 'Leaderboard',
-      right: `
-      <div class="period-tabs" role="tablist" aria-label="Leaderboard period">
-        <button class="btn period-tab ${period === 'weekly' ? 'active' : ''}" type="button" data-period="weekly">Weekly</button>
-        <button class="btn period-tab ${period === 'all-time' ? 'active' : ''}" type="button" data-period="all-time">All-time</button>
-      </div>
-    `})}
+    })}
+    <div class="lb-tabs" role="tablist" aria-label="Leaderboard type">
+      <button class="lb-tab ${activeTab === 'rating'    ? 'active' : ''}" type="button" data-lb-tab="rating">⭐ Rating FFBAD</button>
+      <button class="lb-tab ${activeTab === 'placement' ? 'active' : ''}" type="button" data-lb-tab="placement">📍 Placement</button>
+      <button class="lb-tab ${activeTab === 'tactical'  ? 'active' : ''}" type="button" data-lb-tab="tactical">🎯 Tactique</button>
+    </div>
     <div class="personal-rank-grid">
       <article class="personal-rank-card card">
-        <span class="stat-label">PLAYER</span>
+        <span class="stat-label">JOUEUR</span>
         <strong>${escapeHtml(profile.name)}</strong>
-        <span class="stat-hint">${flagBadge(profile.country)} ${profile.rank} · ${profile.rating ?? 600} rating</span>
+        <span class="stat-hint">${flagBadge(profile.country)} ${rankBadge(profile.rank)} · ${profile.rating ?? 600} pts</span>
       </article>
       <article class="personal-rank-card card">
         <span class="stat-label">RECORD</span>
@@ -341,43 +452,38 @@ function renderLeaderboardPage(state) {
         <span class="stat-hint">personal record</span>
       </article>
       <article class="personal-rank-card card">
-        <span class="stat-label">AVERAGE</span>
+        <span class="stat-label">MOYENNE</span>
         <strong>${summary.averageScore ?? 0}</strong>
-        <span class="stat-hint">per rally</span>
+        <span class="stat-hint">par rally</span>
       </article>
     </div>
     <div class="standings-wrap card">
       <div class="standings-row standings-head">
         <span class="rank-cell">#</span>
         <span class="player-cell">SESSION</span>
-        <span class="tier">RESULT</span>
+        <span class="tier">RÉSULTAT</span>
         <span class="wins">SCORE</span>
-        <span class="wr">ACC</span>
-        <span class="xp">RATING</span>
+        <span class="wr">PRÉC.</span>
+        <span class="xp">${headLabel}</span>
+        <span class="weekly-delta">WEEKLY</span>
       </div>
-      ${sessions.length ? sessions.map((session, index) => `
-        <article class="standings-row">
-          <span class="rank-cell">#${index + 1}</span>
-          <span class="player-cell">
-            <span class="player-avatar">${playerInitials(profile.name)}</span>
-            <span><strong>${escapeHtml(session.matchId ?? 'Training rally')}</strong><small>${escapeHtml(session.workshop)} · ${new Date(session.completedAt).toLocaleDateString()}</small></span>
-          </span>
-          <span class="tier">${session.result ?? '—'}</span>
-          <span class="wins">${session.score}</span>
-          <span class="wr">${session.accuracy ?? Math.round((session.correct / session.totalTurns) * 100)}%</span>
-          <span class="xp">${session.ratingDelta > 0 ? '+' : ''}${session.ratingDelta ?? 0}</span>
-        </article>
-      `).join('') : '<p class="season-note">NO SESSION RECORDED YET · PLAY A DRILL TO FILL THIS TABLE</p>'}
+      ${sessions.length
+        ? sessions.map((s, i) => leaderboardSessionRow(s, i, profile)).join('')
+        : '<p class="season-note">AUCUNE SESSION · JOUE UN DRILL POUR REMPLIR CE TABLEAU</p>'}
     </div>`;
 }
 
 function renderSettingsPage(state) {
   const profile = getProfile(state);
   const initials = playerInitials(profile.name);
+  const isLeftHanded = (profile.racketHand ?? 'right') === 'left';
+  const email = escapeHtml(state.account?.email ?? state.user?.email ?? 'local player');
 
   return `
     ${pageTitleMarkup({ eyebrow: 'YOUR PREFERENCES', title: 'Settings' })}
     <div class="settings-grid">
+
+      <!-- ── Profile ──────────────────────────────────────────────────── -->
       <section class="settings-card card profile-card">
         <div class="settings-card-head">
           <span class="settings-accent green"></span>
@@ -405,27 +511,38 @@ function renderSettingsPage(state) {
                 ${countryOptionsMarkup(profile.country)}
               </select>
             </label>
-            <label>
-              <span>Rank</span>
-              <input class="settings-input" type="text" value="${escapeHtml(profile.rank)} · ${profile.rating ?? 600} rating" readonly>
+            <div class="rank-display-row">
+              <span class="rank-display-label">Classement</span>
+              <span class="rank-display-value">
+                ${rankBadge(profile.rank)}
+                <span class="rank-display-pts">${profile.rating ?? 600} pts FFBAD</span>
+              </span>
+            </div>
+            <label class="toggle-label">
+              <span>I am left-handed</span>
+              <button
+                class="hand-toggle ${isLeftHanded ? 'active' : ''}"
+                type="button"
+                data-hand-toggle
+                aria-pressed="${isLeftHanded}"
+                title="Ta raquette sera affichée du bon côté sur le terrain"
+              >
+                <span class="hand-toggle-knob"></span>
+              </button>
             </label>
             <button class="btn primary save-profile" type="button" disabled>Save profile</button>
           </div>
         </div>
       </section>
+
+      <!-- ── Account ──────────────────────────────────────────────────── -->
       <section class="settings-card card account-card">
         <div class="settings-card-head">
           <span class="settings-accent blue"></span>
           <h2>Account</h2>
         </div>
         <div class="account-list">
-          <div><span>Email</span><strong>${escapeHtml(state.account?.email ?? state.user?.email ?? 'local player')}</strong></div>
-          <div><span>Level</span><strong>Level ${profile.level}</strong></div>
-          <div><span>XP</span><strong>${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()}</strong></div>
-          <div><span>PEAK</span><strong>${profile.peakRating ?? profile.rating ?? 600} rating</strong></div>
-          <div><span>Record</span><strong>${profile.wins ?? 0}-${profile.losses ?? 0} · ${profile.winRate ?? 0}% WR</strong></div>
-          <div><span>Training</span><strong>${profile.trained} total</strong></div>
-          <div><span>Streak</span><strong>${profile.streak} wins</strong></div>
+          <div><span>Email</span><strong>${email}</strong></div>
         </div>
         <div class="password-fields">
           <input class="settings-input" type="password" name="currentPassword" placeholder="Current password" autocomplete="current-password">
@@ -437,6 +554,23 @@ function renderSettingsPage(state) {
           <button class="btn danger block reset-progression" type="button">Reset progression</button>
         </div>
       </section>
+
+      <!-- ── Performance Stats ─────────────────────────────────────────── -->
+      <section class="settings-card card perf-card">
+        <div class="settings-card-head">
+          <span class="settings-accent amber"></span>
+          <h2>Performance</h2>
+        </div>
+        <div class="account-list">
+          <div><span>Level</span><strong>Level ${profile.level} · ${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP</strong></div>
+          <div><span>Peak rating</span><strong>${profile.peakRating ?? profile.rating ?? 600} pts</strong></div>
+          <div><span>Record</span><strong>${profile.wins ?? 0}W · ${profile.losses ?? 0}L · ${profile.winRate ?? 0}% WR</strong></div>
+          <div><span>Training</span><strong>${profile.trained} total</strong></div>
+          <div><span>Win streak</span><strong>${profile.streak} · best ${profile.bestStreak}</strong></div>
+        </div>
+      </section>
+
+      <!-- ── Controls ──────────────────────────────────────────────────── -->
       <section class="settings-card card keybind-card">
         <div class="settings-card-head">
           <span class="settings-accent red"></span>
@@ -445,13 +579,14 @@ function renderSettingsPage(state) {
         <div class="keybind-grid">
           ${state.controls.map(bind => `
             <div class="keybind-row">
-              <span>${bind.action}</span>
-              <kbd>${bind.key}</kbd>
+              <span>${escapeHtml(bind.action)}</span>
+              <kbd class="rebindable" data-action="${escapeHtml(bind.action)}" tabindex="0">${escapeHtml(bind.key)}</kbd>
             </div>
           `).join('')}
         </div>
         <button class="btn reset-controls" type="button">Reset to defaults</button>
       </section>
+
     </div>`;
 }
 
@@ -502,6 +637,110 @@ function renderAuthScreen() {
         </label>
         <button class="btn primary block" type="submit">Create</button>
       </form>
+    </div>`;
+}
+
+// ─── Rating history modal ─────────────────────────────────────────────────────
+
+const RATING_RANKS = Object.entries(RATING_THRESHOLDS)
+  .sort((a, b) => a[1] - b[1]); // [ ['P12', 0], ['P11', 660], … ]
+
+const RATING_MIN = 0;
+const RATING_MAX = RATING_RANKS[RATING_RANKS.length - 1][1] + 120; // a bit above N1
+
+function ratingHistoryModalMarkup(state) {
+  const profile = getProfile(state);
+  const sessions = (state.leaderboard?.sessions ?? []).slice().reverse(); // oldest first
+  const baseRating = profile.rating ?? 600;
+
+  // Build cumulative rating history from deltas (sessions are newest-first, we reversed)
+  const history = [];
+  let running = baseRating;
+  // Walk backwards to reconstruct the start rating
+  const reversedDeltas = sessions.map(s => s.ratingDelta ?? 0);
+  const startRating = Math.max(RATING_MIN, reversedDeltas.reduce((acc, d) => acc - d, running));
+  running = startRating;
+  history.push({ label: 'Départ', rating: running });
+  for (const session of sessions) {
+    running = Math.max(RATING_MIN, Math.min(RATING_MAX, running + (session.ratingDelta ?? 0)));
+    history.push({ label: new Date(session.completedAt).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }), rating: running });
+  }
+
+  // Compute next rank / fallback rank
+  const currentRating = profile.rating ?? 600;
+  const sortedRanks = RATING_RANKS;
+  let nextRankEntry = null;
+  let prevRankEntry = null;
+  for (let i = 0; i < sortedRanks.length; i++) {
+    if (sortedRanks[i][1] > currentRating) { nextRankEntry = sortedRanks[i]; break; }
+    prevRankEntry = sortedRanks[i];
+  }
+  const ptsToNext  = nextRankEntry  ? nextRankEntry[1]  - currentRating : null;
+  const ptsAbovePrev = prevRankEntry ? currentRating - prevRankEntry[1] : null;
+
+  // SVG chart dimensions
+  const W = 560, H = 200, padL = 44, padR = 16, padT = 12, padB = 24;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = history.length;
+  const xScale = n > 1 ? chartW / (n - 1) : chartW;
+  const yScale = (v) => padT + chartH - ((Math.min(v, RATING_MAX) - RATING_MIN) / (RATING_MAX - RATING_MIN)) * chartH;
+
+  const points = history.map((p, i) => `${padL + i * xScale},${yScale(p.rating)}`).join(' ');
+
+  // Threshold lines
+  const thresholdLines = RATING_RANKS.map(([rank, pts]) => {
+    const y = yScale(pts);
+    if (y < padT - 2 || y > padT + chartH + 2) return '';
+    const color = rankColor(rank);
+    return `
+      <line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>
+      <text x="${padL - 4}" y="${y + 4}" text-anchor="end" font-size="9" fill="${color}" font-family="JetBrains Mono, monospace">${rank}</text>`;
+  }).join('');
+
+  // Data path
+  const pathD = history.length > 1
+    ? `M ${history.map((p, i) => `${padL + i * xScale} ${yScale(p.rating)}`).join(' L ')}`
+    : '';
+
+  return `
+    <div class="rating-modal-overlay" id="rating-modal">
+      <div class="rating-modal-card card">
+        <div class="rating-modal-head">
+          <span>
+            ${rankBadge(profile.rank)}
+            <strong>${currentRating} pts FFBAD</strong>
+          </span>
+          <button class="rating-modal-close" type="button" aria-label="Fermer">✕</button>
+        </div>
+
+        <svg class="rating-chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+          ${thresholdLines}
+          ${pathD ? `<polyline points="${points}" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linejoin="round"/>` : ''}
+          ${history.map((p, i) => `<circle cx="${padL + i * xScale}" cy="${yScale(p.rating)}" r="3" fill="#60a5fa"/>`).join('')}
+        </svg>
+
+        <div class="rating-delta-row">
+          ${nextRankEntry ? `
+            <div class="rating-delta-card positive">
+              <span class="delta-label">Vers ${nextRankEntry[0]}</span>
+              <strong>+${ptsToNext} pts</strong>
+            </div>` : `
+            <div class="rating-delta-card positive">
+              <span class="delta-label">Classement max</span>
+              <strong>N1 ★</strong>
+            </div>`}
+          ${prevRankEntry ? `
+            <div class="rating-delta-card negative">
+              <span class="delta-label">Au-dessus de ${prevRankEntry[0]}</span>
+              <strong>+${ptsAbovePrev} pts</strong>
+            </div>` : `
+            <div class="rating-delta-card negative">
+              <span class="delta-label">Classement min</span>
+              <strong>P12</strong>
+            </div>`}
+        </div>
+      </div>
     </div>`;
 }
 
@@ -559,9 +798,13 @@ export class ScreenManager {
           </nav>
           <div class="player-pill" data-player-pill aria-label="Profil joueur" style="--avatar-color:${profile.avatarColor}">
             <span class="player-avatar" data-player-initials>${initials}</span>
-            <span>
+            <span class="player-rank-group">
+              <span class="player-rank" data-player-rank style="color:${rankColor(profile.rank)}">${escapeHtml(profile.rank.toUpperCase())} · ${profile.rating ?? 600} pts</span>
               <span class="player-name" data-player-name>${escapeHtml(profile.name)}</span>
-              <span class="player-rank" data-player-rank>LVL ${profile.level} · ${profile.rank.toUpperCase()} · ${profile.rating ?? 600}</span>
+            </span>
+            <span class="player-level-group">
+              <span class="level-tag">LVL</span>
+              <strong data-player-level>${profile.level}</strong>
             </span>
           </div>
         </header>
@@ -569,7 +812,7 @@ export class ScreenManager {
         <main class="rally-main">
           <section class="rally-page active" data-panel="home">
             <div class="stats-strip">
-              ${this._homeStatsMarkup(profile)}
+              ${this._homeStatsMarkup(profile, this._state)}
             </div>
             <div class="page-title-row">
               <div>
@@ -668,16 +911,22 @@ export class ScreenManager {
         event.stopPropagation();
         const mode = button.closest('.mode-card')?.dataset.mode;
         if (button.dataset.available !== 'true') {
-          this._showFeedback(menu, 'Match Mode is coming soon. Attack and Defense workshops are still playable for now.');
+          this._showFeedback(menu, 'This mode is locked for now.');
           return;
         }
-        if (mode === 'attack' || mode === 'defense') {
+        if (mode === 'attack' || mode === 'defense' || mode === 'match') {
           this._emit('workshop:select', { workshop: mode });
         }
       });
     });
 
+    menu.querySelector('[data-player-rank]')?.addEventListener('click', () => {
+      this._showRatingHistory();
+    });
+
     this._wireDrills(menu);
+
+    this._wireInterclub(menu);
 
     this._wireLeaderboard(menu);
 
@@ -692,8 +941,8 @@ export class ScreenManager {
           ${MODES.filter(mode => mode.available).map(mode => `
             <button class="workshop-card" type="button" data-workshop="${mode.id}" style="--mode-color:${mode.color}">
               <span class="workshop-icon">${modeIcon(mode.id)}</span>
-              <span class="workshop-title">${mode.id === 'attack' ? 'Attack' : 'Defense'}</span>
-              <span class="workshop-desc">${mode.id === 'attack' ? 'Rotation, smash, net kill' : 'Side-by-side, lift, block'}</span>
+              <span class="workshop-title">${escapeHtml(mode.title)}</span>
+              <span class="workshop-desc">${escapeHtml(mode.tagline)}</span>
             </button>
           `).join('')}
         </div>
@@ -837,8 +1086,8 @@ export class ScreenManager {
     this.show('menu');
   }
 
-  _homeStatsMarkup(profile) {
-    return homeStats(profile).map(stat => `
+  _homeStatsMarkup(profile, state) {
+    return homeStats(profile, state).map(stat => `
       <article class="stat-card">
         <span class="stat-label">${stat.label}</span>
         <strong>${stat.value}</strong>
@@ -850,7 +1099,7 @@ export class ScreenManager {
 
   _renderHomeStats(menu) {
     const stats = menu.querySelector('.stats-strip');
-    if (stats) stats.innerHTML = this._homeStatsMarkup(getProfile(this._state));
+    if (stats) stats.innerHTML = this._homeStatsMarkup(getProfile(this._state), this._state);
   }
 
   _applyDrillFilter(menu, category) {
@@ -904,15 +1153,39 @@ export class ScreenManager {
     });
   }
 
+  _showRatingHistory() {
+    document.getElementById('rating-modal')?.remove();
+    const div = document.createElement('div');
+    div.innerHTML = ratingHistoryModalMarkup(this._state);
+    const modal = div.firstElementChild;
+    document.body.appendChild(modal);
+    modal.querySelector('.rating-modal-close')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  _wireInterclub(menu) {
+    menu.querySelector('[data-interclub]')?.addEventListener('click', async () => {
+      const today = new Date().toDateString();
+      if ((this._state.interclubLastDate ?? '') === today) return;
+      this._state = await saveAppStateAsync({ interclubLastDate: today });
+      // Re-render the daily bonus section so the button becomes "used"
+      const dailyBonus = menu.querySelector('.daily-actions-group');
+      if (dailyBonus) dailyBonus.outerHTML = dailyBonusMarkup(this._state);
+      this._wireInterclub(menu);
+      // Launch interclub match (higher-ranked opponent, asymmetric ELO)
+      this._emit('workshop:select', { workshop: 'match', interclub: true });
+    });
+  }
+
   _renderLeaderboardPanel(menu) {
     const panel = menu.querySelector('[data-panel="leaderboard"]');
     if (panel) panel.innerHTML = renderLeaderboardPage(this._state);
   }
 
   _wireLeaderboard(menu) {
-    menu.querySelectorAll('.period-tab').forEach(button => {
+    menu.querySelectorAll('.lb-tab').forEach(button => {
       button.addEventListener('click', async () => {
-        this._state = await saveAppStateAsync({ preferences: { leaderboardPeriod: button.dataset.period } });
+        this._state = await saveAppStateAsync({ preferences: { leaderboardTab: button.dataset.lbTab } });
         this._renderLeaderboardPanel(menu);
         this._wireLeaderboard(menu);
       });
@@ -941,6 +1214,62 @@ export class ScreenManager {
       input.addEventListener('input', () => this._markProfileDirty(menu));
       input.addEventListener('change', () => this._markProfileDirty(menu));
     });
+
+    menu.querySelector('[data-hand-toggle]')?.addEventListener('click', async button => {
+      const el = button.currentTarget;
+      const nowLeft = el.getAttribute('aria-pressed') !== 'true';
+      el.setAttribute('aria-pressed', String(nowLeft));
+      el.classList.toggle('active', nowLeft);
+      this._state = await saveAppStateAsync({ profile: { racketHand: nowLeft ? 'left' : 'right' } });
+    });
+
+    // ── Key rebinding ──────────────────────────────────────────────────
+    let rebindTarget = null;
+    menu.querySelectorAll('.rebindable').forEach(kbd => {
+      kbd.addEventListener('click', () => {
+        if (rebindTarget) rebindTarget.classList.remove('rebinding');
+        rebindTarget = kbd;
+        kbd.classList.add('rebinding');
+        kbd.textContent = '…';
+      });
+      kbd.addEventListener('keydown', e => {
+        e.preventDefault();
+        if (rebindTarget === kbd && e.key !== 'Escape') {
+          kbd.textContent = e.key;
+          kbd.classList.remove('rebinding');
+          rebindTarget = null;
+          const action = kbd.dataset.action;
+          const updated = (this._state.controls ?? []).map(b =>
+            b.action === action ? { ...b, key: e.key } : b
+          );
+          void saveAppStateAsync({ controls: updated }).then(s => { this._state = s; });
+        } else if (e.key === 'Escape') {
+          const action = kbd.dataset.action;
+          kbd.textContent = (this._state.controls ?? []).find(b => b.action === action)?.key ?? '?';
+          kbd.classList.remove('rebinding');
+          rebindTarget = null;
+        }
+      });
+    });
+
+    document.addEventListener('keydown', e => {
+      if (!rebindTarget) return;
+      if (e.key === 'Escape') {
+        const action = rebindTarget.dataset.action;
+        rebindTarget.textContent = (this._state.controls ?? []).find(b => b.action === action)?.key ?? '?';
+        rebindTarget.classList.remove('rebinding');
+        rebindTarget = null;
+        return;
+      }
+      rebindTarget.textContent = e.key;
+      rebindTarget.classList.remove('rebinding');
+      const action = rebindTarget.dataset.action;
+      rebindTarget = null;
+      const updated = (this._state.controls ?? []).map(b =>
+        b.action === action ? { ...b, key: e.key } : b
+      );
+      void saveAppStateAsync({ controls: updated }).then(s => { this._state = s; });
+    }, { once: false });
 
     menu.querySelector('.save-profile')?.addEventListener('click', () => {
       void this._saveProfileFromDom(menu);
@@ -1013,7 +1342,12 @@ export class ScreenManager {
     const playerName = menu.querySelector('[data-player-name]');
     if (playerName) playerName.textContent = profile.name;
     const playerRank = menu.querySelector('[data-player-rank]');
-    if (playerRank) playerRank.textContent = `LVL ${profile.level} · ${profile.rank.toUpperCase()} · ${profile.rating ?? 600}`;
+    if (playerRank) {
+      playerRank.textContent = `${profile.rank.toUpperCase()} · ${profile.rating ?? 600} pts`;
+      playerRank.style.color = rankColor(profile.rank);
+    }
+    const playerLevel = menu.querySelector('[data-player-level]');
+    if (playerLevel) playerLevel.textContent = profile.level;
     const greeting = menu.querySelector('[data-home-greeting]');
     if (greeting) greeting.textContent = `Ready to play, ${firstName}?`;
     this._applyAvatarColor(menu, profile.avatarColor);
