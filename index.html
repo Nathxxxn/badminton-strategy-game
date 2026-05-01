@@ -67,6 +67,19 @@
           <span id="hud-turn-total" class="turn-tot">4</span>
           <div class="turn-dots" id="hud-turn-dots"></div>
         </div>
+        <div class="match-scoreboard" id="match-scoreboard" hidden>
+          <div class="match-side">
+            <span class="match-name">PLAYER</span>
+            <strong id="match-player-points">0</strong>
+            <span>sets <b id="match-player-sets">0</b></span>
+          </div>
+          <div class="match-score-sep">:</div>
+          <div class="match-side">
+            <span class="match-name">OPP</span>
+            <strong id="match-opponent-points">0</strong>
+            <span>sets <b id="match-opponent-sets">0</b></span>
+          </div>
+        </div>
       </div>
 
       <div id="hud-right">
@@ -77,6 +90,7 @@
             <path d="M10 4H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
           <span id="hud-timer">--</span>
+          <span class="hud-timer-track" aria-hidden="true"><span id="hud-timer-bar"></span></span>
         </div>
         <div class="score-pill">
           <span class="score-val" id="hud-score">0</span>
@@ -147,6 +161,12 @@
       <!-- ─── Stage (court canvas + overlays) ──────────────────────────── -->
       <div class="stage" id="stage">
         <canvas id="game-canvas"></canvas>
+        <div class="match-fatigue" id="match-fatigue" hidden>
+          <div class="fatigue-row"><span>Player</span><b>100</b><i><em id="fatigue-player"></em></i></div>
+          <div class="fatigue-row"><span>Partner</span><b>100</b><i><em id="fatigue-partner"></em></i></div>
+          <div class="fatigue-row"><span>Opp 1</span><b>100</b><i><em id="fatigue-opponent1"></em></i></div>
+          <div class="fatigue-row"><span>Opp 2</span><b>100</b><i><em id="fatigue-opponent2"></em></i></div>
+        </div>
         <div class="shot-type-selector" id="shot-type-selector" hidden>
           <button class="shot-type-btn is-active" data-shot-type="SMASH" type="button">SMASH</button>
           <button class="shot-type-btn"           data-shot-type="DROP"  type="button">DROP</button>
@@ -214,6 +234,14 @@
         </div>
       </div>
     </div>
+
+    <div id="match-ready-overlay" class="match-ready-overlay" hidden>
+      <div class="match-ready-card">
+        <p class="match-ready-eyebrow">MATCH MODE</p>
+        <h2>First rally</h2>
+        <button id="match-ready-btn" class="match-ready-btn" type="button">I'm ready</button>
+      </div>
+    </div>
   </div>
 
   <div id="end-screen">
@@ -222,6 +250,8 @@
     <p  id="end-detail"></p>
     <button id="end-btn" class="btn-primary">Play again</button>
   </div>
+
+  <button id="continue-btn" hidden>Continuer →</button>
 
   <script type="module" src="src/js/main.js"></script>
 </body>

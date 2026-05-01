@@ -33,7 +33,7 @@ const OPP_STROKE  = '#0f1a14';
 const OPP_LABEL   = '#fff8e1';
 
 // Ghost (movingTo preview)
-const GHOST_ALPHA = 0.30;
+const GHOST_ALPHA = 0.55;
 
 // Glow (active player) — amber
 const GLOW_COLOUR = 'rgba(255, 210, 63, 0.70)';
@@ -79,7 +79,7 @@ export class Renderer {
    *
    * @param {Object} players       — keyed by role id (ally1, ally2, opponent1, opponent2)
    *                                 Each entry: { x, y, label?, movingTo? }
-   * @param {Object|null} shuttlecock — { position, trajectory, speed?, height? }
+   * @param {Object|null} shuttlecock — { position, trajectory, speed?, height?, type? }
    * @param {string|null} activePlayerId — role id of the player whose turn it is
    */
   drawScene(players, shuttlecock, activePlayerId = null, equipment = null) {
@@ -248,14 +248,13 @@ export class Renderer {
   }
 
   /**
-   * Draw the choice-vs-optimal feedback:
-   *  - choice marker (color reflects scoring tier: good/near/wrong)
-   *  - optimal marker (yellow accent star/diamond, ink ring)
-   *  - dashed ink line between them with the distance in metres
+   * Draw minimal choice-vs-optimal feedback:
+   *  - dashed ink line between choice and optimal
+   *  - distance pill at midpoint (no large disc markers)
    *
    * @param {{x:number,y:number}} choice
    * @param {{x:number,y:number}} optimal
-   * @param {'good'|'near'|'wrong'} [tier='wrong']
+   * @param {'good'|'near'|'wrong'} [tier='wrong']  — kept for API compatibility, unused visually
    */
   drawChoiceVsOptimal(choice, optimal, tier = 'wrong') {
     if (!choice || !optimal) return;
@@ -264,13 +263,8 @@ export class Renderer {
     const c = court.toCanvas(choice.x, choice.y);
     const o = court.toCanvas(optimal.x, optimal.y);
 
-    const ink    = '#0f1a14';
-    const cream  = '#f4ecd8';
-    const accent = '#ffd23f';
-    const choiceColor =
-      tier === 'good'  ? '#22c55e' :
-      tier === 'near'  ? '#fb923c' :
-                         '#e85d3c';
+    const ink   = '#0f1a14';
+    const cream = '#f4ecd8';
 
     // Court is 13.4 m long (y) × 6.1 m wide (x)
     const dxM = (choice.x - optimal.x) * 6.1;
@@ -283,39 +277,12 @@ export class Renderer {
     ctx.setLineDash([6, 5]);
     ctx.strokeStyle = ink;
     ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(c.x, c.y);
     ctx.lineTo(o.x, o.y);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    // ─── Optimal marker — yellow accent disc with ink ring + star ───────
-    const optR = Math.max(8, court.courtW * 0.022);
-    ctx.beginPath();
-    ctx.arc(o.x, o.y, optR + 2, 0, Math.PI * 2);
-    ctx.fillStyle = ink;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(o.x, o.y, optR, 0, Math.PI * 2);
-    ctx.fillStyle = accent;
-    ctx.fill();
-    // Inner star/dot
-    ctx.fillStyle = ink;
-    ctx.font = `bold ${Math.round(optR * 1.3)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('★', o.x, o.y + 1);
-
-    // ─── Choice marker — colored disc with ink ring ─────────────────────
-    const chR = Math.max(7, court.courtW * 0.018);
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, chR + 2, 0, Math.PI * 2);
-    ctx.fillStyle = ink;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, chR, 0, Math.PI * 2);
-    ctx.fillStyle = choiceColor;
-    ctx.fill();
 
     // ─── Distance label (cream pill on ink) at the line midpoint ────────
     const mx = (c.x + o.x) / 2;
@@ -335,15 +302,9 @@ export class Renderer {
     ctx.roundRect(mx - pillW / 2, my - pillH / 2, pillW, pillH, 6);
     ctx.fill();
     ctx.fillStyle = cream;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(distText, mx, my + 1);
-
-    // ─── "OPTIMAL" caption above the star ───────────────────────────────
-    ctx.font = `bold ${Math.round(court.courtW * 0.020)}px ` +
-               `"JetBrains Mono", ui-monospace, monospace`;
-    ctx.fillStyle = ink;
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('OPTIMAL', o.x, o.y - optR - 6);
 
     ctx.restore();
   }
@@ -404,22 +365,60 @@ export class Renderer {
     ctx.fillText(label, x, y);
 
     if (hand === 'left' || hand === 'right') {
-      const badgeR = r * 0.32;
-      const bx = x + r * 0.7;
-      const by = y - r * 0.7;
-      ctx.beginPath();
-      ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffd23f';
-      ctx.fill();
-      ctx.strokeStyle = '#0f1a14';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = '#0f1a14';
-      ctx.font = `bold ${Math.round(r * 0.3)}px 'JetBrains Mono', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(hand === 'left' ? 'L' : 'R', bx, by);
+      // Allies face up (toward opponent half) — racket on the hand side as seen top-down.
+      // Opponents face down — their right/left is mirrored from the viewer perspective.
+      const handOffset = (hand === 'right') === isAlly ? r * 1.3 : -(r * 1.3);
+      this._drawRacketIcon(ctx, x + handOffset, y, r, isAlly);
     }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw a small stylised racket icon (oval head + short grip).
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} bx   Centre x of icon
+   * @param {number} by   Centre y of icon
+   * @param {number} r    Player circle radius (used for scaling)
+   * @param {boolean} isAlly
+   */
+  _drawRacketIcon(ctx, bx, by, r, isAlly) {
+    const headRx = r * 0.28;
+    const headRy = r * 0.36;
+    const gripLen = r * 0.48;
+    const angle   = Math.PI * 0.08; // slight tilt
+    const colour  = isAlly ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.85)';
+
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(angle);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([]);
+
+    // Head (oval)
+    ctx.beginPath();
+    ctx.ellipse(0, 0, headRx, headRy, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Cross strings (simplified: one horizontal, one vertical)
+    ctx.lineWidth = 0.8;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(-headRx * 0.7, 0);
+    ctx.lineTo( headRx * 0.7, 0);
+    ctx.moveTo(0, -headRy * 0.7);
+    ctx.lineTo(0,  headRy * 0.7);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Grip (line below the head)
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(0, headRy);
+    ctx.lineTo(0, headRy + gripLen);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -445,8 +444,13 @@ export class Renderer {
     ctx.globalAlpha = GHOST_ALPHA;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle   = fill;
+    ctx.fillStyle = fill;
     ctx.fill();
+    // Thin stroke ring for legibility over the veil
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = fill;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -472,9 +476,10 @@ export class Renderer {
 
     ctx.save();
     ctx.strokeStyle = fill;
-    ctx.lineWidth   = 1.5;
+    ctx.lineWidth   = 2.5;
     ctx.setLineDash([5, 4]);
-    ctx.globalAlpha = 0.7;
+    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+    ctx.shadowBlur  = 6;
 
     ctx.beginPath();
     ctx.moveTo(sx, sy);
@@ -483,8 +488,7 @@ export class Renderer {
 
     // Arrowhead
     ctx.setLineDash([]);
-    ctx.globalAlpha = 0.85;
-    this._drawArrowHead(ctx, ex, ey, ux, uy, 7);
+    this._drawArrowHead(ctx, ex, ey, ux, uy, 8);
 
     ctx.restore();
   }
@@ -537,32 +541,173 @@ export class Renderer {
     ctx.restore();
   }
 
+  // ─── Trajectory drawing ───────────────────────────────────────────────────
+
+  /**
+   * Draw the shuttle trajectory with visual style differentiated by shot type.
+   *
+   * Type → style mapping:
+   *   DRIVE           — solid straight line
+   *   SMASH           — double parallel straight lines
+   *   KILL            — triple parallel straight lines
+   *   CLEAR           — solid bezier curve (lofted)
+   *   DROP            — dashed bezier curve
+   *   NET_DROP        — short dotted bezier curve
+   *   NET_DROP+spin   — dotted bezier + small spin loops
+   *   (other/unknown) — legacy dotted line
+   */
   _drawTrajectory(shuttlecock) {
-    const { trajectory, speed } = shuttlecock;
+    const { trajectory, speed, type, spinApplied } = shuttlecock;
     if (!trajectory || trajectory.length < 2) return;
 
     const { ctx, court } = this;
     const points = trajectory.map(p => court.toCanvas(p.x, p.y));
 
-    // Number of trail dots based on speed
+    // Number of trail points based on speed
     const segments = TRAIL_SEGMENTS[speed] ?? TRAIL_SEGMENTS.medium;
-    // Take last N+1 points (or all if fewer)
     const visible  = points.slice(-Math.min(segments + 1, points.length));
 
     ctx.save();
-    ctx.strokeStyle = TRAJ_COLOUR;
-    ctx.lineWidth   = TRAJ_WIDTH;
-    ctx.setLineDash(TRAJ_DASH);
-    ctx.lineCap     = 'round';
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
 
-    ctx.beginPath();
-    ctx.moveTo(visible[0].x, visible[0].y);
-    for (let i = 1; i < visible.length; i++) {
-      ctx.lineTo(visible[i].x, visible[i].y);
+    switch (type) {
+      case 'DRIVE':
+        this._strokePath(ctx, visible, [], 1.8, TRAJ_COLOUR);
+        break;
+
+      case 'SMASH':
+        this._drawParallelLines(ctx, visible, 2, 3.5, 1.5, TRAJ_COLOUR);
+        break;
+
+      case 'KILL':
+        this._drawParallelLines(ctx, visible, 3, 2.5, 1.4, TRAJ_COLOUR);
+        break;
+
+      case 'CLEAR':
+        this._strokeCurve(ctx, visible, [], 2.0, TRAJ_COLOUR);
+        break;
+
+      case 'DROP':
+        this._strokeCurve(ctx, visible, [8, 6], 1.8, TRAJ_COLOUR);
+        break;
+
+      case 'NET_DROP':
+        if (spinApplied) {
+          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR);
+          this._drawSpinLoops(ctx, visible, TRAJ_COLOUR);
+        } else {
+          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR);
+        }
+        break;
+
+      default:
+        // Fallback: legacy dotted line
+        ctx.strokeStyle = TRAJ_COLOUR;
+        ctx.lineWidth   = TRAJ_WIDTH;
+        ctx.setLineDash(TRAJ_DASH);
+        ctx.beginPath();
+        ctx.moveTo(visible[0].x, visible[0].y);
+        for (let i = 1; i < visible.length; i++) ctx.lineTo(visible[i].x, visible[i].y);
+        ctx.stroke();
     }
-    ctx.stroke();
 
+    ctx.setLineDash([]);
     ctx.restore();
+  }
+
+  /** Stroke a straight polyline through the given canvas points. */
+  _strokePath(ctx, pts, dash, width, colour) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = width;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+
+  /**
+   * Stroke a quadratic bezier curve through the visible points.
+   * The control point is raised upward to suggest a lofted trajectory.
+   */
+  _strokeCurve(ctx, pts, dash, width, colour) {
+    if (pts.length < 2) return;
+    const start = pts[0];
+    const end   = pts[pts.length - 1];
+    const mx    = (start.x + end.x) / 2;
+    // Raise control point upward (negative y in canvas = up on screen)
+    const liftPx = this.court.courtH * 0.06;
+    const my    = (start.y + end.y) / 2 - liftPx;
+
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = width;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(mx, my, end.x, end.y);
+    ctx.stroke();
+  }
+
+  /**
+   * Draw N parallel lines offset perpendicular to the path direction.
+   * Used for SMASH (n=2) and KILL (n=3).
+   */
+  _drawParallelLines(ctx, pts, n, gap, width, colour) {
+    if (pts.length < 2) return;
+    const start = pts[0];
+    const end   = pts[pts.length - 1];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return;
+    // Perpendicular unit vector
+    const px = -dy / len;
+    const py =  dx / len;
+
+    // Centre the group of lines
+    const totalSpan = gap * (n - 1);
+    const startOffset = -totalSpan / 2;
+
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = width;
+    ctx.setLineDash([]);
+
+    for (let i = 0; i < n; i++) {
+      const off = startOffset + i * gap;
+      ctx.beginPath();
+      ctx.moveTo(start.x + px * off, start.y + py * off);
+      // Draw through all visible points with the same offset
+      for (let j = 1; j < pts.length; j++) {
+        ctx.lineTo(pts[j].x + px * off, pts[j].y + py * off);
+      }
+      ctx.stroke();
+    }
+  }
+
+  /**
+   * Draw small elliptical loops along the midpoint of the trajectory
+   * to suggest spin (used for NET_DROP with spin).
+   */
+  _drawSpinLoops(ctx, pts, colour) {
+    if (pts.length < 2) return;
+    const start = pts[0];
+    const end   = pts[pts.length - 1];
+    const loopR = 4;
+    const count = 3;
+
+    ctx.strokeStyle = colour;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([]);
+
+    for (let i = 1; i <= count; i++) {
+      const t  = i / (count + 1);
+      const lx = start.x + (end.x - start.x) * t;
+      const ly = start.y + (end.y - start.y) * t;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, loopR, loopR * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────

@@ -33,6 +33,14 @@ import { ShotTypeSelector, clampPowerForType } from './shot-type-selector.js';
 import { AISpawnEngine }          from './logic/AISpawnEngine.js';
 import { KinematicEngine }        from './logic/KinematicEngine.js';
 import { PlacementEngine }        from './logic/PlacementEngine.js';
+import {
+  createMatchState,
+  applyMatchPoint,
+  isMatchComplete,
+  resolveTurnTimeLimitSeconds,
+  DEFAULT_OPPONENT_RANK,
+  DEFAULT_OPPONENT_NAMES,
+} from './match-runtime.js';
 
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
@@ -44,8 +52,12 @@ const SHOT_PROFILES = kinematicEngine.SHOT_PARAMS;
 const ALL_SHOT_TYPES = UI_SHOT_TYPES.filter(type => SHOT_PROFILES[type]);
 const DEFAULT_PLAYER_PROFILE = Object.freeze({
   rank: 'P12',
-  points: 0,
+  // FFBAD numerical rating (sent to Logic at initialisation). Distinct from in-game XP.
+  rating: 600,
+  racketHand: 'right',
   level: 1,
+  // In-game XP (managed Front-side, not sent to Logic).
+  xp: 0,
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -70,7 +82,7 @@ court.onGeometryChange(() => {
 const screens  = new ScreenManager();
 const timer    = new ExerciseTimer(
   DEFAULT_PLAYER_PROFILE.rank,
-  () => {},
+  (remaining, total) => hud.setTimerProgress(remaining, total),
   () => {
     const context = timedTurnContext;
     if (!context) return;
@@ -93,6 +105,7 @@ const shotTypeSelector = new ShotTypeSelector(
 let currentRally    = null;
 let currentWorkshop = null;
 let currentDrillId  = null;
+let currentMatchState = null;
 let turnIndex       = 0;
 let score           = 0;
 let combo           = 0;
@@ -238,6 +251,45 @@ function renderFeedbackFrame(
 
 const nextFrame = () => new Promise(r => requestAnimationFrame(r));
 
+function showMatchReadyPrompt() {
+  const overlay = document.getElementById('match-ready-overlay');
+  const button = document.getElementById('match-ready-btn');
+  if (!overlay || !button) return Promise.resolve();
+
+  cleanupTurnListeners();
+  stopTurnTimer();
+
+  // Populate opponent style cards if available
+  const styles = currentMatchState?.opponentStyles ?? null;
+  let opponentInfoEl = overlay.querySelector('.match-ready-opponents');
+  if (!opponentInfoEl) {
+    opponentInfoEl = document.createElement('div');
+    opponentInfoEl.className = 'match-ready-opponents';
+    button.insertAdjacentElement('beforebegin', opponentInfoEl);
+  }
+  if (styles) {
+    const hand = h => h === 'left' ? 'L' : 'R';
+    opponentInfoEl.innerHTML =
+      `<p class="match-ready-opp-label">Your opponents</p>` +
+      `<div class="match-ready-opp-row">` +
+      `<span class="opp-chip"><strong>${styles.opp1.name}</strong> · ${styles.opp1.style} · ${hand(styles.opp1.hand)}</span>` +
+      `<span class="opp-chip"><strong>${styles.opp2.name}</strong> · ${styles.opp2.style} · ${hand(styles.opp2.hand)}</span>` +
+      `</div>`;
+  } else {
+    opponentInfoEl.innerHTML = '';
+  }
+
+  overlay.hidden = false;
+  button.focus?.();
+
+  return new Promise(resolve => {
+    button.addEventListener('click', () => {
+      overlay.hidden = true;
+      resolve();
+    }, { once: true });
+  });
+}
+
 /**
  * Run multiple animations simultaneously, redrawing base each frame.
  * @param {Array<() => Promise>} starters
@@ -294,6 +346,8 @@ function cleanupTurnListeners() {
   shotTypeSelector.hide();
   currentImpactPointsByType = new Map();
   shotTypeSelector.setAllowedTypes(ALL_SHOT_TYPES);
+  const continueBtn = document.getElementById('continue-btn');
+  if (continueBtn) continueBtn.hidden = true;
 }
 
 function clampToRadius(origin, target, radiusMetres) {
@@ -316,10 +370,17 @@ function constrainPlacementPos(turn, pos) {
 }
 
 function buildScoreLines(totalScore, messages = []) {
-  const list = [`Score: ${totalScore}/100`];
-  if (Array.isArray(messages)) return list.concat(messages.filter(Boolean));
-  if (messages) list.push(messages);
-  return list;
+  const list = Array.isArray(messages) ? messages.filter(Boolean) : messages ? [messages] : [];
+  return list.length ? list : [`Score: ${totalScore}`];
+}
+
+function waitForContinue() {
+  const btn = document.getElementById('continue-btn');
+  if (!btn) return Promise.resolve();
+  btn.hidden = false;
+  return new Promise(resolve => {
+    btn.addEventListener('click', () => { btn.hidden = true; resolve(); }, { once: true });
+  });
 }
 
 function getTimePressure(turn) {
@@ -337,22 +398,32 @@ const TIMER_DISABLED = true;
 
 function startTurnTimer(turn) {
   stopTurnTimer();
-  if (TIMER_DISABLED) return;
+  const isMatch = currentWorkshop === 'match';
+  if (TIMER_DISABLED && !isMatch) return;
 
   const { enabled, secondsPerTurn } = getTimePressure(turn);
   if (!enabled) return;
+
+  const matchSeconds = isMatch
+    ? resolveTurnTimeLimitSeconds(
+        turn,
+        currentMatchState?.previousTurnScore,
+        turn?.opponentRank ?? currentMatchState?.opponentRank ?? DEFAULT_OPPONENT_RANK,
+      )
+    : null;
 
   timedTurnContext = {
     requestId: startRequestId,
     turnIndex,
     turnType: turn.type,
   };
-  timer.start(turn.type, secondsPerTurn);
+  timer.start(turn.type, matchSeconds ?? secondsPerTurn);
 }
 
 function stopTurnTimer() {
   timedTurnContext = null;
   timer.stop();
+  hud.setTimerProgress(0, 0);
 }
 
 async function animatePlacementResolution(turn, pos) {
@@ -390,7 +461,8 @@ async function resolvePositioningTimeout(turn) {
   await animatePlacementResolution(turn, fallbackPos);
 
   const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(fallbackPos, turn)));
-  const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
+  const isCorrect = currentWorkshop === 'match' ? false : feedback.totalScore >= (turn.passingScore ?? 70);
+  const awardedScore = currentWorkshop === 'match' ? 0 : feedback.totalScore;
   recordPlacementFeedback(feedback);
 
   renderFeedbackFrame(turn, {
@@ -414,20 +486,22 @@ async function resolvePositioningTimeout(turn) {
 
   const timeoutLines = ['Time expired: your starting position was kept.'];
   if (feedback.message) timeoutLines.push(feedback.message);
+  if (currentWorkshop === 'match') await showPointResult({ winner: 'opp', reason: 'TIME' });
 
   await hud.showMessages(
-    buildScoreLines(feedback.totalScore, timeoutLines),
+    buildScoreLines(awardedScore, timeoutLines),
     isCorrect ? '#34d399' : '#f87171',
     2200,
   );
 
-  applyScore(feedback.totalScore, isCorrect);
+  applyScore(awardedScore, isCorrect);
+  if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
 }
 
 async function resolveShotTimeout(turn) {
   const shuttlePos = turn.shuttlecock?.position ?? null;
-  const winner = shuttlePos && shuttlePos.y < 0.5 ? 'player' : 'opp';
+  const winner = currentWorkshop === 'match' ? 'opp' : shuttlePos && shuttlePos.y < 0.5 ? 'player' : 'opp';
 
   renderBase(turn);
   if (shuttlePos) zones.drawClickMarker(shuttlePos.x, shuttlePos.y);
@@ -448,6 +522,7 @@ async function resolveShotTimeout(turn) {
   );
 
   applyScore(0, false);
+  if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
 }
 
@@ -575,6 +650,7 @@ async function onPositionClick(e) {
   );
 
   applyScore(feedback.totalScore, isCorrect);
+  if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
 }
 
@@ -676,12 +752,19 @@ async function onShotFired(shot) {
   );
 
   applyScore(feedback.totalScore, isCorrect);
+  if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
 }
 
 function applyScore(pts, isCorrect) {
   score += pts;
   if (isCorrect) { combo++; correct++; } else { combo = 0; }
+
+  if (currentWorkshop === 'match' && currentMatchState) {
+    applyMatchPoint(currentMatchState, isCorrect ? 'player' : 'opponent', pts);
+    hud.setMatchState(currentMatchState);
+  }
+
   hud.update(score, turnIndex, currentRally.length, combo);
 
   const turn = currentRally?.[turnIndex];
@@ -744,17 +827,33 @@ function showPointResult(signal) {
   });
 }
 
+/**
+ * Called by Logic (Developer B) when a point ends mid-turn (fault, NET, OUT, or TIME).
+ *
+ * Expected signal shape:
+ *   { winner: 'player'|'opp', reason: 'NET'|'OUT'|'TIME'|string, impactPoint?: {x,y} }
+ *
+ * `impactPoint` is the full-court normalized position of the shuttlecock at the
+ * moment the fault occurred — used to render a click marker so the player sees
+ * exactly where the shuttle was when the rally stopped.
+ */
 export async function handleStopSignal(signal) {
   if (!turnActive) return;
   stopTurnTimer();
   cleanupTurnListeners();
   turnActive = false;
+
+  const turn = currentRally?.[turnIndex];
+  if (turn) {
+    const ip = signal.impactPoint ?? null;
+    renderBase(turn, { showShuttle: !ip });
+    if (ip) zones.drawClickMarker(ip.x, ip.y);
+  }
+
   await showPointResult(signal);
   applyScore(0, false);
   nextTurn();
 }
-
-// INTEGRATION POINT: Call handleStopSignal(signal) from match.js when Logic engine sends STOP
 
 // ─── Turn sequencing ────────────────────────────────────────────────────────
 
@@ -762,6 +861,18 @@ function nextTurn() {
   stopTurnTimer();
   turnActive = false;
   hud.hideInstruction();  // clear immediately, new turn will set its own
+
+  if (currentWorkshop === 'match' && currentMatchState) {
+    if (isMatchComplete(currentMatchState)) {
+      setTimeout(showEndScreen, 350);
+      return;
+    }
+
+    turnIndex = (turnIndex + 1) % currentRally.length;
+    setTimeout(() => runTurn(turnIndex), 350);
+    return;
+  }
+
   turnIndex++;
   if (turnIndex >= currentRally.length) {
     setTimeout(showEndScreen, 350);
@@ -772,23 +883,44 @@ function nextTurn() {
 
 function runTurn(index) {
   const turn = currentRally[index];
+  if (turn.players) {
+    const styles = currentMatchState?.opponentStyles;
+    const [defaultName1, defaultName2] = DEFAULT_OPPONENT_NAMES;
+    if (turn.players.opponent1) {
+      turn.players.opponent1.label = styles ? styles.opp1.name[0] : defaultName1[0];
+    }
+    if (turn.players.opponent2) {
+      turn.players.opponent2.label = styles ? styles.opp2.name[0] : defaultName2[0];
+    }
+  }
   if (turn.type === 'positioning') startPositioningTurn(turn);
   else                             startShotTurn(turn);
 }
 
 function showEndScreen() {
   hud.hideInstruction();
-  const pct   = Math.round((correct / currentRally.length) * 100);
+  const totalPlayed = currentWorkshop === 'match'
+    ? countTactical + countPlacement
+    : currentRally.length;
+  const pct   = totalPlayed > 0 ? Math.round((correct / totalPlayed) * 100) : 0;
   const stars = pct >= 90 ? '★★★' : pct >= 60 ? '★★☆' : '★☆☆';
   const avgTactical   = countTactical   > 0 ? Math.round(scoreTacticalSum  / countTactical)   : '—';
   const avgPlacement  = countPlacement  > 0 ? Math.round(scorePlacementSum / countPlacement)  : '—';
 
-  document.getElementById('end-title').textContent  = `${stars}  Rally complete!`;
-  document.getElementById('end-score').textContent  = `Score: ${score} pts`;
+  document.getElementById('end-title').textContent = currentWorkshop === 'match'
+    ? `${currentMatchState?.winner === 'player' ? 'Match won!' : 'Match lost'}`
+    : `${stars}  Rally complete!`;
+  document.getElementById('end-score').textContent = currentWorkshop === 'match'
+    ? `Sets: ${currentMatchState?.sets.player ?? 0}-${currentMatchState?.sets.opponent ?? 0} · Score: ${score} pts`
+    : `Score: ${score} pts`;
+
+  // ratingDelta is populated by Logic at end of match (null until then).
+  const ratingDelta = currentMatchState?.ratingDelta ?? null;
 
   const details = [
-    `${correct} / ${currentRally.length} correct answers`,
+    `${correct} / ${totalPlayed} correct answers`,
     `Shot: ${avgTactical !== '—' ? avgTactical + ' pts' : '—'}  |  Positioning: ${avgPlacement !== '—' ? avgPlacement + ' pts' : '—'}`,
+    ...(ratingDelta !== null ? [`FFBAD Rating: ${ratingDelta >= 0 ? '+' : ''}${ratingDelta}`] : []),
     ...(totalBonus  > 0 ? [`Bonus: +${totalBonus}`]     : []),
     ...(totalMalus  > 0 ? [`Penalty: -${totalMalus}`]   : []),
     ...(countBackhand > 0 ? [`Backhands targeted: ${countBackhand}`] : []),
@@ -806,7 +938,7 @@ function showEndScreen() {
     matchId: currentRally[0]?.matchId ?? null,
     score,
     correct,
-    totalTurns: currentRally.length,
+    totalTurns: totalPlayed,
     durationSeconds: gameStartedAt ? Math.max(0, Math.round((Date.now() - gameStartedAt) / 1000)) : 0,
     tacticalAverage: typeof avgTactical === 'number' ? avgTactical : null,
     placementAverage: typeof avgPlacement === 'number' ? avgPlacement : null,
@@ -818,11 +950,27 @@ function showEndScreen() {
 
 // ─── Screen routing ─────────────────────────────────────────────────────────
 
+/**
+ * Build the player init payload for the Logic engine.
+ * Shape: { rank, rating, racketHand }
+ *   rank       — FFBAD classification string (e.g. 'P12', 'R5')
+ *   rating     — FFBAD numerical rating in points (e.g. 600)
+ *   racketHand — 'right' | 'left'
+ */
+function buildPlayerInitPayload() {
+  return {
+    rank:       DEFAULT_PLAYER_PROFILE.rank,
+    rating:     DEFAULT_PLAYER_PROFILE.rating,
+    racketHand: DEFAULT_PLAYER_PROFILE.racketHand,
+  };
+}
+
 async function startGame(workshop) {
   const requestId = ++startRequestId;
   currentWorkshop = workshop;
   currentDrillId = workshop === 'defense' ? 'd5' : workshop === 'attack' ? 'd1' : null;
   currentRally = null;
+  currentMatchState = null;
   gameStartedAt = Date.now();
   stopTurnTimer();
   cleanupTurnListeners();
@@ -841,8 +989,9 @@ async function startGame(workshop) {
   hud.show();
   hud.setMode(workshop);
   hud.setLevel(DEFAULT_PLAYER_PROFILE.level);
-  hud.setXP(DEFAULT_PLAYER_PROFILE.points, 100);
+  hud.setXP(DEFAULT_PLAYER_PROFILE.xp, 100);
   hud.setInstruction({ type: 'positioning', label: 'Loading', text: 'Loading scenarios...' });
+  hud.showMatchHud(workshop === 'match');
   hud.update(score, 0, 1, 0);
   court.draw();
 
@@ -850,6 +999,14 @@ async function startGame(workshop) {
     const rally = await loadWorkshopRally(workshop);
     if (requestId !== startRequestId) return;
     currentRally = rally.map(prepareTurnForRuntime);
+    if (workshop === 'match') {
+      const initPayload = buildPlayerInitPayload();
+      currentMatchState = createMatchState({
+        opponentRank: currentRally[0]?.opponentRank ?? DEFAULT_OPPONENT_RANK,
+        playerRating: initPayload.rating,
+      });
+      hud.setMatchState(currentMatchState);
+    }
   } catch (error) {
     console.error('Unable to load rally', error);
     if (requestId !== startRequestId) return;
@@ -860,6 +1017,10 @@ async function startGame(workshop) {
   }
 
   hud.update(score, 0, currentRally.length, 0);
+  if (workshop === 'match') {
+    await showMatchReadyPrompt();
+    if (requestId !== startRequestId) return;
+  }
   runTurn(0);
 }
 
@@ -871,9 +1032,13 @@ function resetAndShowMenu() {
   paused = false;
   const pauseOverlay = document.getElementById('pause-overlay');
   if (pauseOverlay) pauseOverlay.hidden = true;
+  const readyOverlay = document.getElementById('match-ready-overlay');
+  if (readyOverlay) readyOverlay.hidden = true;
   currentRally = null;
+  currentMatchState = null;
   document.getElementById('end-screen').style.display = 'none';
   hud.hideInstruction();
+  hud.showMatchHud(false);
   hud.hide();
   screens.show('menu');
 }
