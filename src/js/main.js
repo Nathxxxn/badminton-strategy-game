@@ -30,10 +30,18 @@ import { evaluatePlacementTurn, evaluateTacticalTurn, prepareTurnForRuntime } fr
 import { ExerciseTimer }          from './timer.js';
 import { recordGameSessionAsync } from './app-state.js';
 import { ShotTypeSelector, clampPowerForType } from './shot-type-selector.js';
+import { AISpawnEngine }          from './logic/AISpawnEngine.js';
+import { KinematicEngine }        from './logic/KinematicEngine.js';
+import { PlacementEngine }        from './logic/PlacementEngine.js';
 
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
 const MOVE_RADIUS_STROKE = 'rgba(94, 234, 212, 0.42)';
+const UI_SHOT_TYPES = ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP'];
+const kinematicEngine = new KinematicEngine();
+const impactSpawnEngine = new AISpawnEngine(null, new PlacementEngine(), kinematicEngine);
+const SHOT_PROFILES = kinematicEngine.SHOT_PARAMS;
+const ALL_SHOT_TYPES = UI_SHOT_TYPES.filter(type => SHOT_PROFILES[type]);
 const DEFAULT_PLAYER_PROFILE = Object.freeze({
   rank: 'P12',
   points: 0,
@@ -76,6 +84,7 @@ const drag = new DragShooter(canvas, court, onShotFired);
 
 const shotTypeSelector = new ShotTypeSelector(
   document.getElementById('shot-type-selector'),
+  { onChange: onShotTypeChanged },
 );
 
 // ─── Game state ───────────────────────────────────────────────────────────────
@@ -112,6 +121,7 @@ let timedTurnContext = null;
 
 /** Hover-tracker handler for positioning turns (so we can remove it on cleanup) */
 let positioningHoverHandler = null;
+let currentImpactPointsByType = new Map();
 
 // ─── Rendering helpers ─────────────────────────────────────────────────────
 
@@ -132,6 +142,83 @@ function renderBase(turn, { showShuttle = true, reachMode = 'idle', showVeil = f
   if (turn?.playerReach && turn?.players?.ally1) {
     renderer.drawReachCircle(turn.players.ally1, turn.playerReach);
   }
+}
+
+function toImpactSampleSpace(pos) {
+  return { x: pos.x, y: (pos.y - 0.5) / 0.5 };
+}
+
+function fromImpactSampleSpace(point) {
+  return {
+    x: point.x,
+    y: 0.5 + point.y * 0.5,
+    ...(point.t !== undefined && { t: point.t }),
+  };
+}
+
+function getIncomingType(turn) {
+  return turn.incomingShuttle?.type ?? turn.shuttlecock?.type ?? 'DRIVE';
+}
+
+function getBusinessAllowedShotTypes(turn) {
+  const incomingType = getIncomingType(turn);
+  const allowed = SHOT_PROFILES[incomingType]?.allowed ?? Object.keys(SHOT_PROFILES);
+  return ALL_SHOT_TYPES.filter(type => allowed.includes(type));
+}
+
+function getImpactPointsForShotType(turn, shotType) {
+  const start = turn.shuttlecock?.from ?? turn.shuttlecock?.trajectory?.[0] ?? null;
+  const end = turn.shuttlecock?.position ?? null;
+  const player = turn.players?.ally1 ?? null;
+  const reachMeters = turn.playerReach ?? SHOT_PROFILES[getIncomingType(turn)]?.reach ?? 2.0;
+
+  if (!start || !end || !player || !Number.isFinite(reachMeters)) return [];
+
+  return impactSpawnEngine.getValidImpactPoints(
+    toImpactSampleSpace(start),
+    toImpactSampleSpace(end),
+    toImpactSampleSpace(player),
+    reachMeters,
+    shotType,
+  ).map(fromImpactSampleSpace);
+}
+
+function buildImpactOptionsForTurn(turn) {
+  const pointsByType = new Map();
+  const validTypes = [];
+
+  getBusinessAllowedShotTypes(turn).forEach(type => {
+    const points = getImpactPointsForShotType(turn, type);
+    pointsByType.set(type, points);
+    if (points.length > 0) validTypes.push(type);
+  });
+
+  if (validTypes.length === 0 && turn.shuttlecock?.position) {
+    const fallbackType = getBusinessAllowedShotTypes(turn)[0] ?? ALL_SHOT_TYPES[0];
+    console.warn('No valid impact points found for this turn; using legacy shuttle impact fallback.');
+    pointsByType.set(fallbackType, [{ ...turn.shuttlecock.position, t: 1 }]);
+    validTypes.push(fallbackType);
+  }
+
+  return { pointsByType, validTypes };
+}
+
+function setActiveImpactPoints(turn, shotType) {
+  const points = currentImpactPointsByType.get(shotType) ?? [];
+  if (turn?.shuttlecock) {
+    turn.shuttlecock.validImpactPoints = points;
+    turn.shuttlecock.activeImpactPoint = null;
+  }
+  return points;
+}
+
+function onShotTypeChanged(type) {
+  const turn = currentRally?.[turnIndex];
+  if (!turn || turn.type !== 'shot' || !shotTypeSelector.isShown()) return;
+
+  const points = setActiveImpactPoints(turn, type);
+  renderBase(turn);
+  drag.activate(turn.shuttlecock.position, points);
 }
 
 function renderFeedbackFrame(
@@ -205,6 +292,8 @@ function cleanupTurnListeners() {
   stopDragLoop();
   drag.deactivate();
   shotTypeSelector.hide();
+  currentImpactPointsByType = new Map();
+  shotTypeSelector.setAllowedTypes(ALL_SHOT_TYPES);
 }
 
 function clampToRadius(origin, target, radiusMetres) {
@@ -496,7 +585,11 @@ async function startShotTurn(turn) {
   // Show instruction immediately — player reads while shuttle flies in
   hud.setInstruction(turn);
   hud.update(score, turnIndex, currentRally.length, combo);
+  const impactOptions = buildImpactOptionsForTurn(turn);
+  currentImpactPointsByType = impactOptions.pointsByType;
+  shotTypeSelector.setAllowedTypes(impactOptions.validTypes);
   shotTypeSelector.reset();
+  const activeImpactPoints = setActiveImpactPoints(turn, shotTypeSelector.getSelected());
   shotTypeSelector.show();
   // Animate incoming shuttle
   await runAnims(
@@ -505,7 +598,7 @@ async function startShotTurn(turn) {
   );
   renderBase(turn);
   canvas.addEventListener('pointerdown', onShotPointerDown, { once: true, passive: true });
-  drag.activate(turn.shuttlecock.position);
+  drag.activate(turn.shuttlecock.position, activeImpactPoints);
   startTurnTimer(turn);
 }
 
@@ -524,6 +617,10 @@ async function onShotFired(shot) {
   // remain untouched.
   const forcedType = shotTypeSelector.getSelected();
   const bridedShot = { ...shot, power: clampPowerForType(shot.power, forcedType) };
+  const impactPoint = bridedShot.impactPoint ?? turn.shuttlecock.position;
+  if (turn.shuttlecock) {
+    turn.shuttlecock.activeImpactPoint = impactPoint;
+  }
 
   const flightSpeed = bridedShot.power < 0.3 ? 'slow' : bridedShot.power < 0.6 ? 'medium' : 'fast';
 
@@ -536,7 +633,7 @@ async function onShotFired(shot) {
 
   await runAnims(
     [
-      () => anim.flyShuttle(turn.shuttlecock.position, bridedShot.aimPoint, flightSpeed, 'low'),
+      () => anim.flyShuttle(impactPoint, bridedShot.aimPoint, flightSpeed, 'low'),
       () => anim.movePlayer(opp1, opp1Target, false),
       () => anim.movePlayer(opp2, opp2Target, false),
     ],
@@ -553,7 +650,7 @@ async function onShotFired(shot) {
   // Freeze result frame
   renderFeedbackFrame(turn, {
     showShuttle: false,
-    correctionFrom: turn.shuttlecock.position,
+    correctionFrom: impactPoint,
     correctionTo: feedback.correctionRenderPos,
   });
   if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
@@ -564,7 +661,7 @@ async function onShotFired(shot) {
     () => {
       renderFeedbackFrame(turn, {
         showShuttle: false,
-        correctionFrom: turn.shuttlecock.position,
+        correctionFrom: impactPoint,
         correctionTo: feedback.correctionRenderPos,
       });
       if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
@@ -793,7 +890,14 @@ hud.onBack(() => resetAndShowMenu());
 // ─── Pause + keyboard shortcuts ─────────────────────────────────────────────
 
 let paused = false;
-const SHOT_HOTKEYS = { '1': 'SMASH', '2': 'DROP', '3': 'DRIVE', '4': 'CLEAR' };
+const SHOT_HOTKEYS = {
+  '1': 'SMASH',
+  '2': 'DROP',
+  '3': 'DRIVE',
+  '4': 'CLEAR',
+  '5': 'KILL',
+  '6': 'NET_DROP',
+};
 
 function isInExercise() {
   return Boolean(currentRally) && turnIndex < currentRally.length;
@@ -825,7 +929,7 @@ function resumeGame() {
 
   if (turn.type === 'shot') {
     canvas.addEventListener('pointerdown', onShotPointerDown, { once: true, passive: true });
-    drag.activate(turn.shuttlecock.position);
+    drag.activate(turn.shuttlecock.position, currentImpactPointsByType.get(shotTypeSelector.getSelected()) ?? []);
     renderBase(turn);
   } else if (turn.type === 'positioning') {
     canvas.addEventListener('pointerup', onPositionClick, { once: true });

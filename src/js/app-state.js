@@ -18,8 +18,10 @@ import {
 const DEFAULT_CONTROLS = Object.freeze([
   { action: 'Select Smash', key: '1' },
   { action: 'Select Drop', key: '2' },
-  { action: 'Select Clear', key: '3' },
-  { action: 'Select Drive', key: '4' },
+  { action: 'Select Drive', key: '3' },
+  { action: 'Select Clear', key: '4' },
+  { action: 'Select Kill', key: '5' },
+  { action: 'Select Net drop', key: '6' },
   { action: 'Target Left', key: 'A / ←' },
   { action: 'Target Center', key: 'S / ↓' },
   { action: 'Target Right', key: 'D / →' },

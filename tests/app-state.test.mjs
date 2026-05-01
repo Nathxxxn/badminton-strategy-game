@@ -71,6 +71,17 @@ test('resetControls restores default keybinds and keeps other state', () => {
   assert.deepEqual(state.controls, DEFAULT_APP_STATE.controls);
 });
 
+test('default controls match playable shot hotkeys', () => {
+  assert.deepEqual(DEFAULT_APP_STATE.controls.slice(0, 6), [
+    { action: 'Select Smash', key: '1' },
+    { action: 'Select Drop', key: '2' },
+    { action: 'Select Drive', key: '3' },
+    { action: 'Select Clear', key: '4' },
+    { action: 'Select Kill', key: '5' },
+    { action: 'Select Net drop', key: '6' },
+  ]);
+});
+
 test('loadAppStateAsync uses backend state and mirrors it to localStorage', async () => {
   storage.clear();
   globalThis.fetch = async url => {

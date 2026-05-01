@@ -17,6 +17,7 @@ export class AISpawnEngine {
             DRIVE:    [{start: 0.4, end: 1.0}], 
             DROP:     [{start: 0.5, end: 1.0}], 
             NET_DROP: [{start: 0.5, end: 1.0}], 
+            NET_CLEAR: [{start: 0.5, end: 1.0}],
             CLEAR:    [{start: 0.0, end: 0.1}, {start: 0.8, end: 1.0}] 
         };
     }
@@ -34,6 +35,7 @@ export class AISpawnEngine {
             case 'SMASH':    return this.placement.getIdealSmashPos(shuttleEndPos, isHitter);
             case 'DROP':     return this.placement.getIdealDropPos(shuttleEndPos, isHitter);
             case 'NET_DROP': return this.placement.getIdealNetDropPos(shuttleEndPos, isHitter);
+            case 'NET_CLEAR': return this.placement.getIdealDefensePos(shuttleEndPos, isPlayerLeft);
             default:         return { x: 0.5, y: 0.5 };
         }
     }
@@ -151,17 +153,18 @@ export class AISpawnEngine {
     /**
      * CALCUL DU POINT D'IMPACT (Méthode par échantillonnage)
      */
-    getValidImpactPoint(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
+    getValidImpactPoints(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
         const windows = this.SHOT_WINDOWS[shotType];
-        
+        if (!windows) return [];
+
         // La fatigue réduit la fenêtre de frappe (on est moins précis/rapide)
-        const fatigueFactor = 1 / fatigue; 
+        const safeFatigue = Number.isFinite(fatigue) && fatigue > 0 ? fatigue : 1.0;
+        const fatigueFactor = 1 / safeFatigue;
+
         const adjustedWindows = windows.map(w => ({
             start: w.start + (1 - fatigueFactor) * 0.1, // La fenêtre rétrécit
             end: w.end - (1 - fatigueFactor) * 0.1
         }));
-
-        if (!windows) return null;
 
         const validPoints = [];
         const numSamples = 100; // Précision du découpage de la trajectoire
@@ -170,7 +173,7 @@ export class AISpawnEngine {
             const t = i / numSamples;
             
             // 1. Est-ce dans la fenêtre temporelle du coup ?
-            const inWindow = windows.some(w => t >= w.start && t <= w.end);
+            const inWindow = adjustedWindows.some(w => t >= w.start && t <= w.end);
             if (!inWindow) continue;
 
             // 2. Coordonnées du point à l'instant t
@@ -185,9 +188,19 @@ export class AISpawnEngine {
 
             // 4. Si c'est dans la reach, on stocke
             if (dist <= reachMeters) {
-                validPoints.push({ x: currentPosX, y: currentPosY, t: t });
+                validPoints.push({
+                    x: Number(currentPosX.toFixed(6)),
+                    y: Number(currentPosY.toFixed(6)),
+                    t: Number(t.toFixed(2))
+                });
             }
         }
+
+        return validPoints;
+    }
+
+    getValidImpactPoint(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
+        const validPoints = this.getValidImpactPoints(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue) ?? [];
 
         // Renvoie un point aléatoire parmi les points valides
         if (validPoints.length === 0) return null;

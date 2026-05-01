@@ -144,7 +144,7 @@ export function prepareTurnForRuntime(rawTurn) {
 
     return {
       ...prepared,
-      label: prepared.label ?? 'Tir',
+      label: prepared.label ?? 'Shot',
       incomingShuttle,
       playerReach: prepared.playerReach ?? shotCaps.allowedReach,
     };

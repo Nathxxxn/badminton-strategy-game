@@ -53,6 +53,9 @@ const CORK_RADIUS_RATIO = 0.008;
 const TRAJ_COLOUR = 'rgba(15, 26, 20, 0.40)';
 const TRAJ_DASH   = [5, 5];
 const TRAJ_WIDTH  = 1.5;
+const IMPACT_SEGMENT_COLOUR = 'rgba(255, 210, 63, 0.88)';
+const IMPACT_SEGMENT_WIDTH = 4;
+const IMPACT_MARKER_COLOUR = '#ffd23f';
 
 const TRAIL_SEGMENTS = { slow: 3, medium: 6, fast: 10 };
 
@@ -81,8 +84,65 @@ export class Renderer {
    */
   drawScene(players, shuttlecock, activePlayerId = null, equipment = null) {
     if (shuttlecock) this._drawTrajectory(shuttlecock);
+    if (shuttlecock?.validImpactPoints?.length) {
+      this.drawValidImpactSegments(shuttlecock.validImpactPoints, shuttlecock.activeImpactPoint ?? null);
+    }
     this._drawPlayers(players, activePlayerId, equipment);
     if (shuttlecock) this._drawShuttlecock(shuttlecock);
+  }
+
+  drawValidImpactSegments(points, activePoint = null) {
+    if (!Array.isArray(points) || points.length === 0) return;
+
+    const { ctx, court } = this;
+    const sorted = [...points].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+    const groups = [];
+    let current = [];
+
+    sorted.forEach((point, index) => {
+      const previous = sorted[index - 1];
+      if (previous && Number.isFinite(point.t) && Number.isFinite(previous.t) && point.t - previous.t > 0.011) {
+        groups.push(current);
+        current = [];
+      }
+      current.push(point);
+    });
+    if (current.length) groups.push(current);
+
+    ctx.save();
+    ctx.strokeStyle = IMPACT_SEGMENT_COLOUR;
+    ctx.fillStyle = IMPACT_SEGMENT_COLOUR;
+    ctx.lineWidth = IMPACT_SEGMENT_WIDTH;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([]);
+
+    groups.forEach(group => {
+      const canvasPoints = group.map(point => court.toCanvas(point.x, point.y));
+      if (canvasPoints.length === 1) {
+        ctx.beginPath();
+        ctx.arc(canvasPoints[0].x, canvasPoints[0].y, IMPACT_SEGMENT_WIDTH / 2, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(canvasPoints[0].x, canvasPoints[0].y);
+      canvasPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+      ctx.stroke();
+    });
+
+    if (activePoint) {
+      const marker = court.toCanvas(activePoint.x, activePoint.y);
+      ctx.strokeStyle = '#0f1a14';
+      ctx.fillStyle = IMPACT_MARKER_COLOUR;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(marker.x, marker.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   drawReachCircle(playerPos, reachMetres, strokeStyle = 'rgba(15,26,20,0.55)', mode = 'idle') {

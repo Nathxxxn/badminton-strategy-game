@@ -6,7 +6,7 @@ const DATA_FILES = {
   matches: 'data/matches.json',
 };
 
-const SHOT_TYPES = new Set(['SMASH', 'KILL', 'DRIVE', 'DROP', 'NET_DROP', 'CLEAR']);
+const SHOT_TYPES = new Set(['SMASH', 'KILL', 'DRIVE', 'DROP', 'NET_DROP', 'CLEAR', 'NET_CLEAR']);
 const EXERCISE_TYPES = new Set(['shot', 'positioning']);
 const HANDS = new Set(['left', 'right']);
 const COORD_EPSILON = 1e-6;

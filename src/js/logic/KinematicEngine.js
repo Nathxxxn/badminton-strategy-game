@@ -41,16 +41,22 @@ export class KinematicEngine {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    shotPossibility(shotType, impactPos = {x: 0.5 , y:0.5}, opponents = {opp1 : {x: 0.5 , y:0.5}, opp2 : {x: 0.5 , y:0.5}}) {
+    _normalizeOpponents(opponents = [{x: 0.5, y: 0.5}]) {
+        if (Array.isArray(opponents)) return opponents.filter(Boolean);
+        return Object.values(opponents ?? {}).filter(Boolean);
+    }
+
+    shotPossibility(shotType, impactPos = {x: 0.5 , y:0.5}, opponents = [{x: 0.5, y: 0.5}]) {
         // 2. Récupération des paramètres de base
-        let allowedReach = this.SHOT_PARAMS[shotType].reach;
-        let allowedShots = [...this.SHOT_PARAMS[shotType].allowed];
+        const profile = this.SHOT_PARAMS[shotType] ?? this.SHOT_PARAMS.DRIVE;
+        let allowedReach = profile.reach;
+        let allowedShots = [...profile.allowed];
 
         if (shotType === 'NET_CLEAR'){
             // 1. Calcul de la distance réelle avec l'adversaire le plus proche
             let minOpponentDist = Infinity;
             
-            opponents.forEach(opp => {
+            this._normalizeOpponents(opponents).forEach(opp => {
                 const dx = (impactPos.x - opp.x) * 6.10; // WIDTH
                 const dy = (impactPos.y - opp.y) * 6.70; // HALF_LENGTH[cite: 16]
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -69,7 +75,7 @@ export class KinematicEngine {
         };
     }
 
-    movementPossibility(shotType, impactPos = {x: 0.5 , y:0.5}, opponents = {opp1 : {x: 0.5 , y:0.5}, opp2 : {x: 0.5 , y:0.5}}) {
+    movementPossibility(shotType, impactPos = {x: 0.5 , y:0.5}, opponents = [{x: 0.5, y: 0.5}]) {
         
 
         // 2. Détermination du rayon autorisé
@@ -78,7 +84,7 @@ export class KinematicEngine {
         if (shotType === 'NET_CLEAR'){
             // 1. Calcul de la distance réelle (identique à shotPossibility)
             let minOpponentDist = Infinity;
-            opponents.forEach(opp => {
+            this._normalizeOpponents(opponents).forEach(opp => {
                 const dx = (impactPos.x - opp.x) * 6.10;
                 const dy = (impactPos.y - opp.y) * 6.70;
                 const dist = Math.sqrt(dx * dx + dy * dy);

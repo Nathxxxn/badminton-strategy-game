@@ -2,18 +2,27 @@
  * Moteur Tactique Badminton - Version 3.0 (Physique & Réalisme)
  */
 
-const SHOT_PARAMS = {
-    SMASH:      { id: 'SMASH',      bonus: 10, reach: 2.0, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
-    KILL:       { id: 'KILL',       bonus: 10, reach: 2.0, allowed: ['NET_DROP','DRIVE','CLEAR'] },
-    DRIVE:      { id: 'DRIVE',      bonus: 3,  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
-    DROP:       { id: 'DROP',       bonus: 7,  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
-    NET_DROP:   { id: 'NET_DROP',   bonus: 4,  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE'] },
-    CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'DROP', 'DRIVE', 'CLEAR'] },
-    NET_CLEAR:  { id: 'NET_CLEAR',  bonus:-5, reach: 3.0, allowed: ['KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
-};
+import { KinematicEngine } from './KinematicEngine.js';
+
+export const SHOT_PARAMS = new KinematicEngine().SHOT_PARAMS;
+
+function faultResult(type, message, rules = null) {
+    return {
+        type,
+        score: 0,
+        message,
+        isReversTargeted: false,
+        isBodyHit: false,
+        isTooClose: false,
+        isTooShort: false,
+        reachMeters: rules?.reach ?? null,
+        details: { placement: 0, bonus: 0 }
+    };
+}
 
 export class TacticalEngine {
     constructor() {
+        this.SHOT_PARAMS = SHOT_PARAMS;
         this.HALF_LENGTH = 6.70; 
         this.WIDTH = 6.10;       
         this.RIVIERE_LIMITE = 1.98 / 6.70; // ~0.29
@@ -30,6 +39,10 @@ export class TacticalEngine {
         const rules = SHOT_PARAMS[user.type];
         const incomingRules = SHOT_PARAMS[incoming.type];
 
+        if (!rules || !incomingRules) {
+            return faultResult(user.type ?? null, "Unknown shot type", rules);
+        }
+
         // 1. VÉRIFICATION DES FAUTES DE "ZONE" (NOUVEAU)
         
         // KILL : Autorisé seulement dans le 1er tiers
@@ -39,25 +52,25 @@ export class TacticalEngine {
         }
         // KILL sur CLEAR : Seulement si le Clear adverse est court (1er tiers)
         if (user.type === 'KILL' && incoming.type === 'NET_CLEAR' && incoming.endPos.y > this.FIRST_THIRD) {
-            return { score: 0, message: "IMPOSSIBLE : On ne kill pas un long volant !" };
+            return faultResult(user.type, "Impossible: you cannot kill a long shuttle.", rules);
         }
 
         if (user.type === 'KILL' && user.endPos.y < 0.25) {
-            return { score: 0, message: "FAULT : In the net !" };
+            return faultResult(user.type, "Fault: in the net.", rules);
         }
         
 
         // SMASH : Interdit dans le 1er tiers (risque de filet ou trajectoire impossible)
         if (user.type === 'SMASH' && impactPos.y < this.FIRST_THIRD) {
-            return { score: 0, message: "FAUTE : Trop près pour smasher (ça sort) !" };
+            return faultResult(user.type, "Fault: too close to smash.", rules);
         }
 
         // OUT & VALIDITÉ GÉNÉRALE
         if (user.endPos.x < 0 || user.endPos.x > 1 || user.endPos.y < 0 || user.endPos.y > 1) {
-            return { score: 0, message: "OUT !" };
+            return faultResult(user.type, "OUT !", rules);
         }
         if (!incomingRules.allowed.includes(user.type)) {
-            return { score: 0, message: "Type de coup impossible ici" };
+            return faultResult(user.type, "Shot type is not possible here", rules);
         }
 
         // 2. CALCUL DE DISTANCE AUX ADVERSAIRES
@@ -136,6 +149,7 @@ export class TacticalEngine {
         }
 
         return {
+            type: user.type,
             score: Math.min(100, Math.max(0, Math.round(totalScore))),
             isReversTargeted: isRevers,
             isBodyHit: hittingBody,
@@ -159,7 +173,7 @@ export class TacticalEngine {
 
         shotTypes.forEach(type => {
             // 1. Est-ce que ce type de coup est autorisé par le coup adverse ?
-            if (!SHOT_PARAMS[incoming.type].allowed.includes(type)) return;
+            if (!SHOT_PARAMS[incoming.type]?.allowed.includes(type)) return;
 
             for (let x = 0.05; x <= 0.95; x += stepX) {
                 for (let y = 0.05; y <= 0.95; y += stepY) {
@@ -194,15 +208,18 @@ export class TacticalEngine {
     const scoreFinal = Math.ceil(playerAnalysis.score * ratio);
     
     // placementFinal = placement * ratio + (ratio - 1) * bonus
-    const placementOriginal = playerAnalysis.details.placement;
-    const bonusOriginal = playerAnalysis.details.bonus;
+    const placementOriginal = playerAnalysis.details?.placement ?? 0;
+    const bonusOriginal = playerAnalysis.details?.bonus ?? 0;
     const placementFinal = Math.ceil(placementOriginal * ratio + (ratio - 1) * bonusOriginal);
 
     return {
+        score: scoreFinal,
         player: {
             ...playerAnalysis,
             score: scoreFinal,
             details: {
+                placement: 0,
+                bonus: 0,
                 ...playerAnalysis.details,
                 placement: placementFinal,
                 // Le bonus reste identique en valeur absolue pour l'affichage

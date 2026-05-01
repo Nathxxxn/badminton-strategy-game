@@ -224,9 +224,9 @@ export class PlacementEngine {
 
         for (let x = 0.05; x <= 0.95; x += stepX) {
             for (let y = 0.05; y <= 0.95; y += stepY) {
-                const res = this._calculateRawScore(playerPos, partnerPos, shotContext, isHitter);
-                if (res.total > best.score) {
-                    best = { x, y, score: res.total };
+                const score = this._calculateRawScore({ x, y }, partnerPos, shotContext, isHitter);
+                if (score > best.score) {
+                    best = { x, y, score };
                 }
             }
         }
@@ -250,6 +250,7 @@ export class PlacementEngine {
         // 1. Déterminer la position idéale selon le type de coup
         switch (shotType) {
             case 'CLEAR': idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft); break;
+            case 'NET_CLEAR': idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft); break;
             case 'KILL': idealPos = this.getIdealKillPos(shuttleEndPos, isHitter); break;
             case 'DRIVE': idealPos = this.getIdealDrivePos(shuttleEndPos, isHitter); break;
             case 'SMASH': idealPos = this.getIdealSmashPos(shuttleEndPos, isHitter); break;
@@ -284,11 +285,9 @@ export class PlacementEngine {
                 formation: Math.ceil(rawTotal*0.7*ratio)
             },
             realDistance: this.calculateDistMeters(playerPos, partnerPos).toFixed(2),
-            ideal : { 
-                pos :{
-                    x : bestPlacement.x,
-                    y : bestPlacement.y,
-                },
+            ideal: {
+                x: bestPlacement.x,
+                y: bestPlacement.y,
             },
         };
     }

@@ -25,7 +25,7 @@ export function buildTacticalPayload(shot, turn, { forcedType = null } = {}) {
   const opp1      = turn.players?.opponent1 ?? null;
   const opp2      = turn.players?.opponent2 ?? null;
   const equipment = turn.equipment ?? {};
-  const impact    = turn.shuttlecock?.position ?? null;
+  const impact    = shot.impactPoint ?? turn.shuttlecock?.position ?? null;
   const opp1Hand  = equipment.opp1?.hand ?? equipment.opponent1?.hand ?? null;
   const opp2Hand  = equipment.opp2?.hand ?? equipment.opponent2?.hand ?? null;
 

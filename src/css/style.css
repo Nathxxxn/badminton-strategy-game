@@ -212,7 +212,7 @@ body::after {
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   z-index: 5;
   pointer-events: auto;
 }
@@ -227,18 +227,18 @@ body::after {
   box-shadow: 4px 4px 0 0 var(--rally-ink);
   font: 800 13px 'JetBrains Mono', monospace;
   letter-spacing: 0.05em;
-  padding: 10px 14px;
+  padding: 8px 14px;
   min-width: 96px;
   cursor: pointer;
   transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
 }
 
-.shot-type-btn:hover {
+.shot-type-btn:not(:disabled):hover {
   transform: translate(-1px, -1px);
   box-shadow: 5px 5px 0 0 var(--rally-ink);
 }
 
-.shot-type-btn:active {
+.shot-type-btn:not(:disabled):active {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 0 var(--rally-ink);
 }
@@ -247,9 +247,18 @@ body::after {
   background: var(--rally-accent);
 }
 
+.shot-type-btn:disabled,
+.shot-type-btn.is-disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  color: rgba(21, 28, 35, 0.68);
+  box-shadow: 2px 2px 0 0 var(--rally-ink);
+  transform: none;
+}
+
 @media (max-width: 980px) {
-  .shot-type-selector { right: 8px; gap: 6px; }
-  .shot-type-btn { min-width: 72px; padding: 6px 10px; font-size: 11px; }
+  .shot-type-selector { right: 8px; gap: 5px; }
+  .shot-type-btn { min-width: 76px; padding: 5px 8px; font-size: 10px; }
 }
 
 /* ─── Pause overlay ─────────────────────────────────────────────────────────── */

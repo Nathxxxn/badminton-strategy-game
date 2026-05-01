@@ -4,7 +4,7 @@
  *
  * Responsibilities:
  *  - Listen for mouse/touch events on the canvas
- *  - Activate when the player presses near the shuttlecock position
+ *  - Activate when the player presses near a valid shuttle impact point
  *  - Track drag direction (aim), length (power), and curvature (spin)
  *  - Render a live aim line (color-coded by power) + spin arc indicator
  *  - Emit a shot descriptor on release: { aimPoint, power, spin }
@@ -102,7 +102,7 @@ export class DragShooter {
    * @param {import('./court.js').Court}   court
    * @param {function(ShotDescriptor): void} onShot  — called on release with shot data
    *
-   * @typedef {{ aimPoint: {x:number,y:number}, power: number, spin: number }} ShotDescriptor
+   * @typedef {{ aimPoint: {x:number,y:number}, power: number, spin: number, impactPoint?: {x:number,y:number,t?:number} }} ShotDescriptor
    */
   constructor(canvas, court, onShot) {
     this.canvas  = canvas;
@@ -112,6 +112,12 @@ export class DragShooter {
 
     /** Normalized position of the shuttlecock — set via activate() */
     this._shuttleNorm = null;
+
+    /** Valid normalized impact points for this turn, if provided */
+    this._impactPoints = [];
+
+    /** Impact point selected by the pointerdown that started the drag */
+    this._selectedImpactPoint = null;
 
     /** Canvas-pixel origin of the drag (at shuttlecock) */
     this._origin = null;
@@ -160,10 +166,15 @@ export class DragShooter {
    * Arm the mechanic for a shot exercise turn.
    * Call this every time a new shot exercise is presented.
    *
-   * @param {{ x: number, y: number }} shuttleNorm  normalized shuttlecock position
+   * @param {{ x: number, y: number }} shuttleNorm  fallback normalized shuttlecock position
+   * @param {Array<{ x: number, y: number, t?: number }>} impactPoints valid impact points
    */
-  activate(shuttleNorm) {
+  activate(shuttleNorm, impactPoints = []) {
     this._shuttleNorm = snapToGrid(shuttleNorm.x, shuttleNorm.y);
+    this._impactPoints = Array.isArray(impactPoints)
+      ? impactPoints.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y))
+      : [];
+    this._selectedImpactPoint = null;
     this._armed   = true;
     this._dragging = false;
     this._origin   = null;
@@ -179,6 +190,8 @@ export class DragShooter {
     this._dragging = false;
     this._origin   = null;
     this._current  = null;
+    this._impactPoints = [];
+    this._selectedImpactPoint = null;
   }
 
   /**
@@ -199,13 +212,14 @@ export class DragShooter {
     if (!this._armed || !this._shuttleNorm) return;
 
     const pos = this._getCanvasPos(e);
-    const shuttle = this.court.toCanvas(this._shuttleNorm.x, this._shuttleNorm.y);
-    const dist = Math.hypot(pos.x - shuttle.x, pos.y - shuttle.y);
+    const closest = this._findClosestActivationPoint(pos);
+    if (!closest || closest.dist > ACTIVATION_RADIUS_PX) return;
 
-    if (dist > ACTIVATION_RADIUS_PX) return;
+    this._selectedImpactPoint = { ...closest.point };
+    this._shuttleNorm = { x: closest.point.x, y: closest.point.y };
 
     this._dragging = true;
-    this._origin   = { x: shuttle.x, y: shuttle.y };
+    this._origin   = closest.canvasPoint;
     this._current  = { ...pos };
     this._spinDeviation = 0;
 
@@ -289,7 +303,13 @@ export class DragShooter {
       );
     }
 
-    return { aimPoint: aimNorm, power, spin, shuttleType: deriveShuttleType({ power, aimPoint: aimNorm }) };
+    return {
+      aimPoint: aimNorm,
+      power,
+      spin,
+      shuttleType: deriveShuttleType({ power, aimPoint: aimNorm }),
+      ...(this._selectedImpactPoint && { impactPoint: { ...this._selectedImpactPoint } }),
+    };
   }
 
   /** Emit the shot to the consumer and reset state. */
@@ -298,7 +318,23 @@ export class DragShooter {
     this._armed   = false;  // disarm until activate() is called again
     this._origin  = null;
     this._current = null;
+    this._impactPoints = [];
     this.onShot(shot);
+  }
+
+  _findClosestActivationPoint(pos) {
+    const candidates = this._impactPoints.length > 0 ? this._impactPoints : [this._shuttleNorm];
+    let closest = null;
+
+    candidates.forEach(point => {
+      const canvasPoint = this.court.toCanvas(point.x, point.y);
+      const dist = Math.hypot(pos.x - canvasPoint.x, pos.y - canvasPoint.y);
+      if (!closest || dist < closest.dist) {
+        closest = { point, canvasPoint, dist };
+      }
+    });
+
+    return closest;
   }
 
   // ─── Spin deviation tracking ──────────────────────────────────────────────────
