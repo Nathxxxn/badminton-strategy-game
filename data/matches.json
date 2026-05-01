@@ -60,5 +60,37 @@
       "enabled": true,
       "secondsPerTurn": null
     }
+  },
+  {
+    "id": "MATCH_MVP_001",
+    "workshop": "match",
+    "title": "Ranked Match MVP",
+    "opponentRank": "D8",
+    "rally": [
+      {
+        "turn": 1,
+        "type": "positioning",
+        "exerciseRef": "POS_ATK_001"
+      },
+      {
+        "turn": 2,
+        "type": "shot",
+        "exerciseRef": "SHOT_ATK_001"
+      },
+      {
+        "turn": 3,
+        "type": "positioning",
+        "exerciseRef": "POS_DEF_001"
+      },
+      {
+        "turn": 4,
+        "type": "shot",
+        "exerciseRef": "SHOT_DEF_001"
+      }
+    ],
+    "timePressure": {
+      "enabled": true,
+      "secondsPerTurn": null
+    }
   }
 ]

@@ -28,11 +28,14 @@ export function buildTacticalPayload(shot, turn, { forcedType = null } = {}) {
   const impact    = shot.impactPoint ?? turn.shuttlecock?.position ?? null;
   const opp1Hand  = equipment.opp1?.hand ?? equipment.opponent1?.hand ?? null;
   const opp2Hand  = equipment.opp2?.hand ?? equipment.opponent2?.hand ?? null;
+  const spin      = shot.spin ?? 0;
 
   return {
     shuttleType:  forcedType ?? deriveShuttleType(shot),
     shuttleEndPos: { x: shot.aimPoint.x, y: shot.aimPoint.y },
     impactPoint:  impact ? { x: impact.x, y: impact.y } : null,
+    spin,
+    spinApplied: Math.abs(spin) > 0.08,
     opponentsPos: {
       opp1: opp1 ? { x: opp1.x, y: opp1.y } : null,
       opp2: opp2 ? { x: opp2.x, y: opp2.y } : null,

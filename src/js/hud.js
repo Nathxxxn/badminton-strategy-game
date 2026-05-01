@@ -22,6 +22,21 @@ export class HUD {
     this._turnDotsEl = document.getElementById('hud-turn-dots');
     this._comboEl    = document.getElementById('hud-combo');
     this._timerEl    = document.getElementById('hud-timer');
+    this._timerBarEl = document.getElementById('hud-timer-bar');
+    this._matchScoreEl = document.getElementById('match-scoreboard');
+    this._matchEls = {
+      playerPoints: document.getElementById('match-player-points'),
+      opponentPoints: document.getElementById('match-opponent-points'),
+      playerSets: document.getElementById('match-player-sets'),
+      opponentSets: document.getElementById('match-opponent-sets'),
+    };
+    this._fatigueEl = document.getElementById('match-fatigue');
+    this._fatigueEls = {
+      player: document.getElementById('fatigue-player'),
+      partner: document.getElementById('fatigue-partner'),
+      opponent1: document.getElementById('fatigue-opponent1'),
+      opponent2: document.getElementById('fatigue-opponent2'),
+    };
     this._instrEl    = document.getElementById('instruction');
     this._badgeEl    = document.getElementById('instr-badge');
     this._labelEl    = document.getElementById('instr-label');
@@ -54,6 +69,12 @@ export class HUD {
   /** @returns {HTMLElement|null} Timer display element used by ExerciseTimer. */
   getTimerElement() {
     return this._timerEl;
+  }
+
+  setTimerProgress(remaining, total) {
+    if (!this._timerBarEl) return;
+    const pct = total > 0 ? Math.max(0, Math.min(100, (remaining / total) * 100)) : 0;
+    this._timerBarEl.style.width = `${pct}%`;
   }
 
   // ─── Score / turn / combo ─────────────────────────────────────────────────
@@ -109,6 +130,37 @@ export class HUD {
     }
 
     this._lastCombo = combo;
+  }
+
+  showMatchHud(enabled) {
+    if (this._matchScoreEl) this._matchScoreEl.hidden = !enabled;
+    if (this._fatigueEl) this._fatigueEl.hidden = !enabled;
+  }
+
+  setMatchState(state) {
+    if (!state) {
+      this.showMatchHud(false);
+      return;
+    }
+
+    this.showMatchHud(true);
+    if (this._matchEls.playerPoints) this._matchEls.playerPoints.textContent = state.points?.player ?? 0;
+    if (this._matchEls.opponentPoints) this._matchEls.opponentPoints.textContent = state.points?.opponent ?? 0;
+    if (this._matchEls.playerSets) this._matchEls.playerSets.textContent = state.sets?.player ?? 0;
+    if (this._matchEls.opponentSets) this._matchEls.opponentSets.textContent = state.sets?.opponent ?? 0;
+    this.setFatigue(state.fatigue);
+  }
+
+  setFatigue(fatigueState = {}) {
+    Object.entries(this._fatigueEls).forEach(([id, bar]) => {
+      const value = Math.max(0, Math.min(100, Math.round(fatigueState[id] ?? 100)));
+      if (bar) {
+        bar.style.width = `${value}%`;
+        const row = bar.closest?.('.fatigue-row');
+        const label = row?.querySelector?.('b');
+        if (label) label.textContent = value;
+      }
+    });
   }
 
   _renderTurnDots(currentIndex, total) {

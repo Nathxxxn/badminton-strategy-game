@@ -42,6 +42,7 @@ export class ExerciseTimer {
     this._intervalId = null;
     this._remaining = 0;
     this._total = 0;
+    this._deadline = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -64,28 +65,20 @@ export class ExerciseTimer {
       ? Math.floor(base * POSITIONING_MULTIPLIER)
       : base;
     const override = Number.isFinite(secondsOverride) && secondsOverride > 0
-      ? Math.floor(secondsOverride)
+      ? secondsOverride
       : null;
     const total = override ?? computedTotal;
 
     this._total = total;
     this._remaining = total;
+    this._deadline = Date.now() + total * 1000;
 
     // Fire an immediate tick so the HUD reflects the starting value right away.
     this._tick();
 
     this._intervalId = setInterval(() => {
-      this._remaining -= 1;
-
-      if (this._remaining <= 0) {
-        this._remaining = 0;
-        this._tick();
-        this.stop();
-        this._onExpired();
-      } else {
-        this._tick();
-      }
-    }, 1000);
+      this._updateFromClock();
+    }, 50);
 
     return total;
   }
@@ -101,11 +94,32 @@ export class ExerciseTimer {
 
     this._remaining = 0;
     this._total = 0;
+    this._deadline = null;
 
     if (this._displayEl) {
       this._displayEl.textContent = '';
       this._displayEl.classList.remove('timer-urgent');
     }
+  }
+
+  pause() {
+    if (this._intervalId === null) return;
+    this._remaining = this._deadline
+      ? Math.max(0, (this._deadline - Date.now()) / 1000)
+      : this._remaining;
+    clearInterval(this._intervalId);
+    this._intervalId = null;
+    this._deadline = null;
+    this._tick();
+  }
+
+  resume() {
+    if (this._intervalId !== null || this._remaining <= 0 || this._total <= 0) return;
+    this._deadline = Date.now() + this._remaining * 1000;
+    this._intervalId = setInterval(() => {
+      this._updateFromClock();
+    }, 50);
+    this._tick();
   }
 
   /**
@@ -126,7 +140,10 @@ export class ExerciseTimer {
   /** Update HUD element and invoke the onTick callback. */
   _tick() {
     if (this._displayEl) {
-      this._displayEl.textContent = `${this._remaining}s`;
+      const label = this._remaining > URGENT_THRESHOLD_SECONDS
+        ? Math.ceil(this._remaining).toString()
+        : this._remaining.toFixed(1).replace(/\.0$/, '');
+      this._displayEl.textContent = `${label}s`;
 
       if (this._remaining <= URGENT_THRESHOLD_SECONDS) {
         this._displayEl.classList.add('timer-urgent');
@@ -136,5 +153,24 @@ export class ExerciseTimer {
     }
 
     this._onTick(this._remaining, this._total);
+  }
+
+  _updateFromClock() {
+    if (!this._deadline) return;
+    this._remaining = Math.max(0, (this._deadline - Date.now()) / 1000);
+
+    if (this._remaining <= 0) {
+      this._remaining = 0;
+      this._tick();
+      if (this._intervalId !== null) {
+        clearInterval(this._intervalId);
+        this._intervalId = null;
+      }
+      this._deadline = null;
+      this._onExpired();
+      return;
+    }
+
+    this._tick();
   }
 }

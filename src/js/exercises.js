@@ -318,6 +318,21 @@ function buildFallbackCatalog() {
       })),
       timePressure: { ...DEFAULT_TIME_PRESSURE },
     },
+    {
+      id: 'MATCH_MVP_FALLBACK',
+      workshop: 'match',
+      title: 'Ranked Match MVP',
+      opponentRank: 'D8',
+      rally: [
+        ...MOCK_RALLIES.attack.slice(0, 2),
+        ...MOCK_RALLIES.defense.slice(0, 2),
+      ].map((exercise, index) => ({
+        turn: index + 1,
+        type: exercise.type,
+        exerciseRef: exercise.id,
+      })),
+      timePressure: { ...DEFAULT_TIME_PRESSURE },
+    },
   ];
 
   return buildCatalog(fallbackExercises, fallbackMatches, 'mock');
@@ -366,7 +381,26 @@ export async function warmScenarioCatalog() {
 
 export async function loadWorkshopRally(workshop) {
   const catalog = await loadScenarioCatalog();
-  const match = catalog.matches.find(entry => entry.workshop === workshop);
+  let match = catalog.matches.find(entry => entry.workshop === workshop);
+
+  if (!match && workshop === 'match') {
+    const mixedRally = catalog.matches
+      .filter(entry => entry.workshop === 'attack' || entry.workshop === 'defense')
+      .flatMap(entry => entry.rally)
+      .slice(0, 4)
+      .map((turn, index) => ({ ...turn, turn: index + 1 }));
+
+    if (mixedRally.length > 0) {
+      match = {
+        id: 'MATCH_MIXED_FALLBACK',
+        workshop: 'match',
+        title: 'Ranked Match MVP',
+        opponentRank: 'D8',
+        rally: mixedRally,
+        timePressure: { ...DEFAULT_TIME_PRESSURE },
+      };
+    }
+  }
 
   if (!match) {
     throw new Error(`No rally defined for workshop "${workshop}"`);
@@ -384,6 +418,9 @@ export async function loadWorkshopRally(workshop) {
       turn: turn.turn ?? null,
       matchId: match.id,
       matchTitle: match.title ?? null,
+      opponentRank: match.opponentRank ?? null,
+      timeLimitMs: turn.timeLimitMs ?? match.timeLimitMs ?? null,
+      timeLimitSeconds: turn.timeLimitSeconds ?? match.timeLimitSeconds ?? null,
       timePressure: match.timePressure ?? { ...DEFAULT_TIME_PRESSURE },
     };
   });
