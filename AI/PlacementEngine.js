@@ -3,7 +3,7 @@
  * Évaluation du placement d'un joueur en fonction du partenaire et du volant
  */
 
-class PlacementEngine {
+export class PlacementEngine {
     constructor() {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;
@@ -212,16 +212,36 @@ class PlacementEngine {
     }
 
     /**
+     * Recherche la meilleure position possible sur le demi-terrain
+     * en maximisant le score combiné (Partenaire + Formation).
+     */
+    findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter) {
+        let best = { x: 0.5, y: 0.5, score: -1 };
+
+        // Pas de 50cm environ pour la recherche
+        const stepX = 0.5 / this.WIDTH;
+        const stepY = 0.5 / this.HALF_LENGTH;
+
+        for (let x = 0.05; x <= 0.95; x += stepX) {
+            for (let y = 0.05; y <= 0.95; y += stepY) {
+                const score = this._calculateRawScore({ x, y }, partnerPos, shotContext, isHitter);
+                if (score > best.score) {
+                    best = { x, y, score };
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
      * Déduit le rôle et la position initiale du joueur évalué
      * @param {Array} teamPlayers - Liste des 2 joueurs [{id, startX, startY}, ...]
      * @param {number} playerId - L'ID du joueur qu'on évalue
      * @param {number} hitterId - L'ID du joueur qui a frappé le volant
      */
-
-
-    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter) {
+    _calculateRawScore(playerPos, partnerPos, shotContext, isHitter) {
         const partnerScore = this.getPartnerDistanceScore(playerPos, partnerPos);
-        
+
         const shotType = shotContext.type;
         const shuttleEndPos = shotContext.endPos;
 
@@ -229,58 +249,45 @@ class PlacementEngine {
         const isPlayerLeft = (playerPos.x < partnerPos.x);
         // 1. Déterminer la position idéale selon le type de coup
         switch (shotType) {
-            case 'CLEAR':
-                idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft);
-                break;
-            case 'KILL':
-                idealPos = this.getIdealKillPos(shuttleEndPos, isHitter);
-                break;
-            case 'DRIVE':
-                idealPos = this.getIdealDrivePos(shuttleEndPos, isHitter);
-                break;
-            case 'SMASH':
-                idealPos = this.getIdealSmashPos(shuttleEndPos, isHitter);
-                break;
-            case 'DROP':
-                idealPos = this.getIdealDropPos(shuttleEndPos, isHitter);
-                break;
-            case 'NET_DROP':
-                idealPos = this.getIdealNetDropPos(shuttleEndPos, isHitter);
-                break;
-            default:
-                idealPos = { x: 0.5, y: 0.5 }; // Sécurité
+            case 'CLEAR': idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft); break;
+            case 'NET_CLEAR': idealPos = this.getIdealDefensePos(shuttleEndPos, isPlayerLeft); break;
+            case 'KILL': idealPos = this.getIdealKillPos(shuttleEndPos, isHitter); break;
+            case 'DRIVE': idealPos = this.getIdealDrivePos(shuttleEndPos, isHitter); break;
+            case 'SMASH': idealPos = this.getIdealSmashPos(shuttleEndPos, isHitter); break;
+            case 'DROP': idealPos = this.getIdealDropPos(shuttleEndPos, isHitter); break;
+            case 'NET_DROP': idealPos = this.getIdealNetDropPos(shuttleEndPos, isHitter); break;
+            default: idealPos = { x: 0.5, y: 0.5 };
         }
 
 
         // Définit des tolérances spécifiques au contexte (Attaque vs Défense)
-        let tolX = 0.5;
-        let tolY = 1.0;
-
-        if (shotType === 'KILL' || shotType === 'DRIVE') {
-            // En kill/drive, la précision latérale est souvent plus critique (fermer l'angle)
-            tolX = 0.4;
-            tolY = 0.6;
-        }
-
-        if (shotType === 'SMASH' || shotType === 'DROP') {
-            // En attaque, la précision latérale est souvent plus critique (fermer l'angle)
-            tolX = 1.0;
-            tolY = 0.5;
-        }
-
+        let tolX = (shotType === 'KILL' || shotType === 'DRIVE') ? 0.4 : (shotType === 'SMASH' || shotType === 'DROP') ? 1.0 : 0.5;
+        let tolY = (shotType === 'KILL' || shotType === 'DRIVE') ? 0.6 : (shotType === 'SMASH' || shotType === 'DROP') ? 0.5 : 1.0;
         const formationScore = this.calculateFormationScore(playerPos, idealPos, tolX, tolY);
-        const finalScore = (partnerScore * 0.3) + (formationScore * 0.7);
+
+        return (partnerScore * 0.3) + (formationScore * 0.7);
+    }
+
+    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter) {
+        const shotType = shotContext.type;
+        const shuttleEndPos = shotContext.endPos;
+        const bestPlacement = this.findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter);
+        const bestScore = bestPlacement.score;
+
+        
+        const rawTotal = this._calculateRawScore(playerPos, partnerPos, shotContext, isHitter);
+        const ratio = bestScore > 0 ? 100 / bestScore : 1;
 
         return {
-            total: Math.round(finalScore),
+            total: Math.ceil(rawTotal*ratio),
             breakdown: {
-                partner: partnerScore,
-                formation: formationScore
+                partner: Math.ceil(rawTotal*0.3*ratio),
+                formation: Math.ceil(rawTotal*0.7*ratio)
             },
             realDistance: this.calculateDistMeters(playerPos, partnerPos).toFixed(2),
-            ideal : {
-                x : idealPos.x,
-                y : idealPos.y,
+            ideal: {
+                x: bestPlacement.x,
+                y: bestPlacement.y,
             },
         };
     }
