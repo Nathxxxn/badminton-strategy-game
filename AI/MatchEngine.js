@@ -94,3 +94,172 @@ export function calculateAdjustedTime(baseTime, previousScore) {
 
     return Math.round(baseTime * multiplier);
 }
+
+
+class MatchEngine {
+    constructor(player1, player2, executionEngine) {
+        this.executionEngine = executionEngine;
+        
+        // Initialisation des joueurs avec un état de base
+        this.players = {
+            1: { ...player1, fatigue: 0.0, position: { x: 0, y: 0 } },
+            2: { ...player2, fatigue: 0.0, position: { x: 0, y: 0 } }
+        };
+
+        // État du match
+        this.matchState = {
+            scoreP1: 0,
+            scoreP2: 0,
+            setsP1: 0,
+            setsP2: 0,
+            currentServer: 1,
+            rallyInProgress: false,
+            // Historique du volant pour le prochain coup
+            incomingShotType: null,
+            incomingSpin: false
+        };
+
+        // Dictionnaire de résistance à la fatigue selon le classement
+        // Plus le multiplicateur est bas, moins le joueur se fatigue
+        this.FATIGUE_RESISTANCE = this._initFatigueResistance();
+    }
+
+    // ==========================================
+    // GESTION DE LA FATIGUE
+    // ==========================================
+
+    /**
+     * Calcule et ajoute la fatigue après un coup et un déplacement
+     * La fatigue va de 0.0 (frais) à 1.0 (épuisé)
+     */
+    addFatigue(playerId, shotType, distanceMoved) {
+        const player = this.players[playerId];
+        const rank = player.rank || 'NC';
+        const resistanceModifier = this.FATIGUE_RESISTANCE[rank];
+
+        // 1. Coût du déplacement (ex: courir 5 mètres fatigue plus qu'un pas)
+        // On pourra ajuster ce facteur. Disons 0.001 par mètre parcouru
+        let movementCost = distanceMoved * 0.001;
+
+        // 2. Coût de la frappe (un Smash fatigue plus qu'un Net Drop)
+        let shotCost = this._getShotFatigueCost(shotType);
+
+        // 3. Application du multiplicateur de classement
+        let totalFatigueAdded = (movementCost + shotCost) * resistanceModifier;
+
+        // On ajoute à la jauge du joueur et on plafonne à 1.0
+        player.fatigue = Math.min(player.fatigue + totalFatigueAdded, 1.0);
+    }
+
+    /**
+     * Coût énergétique de base de chaque coup
+     */
+    _getShotFatigueCost(shotType) {
+        const costs = {
+            'SMASH': 0.005,
+            'CLEAR': 0.003,
+            'KILL': 0.004,
+            'DRIVE': 0.002,
+            'DROP': 0.002,
+            'NET_DROP': 0.001,
+            'NET_CLEAR': 0.003
+        };
+        return costs[shotType] || 0.001;
+    }
+
+    /**
+     * Crée le tableau des multiplicateurs de fatigue.
+     * Un P12 se fatigue beaucoup plus vite qu'un N1.
+     */
+    _initFatigueResistance() {
+        const ranks = ['N1', 'N2', 'N3', 'R4', 'R5', 'R6', 'D7', 'D8', 'D9', 'P10', 'P11', 'P12', 'NC'];
+        let resistance = {};
+        
+        ranks.forEach((rank, index) => {
+            let rankIdx = Math.min(index, 11); 
+            if (rank === 'NC') rankIdx = 8; // NC équivaut à D9
+            
+            // Si N1 (index 0) = 1.0 (référence)
+            // Si P12 (index 11) = 3.0 (se fatigue 3x plus vite qu'un N1)
+            // Progression linéaire
+            resistance[rank] = 1.0 + (rankIdx / 11) * 2.0; 
+        });
+        
+        return resistance;
+    }
+
+    /**
+     * Récupération d'endurance entre les points ou les sets
+     */
+    recoverFatigue(amount) {
+        this.players[1].fatigue = Math.max(this.players[1].fatigue - amount, 0.0);
+        this.players[2].fatigue = Math.max(this.players[2].fatigue - amount, 0.0);
+    }
+
+    // ==========================================
+    // BOUCLE DE JEU (Squelette)
+    // ==========================================
+
+    /**
+     * Démarre un nouvel échange (Rally)
+     */
+    startRally() {
+        this.matchState.rallyInProgress = true;
+        this.matchState.incomingShotType = 'SERVE'; // On simulera un service
+        this.matchState.incomingSpin = false;
+        
+        // Reset des positions au centre ou en position de service (à implémenter)
+        // this._resetPositionsForServe();
+    }
+
+    /**
+     * Joue le tour d'un joueur (sera appelé en boucle)
+     */
+    playTurn(playerId, intent) {
+        if (!this.matchState.rallyInProgress) return;
+
+        const player = this.players[playerId];
+
+        // 1. Le joueur se déplace vers le volant (KinematicEngine - à lier plus tard)
+        let distanceMoved = 2.5; // Fausse valeur pour l'instant
+
+        // 2. Le joueur frappe le volant
+        const shotResult = this.executionEngine.executeShot(
+            intent, 
+            player, 
+            this.matchState.incomingShotType, 
+            this.matchState.incomingSpin
+        );
+
+        // 3. On applique la fatigue de ce tour
+        this.addFatigue(playerId, shotResult.type, distanceMoved);
+
+        // 4. Analyse du résultat (Faute ou on continue ?)
+        if (shotResult.status !== 'OK') {
+            this._endRally(playerId === 1 ? 2 : 1, shotResult.status); // L'autre joueur gagne le point
+            return shotResult;
+        }
+
+        // 5. Mise à jour de l'état pour le prochain coup
+        this.matchState.incomingShotType = shotResult.type;
+        this.matchState.incomingSpin = shotResult.spin;
+
+        return shotResult;
+    }
+
+    /**
+     * Termine l'échange et donne le point
+     */
+    _endRally(winnerId, reason) {
+        this.matchState.rallyInProgress = false;
+        
+        if (winnerId === 1) this.matchState.scoreP1++;
+        else this.matchState.scoreP2++;
+
+        // Récupération de souffle entre chaque point (ex: -10% de fatigue)
+        this.recoverFatigue(0.10);
+
+        // TODO: Vérifier si le set est gagné
+        console.log(`Point pour Joueur ${winnerId} ! (${reason}) - Score: ${this.matchState.scoreP1}-${this.matchState.scoreP2}`);
+    }
+}

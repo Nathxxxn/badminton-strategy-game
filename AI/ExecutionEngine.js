@@ -1,26 +1,26 @@
 const BASE_PROBS_N1 = {
             // 1. Grosses fautes (Bois complet, raté) - [Incoming][Chosen]
             GROSS_ERROR: {
-                'CLEAR':    { 'CLEAR': 0.01, 'SMASH': 0.01, 'DROP': 0.01, 'DRIVE': 0.01, 'KILL': 0.01, 'NET_DROP': 0.01, 'NET_CLEAR': 0.01 },
-                'SMASH':    { 'CLEAR': 0.03, 'SMASH': 1.00, 'DROP': 0.05, 'DRIVE': 0.04, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.01 },
-                'DROP':     { 'CLEAR': 0.01, 'SMASH': 0.02, 'DROP': 0.01, 'DRIVE': 0.01, 'KILL': 0.01, 'NET_DROP': 0.02, 'NET_CLEAR': 0.01 },
-                'NET_DROP': { 'CLEAR': 1.00, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 1.00, 'KILL': 0.02, 'NET_DROP': 0.01, 'NET_CLEAR': 0.01 },
-                'DRIVE':    { 'CLEAR': 0.02, 'SMASH': 0.03, 'DROP': 0.02, 'DRIVE': 0.01, 'KILL': 0.02, 'NET_DROP': 0.02, 'NET_CLEAR': 0.01 },
-                'KILL':     { 'CLEAR': 0.05, 'SMASH': 1.00, 'DROP': 0.05, 'DRIVE': 0.05, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.01 },
-                'NET_CLEAR':{ 'CLEAR': 0.01, 'SMASH': 0.02, 'DROP': 0.01, 'DRIVE': 0.01, 'KILL': 0.01, 'NET_DROP': 0.01, 'NET_CLEAR': 0.01 }
+                'CLEAR':    { 'CLEAR': 0.001, 'SMASH': 0.00, 'DROP': 0.00, 'DRIVE': 0.01, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.01 },
+                'SMASH':    { 'CLEAR': 0.07, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.09, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.01 },
+                'DROP':     { 'CLEAR': 0.005, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.01, 'KILL': 1.00, 'NET_DROP': 0.005, 'NET_CLEAR': 0.01 },
+                'NET_DROP': { 'CLEAR': 0.005, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.02, 'KILL': 1.00, 'NET_DROP': 0.001, 'NET_CLEAR': 0.01 },
+                'DRIVE':    { 'CLEAR': 0.06, 'SMASH': 1.00, 'DROP': 0.005, 'DRIVE': 0.01, 'KILL': 1.00, 'NET_DROP': 0.03, 'NET_CLEAR': 0.01 },
+                'KILL':     { 'CLEAR': 0.10, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.12, 'KILL': 1.00, 'NET_DROP': 0.08, 'NET_CLEAR': 0.01 },
+                'NET_CLEAR':{ 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 0.00, 'DRIVE': 0.001, 'KILL': 0.001, 'NET_DROP': 0.00, 'NET_CLEAR': 0.01 }
             },
             // 2. Fautes de filet - [Incoming][Chosen]
             NET_FAULT: {
-                'CLEAR':    { 'CLEAR': 0.00, 'SMASH': 0.05, 'DROP': 0.04, 'DRIVE': 0.02, 'KILL': 0.00, 'NET_DROP': 0.00, 'NET_CLEAR': 0.00 },
-                'SMASH':    { 'CLEAR': 0.02, 'SMASH': 1.00, 'DROP': 0.06, 'DRIVE': 0.04, 'KILL': 1.00, 'NET_DROP': 0.06, 'NET_CLEAR': 0.00 },
-                'DROP':     { 'CLEAR': 0.01, 'SMASH': 0.04, 'DROP': 0.03, 'DRIVE': 0.02, 'KILL': 0.02, 'NET_DROP': 0.03, 'NET_CLEAR': 0.00 },
-                'NET_DROP': { 'CLEAR': 1.00, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 1.00, 'KILL': 0.04, 'NET_DROP': 0.03, 'NET_CLEAR': 0.00 },
-                'DRIVE':    { 'CLEAR': 0.01, 'SMASH': 0.04, 'DROP': 0.03, 'DRIVE': 0.02, 'KILL': 0.03, 'NET_DROP': 0.03, 'NET_CLEAR': 0.00 },
-                'KILL':     { 'CLEAR': 0.05, 'SMASH': 1.00, 'DROP': 0.10, 'DRIVE': 0.10, 'KILL': 1.00, 'NET_DROP': 0.10, 'NET_CLEAR': 0.00 },
-                'NET_CLEAR':{ 'CLEAR': 0.00, 'SMASH': 0.04, 'DROP': 0.03, 'DRIVE': 0.02, 'KILL': 0.00, 'NET_DROP': 0.02, 'NET_CLEAR': 0.00 }
+                'CLEAR':    { 'CLEAR': 0.00, 'SMASH': 0.03, 'DROP': 0.02, 'DRIVE': 0.04, 'KILL': 1.00, 'NET_DROP': 0.15, 'NET_CLEAR': 0.00 },
+                'SMASH':    { 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 0.06, 'DRIVE': 0.08, 'KILL': 1.00, 'NET_DROP': 0.03, 'NET_CLEAR': 0.00 },
+                'DROP':     { 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.10, 'KILL': 1.00, 'NET_DROP': 0.003, 'NET_CLEAR': 0.00 },
+                'NET_DROP': { 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.08, 'KILL': 1.00, 'NET_DROP': 0.005, 'NET_CLEAR': 0.00 },
+                'DRIVE':    { 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 0.02, 'DRIVE': 0.005, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.00 },
+                'KILL':     { 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 1.00, 'DRIVE': 0.10, 'KILL': 1.00, 'NET_DROP': 0.05, 'NET_CLEAR': 0.00 },
+                'NET_CLEAR':{ 'CLEAR': 0.00, 'SMASH': 1.00, 'DROP': 0.01, 'DRIVE': 0.00, 'KILL': 0.005, 'NET_DROP': 0.02, 'NET_CLEAR': 0.00 }
             },
             // 3. Bois (Mishit) - [Chosen]
-            WOOD: { 'CLEAR': 0.01, 'SMASH': 0.03, 'DROP': 0.02, 'NET_DROP': 0.02, 'DRIVE': 0.02, 'KILL': 0.03, 'NET_CLEAR': 0.01 },
+            WOOD: { 'CLEAR': 0, 'SMASH': 0.01, 'DROP': 0.01, 'NET_DROP': 0.02, 'DRIVE': 0.03, 'KILL': 0.04, 'NET_CLEAR': 0 },
             // 4. Net Clear (S'envole au filet) - [Chosen]
             NET_CLEAR_CHANCE: { 'DROP': 0.02, 'NET_DROP': 0.04, 'CLEAR': 0, 'SMASH': 0, 'DRIVE': 0, 'KILL': 0, 'NET_CLEAR': 0 }
         };
