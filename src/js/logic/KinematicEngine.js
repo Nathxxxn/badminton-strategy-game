@@ -25,7 +25,7 @@ export class KinematicEngine {
             DRIVE:      { id: 'DRIVE',      bonus: 3,  reach: 2.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR', 'DROP'] },
             DROP:       { id: 'DROP',       bonus: 7,  reach: 3.5, allowed: ['NET_DROP', 'DRIVE', 'CLEAR'] },
             NET_DROP:   { id: 'NET_DROP',   bonus: 4,  reach: 2.0, allowed: ['CLEAR', 'NET_DROP', 'DRIVE'] },
-            CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] },
+            CLEAR:      { id: 'CLEAR',      bonus: 0,  reach: 5.0, allowed: ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] },
             NET_CLEAR:  { id: 'NET_CLEAR',  bonus:-10, reach: 3.0, allowed: ['KILL', 'DROP', 'DRIVE', 'CLEAR', 'NET_DROP'] }
         };
     }
