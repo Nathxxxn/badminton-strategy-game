@@ -106,7 +106,6 @@ class MatchEngine {
             2: { ...player2, fatigue: 0.0, position: { x: 0, y: 0 } }
         };
 
-        // État du match
         this.matchState = {
             scoreP1: 0,
             scoreP2: 0,
@@ -114,86 +113,95 @@ class MatchEngine {
             setsP2: 0,
             currentServer: 1,
             rallyInProgress: false,
-            // Historique du volant pour le prochain coup
             incomingShotType: null,
-            incomingSpin: false
+            incomingSpin: false,
+            intervalTaken: false // Pour savoir si la pause a déjà été faite dans le set
+        };
+
+        // Initialisation du rapport de match
+        this.matchReport = {
+            winner: null,
+            initialStats: { 
+                player1: { rating: player1.rating, rank: player1.rank },
+                player2: { rating: player2.rating, rank: player2.rank }
+            },
+            finalStats: {},
+            globalScores: { tactical: 0, placement: 0, totalBonus: 0, totalMalus: 0 },
+            counters: {
+                backhandHits: 0,
+                bodyHits: 0,
+                proximityAlerts: 0,
+                distanceAlerts: 0
+            },
+            rallyHistory: [] // On poussera un objet à chaque fin de point
         };
 
         // Dictionnaire de résistance à la fatigue selon le classement
         // Plus le multiplicateur est bas, moins le joueur se fatigue
         this.FATIGUE_RESISTANCE = this._initFatigueResistance();
     }
-
     // ==========================================
-    // GESTION DE LA FATIGUE
+    // CONFIGURATION DU MATCH
     // ==========================================
 
     /**
-     * Calcule et ajoute la fatigue après un coup et un déplacement
-     * La fatigue va de 0.0 (frais) à 1.0 (épuisé)
+     * @param {number} format Format du set (5, 11, 15, 21)
      */
-    addFatigue(playerId, shotType, distanceMoved) {
+    setMatchFormat(format = 5) {
+        const formats = {
+            5: { pointsToWin: 5, interval: 3, maxPoints: 11 },
+            11: { pointsToWin: 11, interval: 6, maxPoints: 15 },
+            15: { pointsToWin: 15, interval: 8, maxPoints: 21 },
+            21: { pointsToWin: 21, interval: 11, maxPoints: 30 }
+        };
+
+        this.rules = formats[format] || formats[21];
+        // On joue toujours au meilleur des 3 sets (2 sets gagnants)
+        this.rules.setsToWin = 2; 
+    }
+
+    // ==========================================
+    // GESTION DE LA FATIGUE (Mise à jour)
+    // ==========================================
+
+    addFatigue(playerId, distanceMoved, shotType = null) {
         const player = this.players[playerId];
         const rank = player.rank || 'NC';
         const resistanceModifier = this.FATIGUE_RESISTANCE[rank];
 
-        // 1. Coût du déplacement (ex: courir 5 mètres fatigue plus qu'un pas)
-        // On pourra ajuster ce facteur. Disons 0.001 par mètre parcouru
         let movementCost = distanceMoved * 0.001;
+        let shotCost = shotType ? this._getShotFatigueCost(shotType) : 0;
 
-        // 2. Coût de la frappe (un Smash fatigue plus qu'un Net Drop)
-        let shotCost = this._getShotFatigueCost(shotType);
-
-        // 3. Application du multiplicateur de classement
         let totalFatigueAdded = (movementCost + shotCost) * resistanceModifier;
-
-        // On ajoute à la jauge du joueur et on plafonne à 1.0
         player.fatigue = Math.min(player.fatigue + totalFatigueAdded, 1.0);
     }
 
-    /**
-     * Coût énergétique de base de chaque coup
-     */
-    _getShotFatigueCost(shotType) {
-        const costs = {
-            'SMASH': 0.005,
-            'CLEAR': 0.003,
-            'KILL': 0.004,
-            'DRIVE': 0.002,
-            'DROP': 0.002,
-            'NET_DROP': 0.001,
-            'NET_CLEAR': 0.003
-        };
-        return costs[shotType] || 0.001;
-    }
-
-    /**
-     * Crée le tableau des multiplicateurs de fatigue.
-     * Un P12 se fatigue beaucoup plus vite qu'un N1.
-     */
     _initFatigueResistance() {
         const ranks = ['N1', 'N2', 'N3', 'R4', 'R5', 'R6', 'D7', 'D8', 'D9', 'P10', 'P11', 'P12', 'NC'];
         let resistance = {};
         
         ranks.forEach((rank, index) => {
             let rankIdx = Math.min(index, 11); 
-            if (rank === 'NC') rankIdx = 8; // NC équivaut à D9
+            if (rank === 'NC') rankIdx = 8; 
             
-            // Si N1 (index 0) = 1.0 (référence)
-            // Si P12 (index 11) = 3.0 (se fatigue 3x plus vite qu'un N1)
-            // Progression linéaire
-            resistance[rank] = 1.0 + (rankIdx / 11) * 2.0; 
+            // N1 = 1.0, P12 = 4.0 (Rapport de 4)
+            resistance[rank] = 1.0 + (rankIdx / 11) * 3.0; 
         });
-        
         return resistance;
     }
 
     /**
-     * Récupération d'endurance entre les points ou les sets
+     * @param {string} type 'POINT', 'INTERVAL' (mi-set), 'SET'
      */
-    recoverFatigue(amount) {
-        this.players[1].fatigue = Math.max(this.players[1].fatigue - amount, 0.0);
-        this.players[2].fatigue = Math.max(this.players[2].fatigue - amount, 0.0);
+    recoverFatigue(type) {
+        let factor = 1.0;
+        if (type === 'POINT') factor = 0.95;       // -5%
+        else if (type === 'INTERVAL') factor = 0.75; // -25%
+        else if (type === 'SET') factor = 0.50;      // -50%
+
+        [1, 2].forEach(id => {
+            this.players[id].fatigue = this.players[id].fatigue * factor;
+        });
     }
 
     // ==========================================
