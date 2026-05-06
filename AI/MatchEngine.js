@@ -100,10 +100,12 @@ class MatchEngine {
     constructor(player1, player2, executionEngine) {
         this.executionEngine = executionEngine;
         
-        // Initialisation des joueurs avec un état de base
+        // teamA = [p1, p2], teamB = [p3, p4]
         this.players = {
-            1: { ...player1, fatigue: 0.0, position: { x: 0, y: 0 } },
-            2: { ...player2, fatigue: 0.0, position: { x: 0, y: 0 } }
+            1: { ...teamA[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A' },
+            2: { ...teamA[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A' },
+            3: { ...teamB[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B' },
+            4: { ...teamB[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B' }
         };
 
         this.matchState = {
@@ -203,6 +205,144 @@ class MatchEngine {
             this.players[id].fatigue = this.players[id].fatigue * factor;
         });
     }
+    // ==========================================
+    // LOGIQUE DE SCORE ET DE MATCH
+    // ==========================================
+
+    /**
+     * Appelée à la fin de chaque échange par _endRally()
+     * Vérifie si on déclenche une pause, une fin de set ou une fin de match.
+     */
+    checkScore() {
+        const { scoreP1, scoreP2 } = this.matchState;
+        const { pointsToWin, maxPoints, interval, setsToWin } = this.rules;
+
+        // 1. Vérifier la pause de mi-set
+        if (!this.matchState.intervalTaken && (scoreP1 === interval || scoreP2 === interval)) {
+            this.matchState.intervalTaken = true;
+            this.recoverFatigue('INTERVAL');
+            console.log(`[PAUSE] Mi-set atteinte à ${scoreP1}-${scoreP2}. Récupération de 25% de la fatigue accumulée.`);
+            return; // On s'arrête ici pour ce point
+        }
+
+        // 2. Vérifier la victoire du set
+        const maxScore = Math.max(scoreP1, scoreP2);
+        const diff = Math.abs(scoreP1 - scoreP2);
+
+        // Règle : Avoir atteint le score cible ET avoir 2 points d'écart, OU atteindre le plafond
+        if ((maxScore >= pointsToWin && diff >= 2) || maxScore === maxPoints) {
+            this._endSet(scoreP1 > scoreP2 ? 1 : 2);
+        } else {
+            // Le set continue, récupération normale entre deux points
+            this.recoverFatigue('POINT');
+        }
+    }
+
+    /**
+     * Gère la clôture d'un set
+     */
+    _endSet(winnerId) {
+        // Incrémentation des sets
+        if (winnerId === 1) this.matchState.setsP1++;
+        else this.matchState.setsP2++;
+
+        console.log(`[FIN DU SET] Remporté par Joueur ${winnerId} (${this.matchState.scoreP1}-${this.matchState.scoreP2})`);
+
+        // Vérifier la victoire du match
+        if (this.matchState.setsP1 === this.rules.setsToWin || this.matchState.setsP2 === this.rules.setsToWin) {
+            this._endMatch(winnerId);
+        } else {
+            // Préparation du set suivant
+            this.matchState.scoreP1 = 0;
+            this.matchState.scoreP2 = 0;
+            this.matchState.intervalTaken = false;
+            
+            // Récupération complète (50% de la fatigue)
+            this.recoverFatigue('SET');
+            
+            // En badminton, le vainqueur du set sert au début du set suivant
+            this.matchState.currentServer = winnerId;
+            
+            console.log(`[NOUVEAU SET] Début du set suivant. Le Joueur ${winnerId} sert.`);
+        }
+    }
+
+    /**
+     * Clôture le match et prépare les statistiques
+     */
+    
+    _endMatch(winnerId) {
+        this.matchState.matchOver = true;
+        this.matchReport.winner = (winnerId <= 2) ? "TEAM_A" : "TEAM_B";
+
+        // TODO plus tard : Calcul des nouveaux classements (rating) via le système Elo ou autre
+        // On remplit les stats finales avant de renvoyer
+        this.matchReport.finalStats = this._generateFinalStats();
+        
+        console.log("Match Terminé. Rapport généré.");
+        return this.matchReport; // C'est ici qu'on l'extrait pour l'UI
+    }
+
+
+    // ==========================================
+    // LOGIQUE DE JEU (Continuité)
+    // ==========================================
+    /**
+     * PHASE A : Calcul des conséquences physiques immédiates du coup
+     */
+    processPostShot(strikerId, shotResult) {
+        const striker = this.players[strikerId];
+        const partnerId = (strikerId % 2 === 0) ? strikerId - 1 : strikerId + 1;
+        const partner = this.players[partnerId];
+
+        // 1. Calcul du repositionnement automatique du partenaire
+        // On utilise la logique de double : si je smashe, il descend au filet, etc.
+        let partnerMove = this.kinematicEngine.calculateRepositioning(partner, striker, shotResult);
+        
+        // 2. Calcul du temps de réflexion pour le prochain coup
+        // Temps de vol - Temps de réaction (ajusté par le classement et la fatigue)
+        // Formula: $T_{reflexion} = T_{vol} - T_{reaction}$
+        let reflectionTime = shotResult.flightTime - this.kinematicEngine.getAdjustedReactionTime(this.players[3]); 
+
+        // 3. Application de la fatigue de frappe pour le striker
+        this.addFatigue(strikerId, shotResult.distanceToBall, shotResult.type);
+        
+        // On renvoie les infos pour l'affichage du chrono et des ombres de déplacement
+        return {
+            partnerTarget: partnerMove.target,
+            partnerDistance: partnerMove.distance,
+            reflectionTime: Math.max(reflectionTime, 0.1) // Jamais moins de 100ms
+        };
+    }
+
+    /**
+     * PHASE B : Calcul de la réponse adverse et choix du prochain coup
+     */
+    processPostMovement(movedPlayerId) {
+        // 1. Déterminer quel adversaire va intercepter le volant
+        const opponentIds = (movedPlayerId <= 2) ? [3, 4] : [1, 2];
+        const interceptorId = this._getBestInterceptor(opponentIds, this.shuttle.landingPos);
+        
+        // 2. Calcul du coup de l'IA (TacticalEngine)
+        const aiIntent = this.tacticalEngine.decideShot(this.players[interceptorId], this.shuttle);
+
+        // 3. Calcul des déplacements des deux adversaires
+        const opponentMoves = opponentIds.map(id => 
+            this.kinematicEngine.calculateMoveToIntercept(this.players[id], this.shuttle.landingPos)
+        );
+
+        // 4. Gestion de l'IA Partenaire (Overwrite)
+        // Si le volant arrive sur le partenaire humain, on "overwrite"
+        const nextStrikerId = this._determineNextStriker(1, 2); // Entre joueur et son pote
+        
+        return {
+            nextStrikerId,
+            aiIntent,
+            opponentMoves,
+            isUserTurn: (nextStrikerId === 1) // 1 est l'ID du joueur humain
+        };
+    }
+
 
     // ==========================================
     // BOUCLE DE JEU (Squelette)
@@ -256,7 +396,7 @@ class MatchEngine {
     }
 
     /**
-     * Termine l'échange et donne le point
+     * Termine l'échange et donne le point (Mise à jour)
      */
     _endRally(winnerId, reason) {
         this.matchState.rallyInProgress = false;
@@ -264,10 +404,43 @@ class MatchEngine {
         if (winnerId === 1) this.matchState.scoreP1++;
         else this.matchState.scoreP2++;
 
-        // Récupération de souffle entre chaque point (ex: -10% de fatigue)
-        this.recoverFatigue(0.10);
+        // Celui qui gagne le point prend le service
+        this.matchState.currentServer = winnerId;
 
-        // TODO: Vérifier si le set est gagné
-        console.log(`Point pour Joueur ${winnerId} ! (${reason}) - Score: ${this.matchState.scoreP1}-${this.matchState.scoreP2}`);
+        console.log(`Point Joueur ${winnerId} (${reason}) - Score: ${this.matchState.scoreP1}-${this.matchState.scoreP2}`);
+
+        // On vérifie immédiatement les conséquences de ce nouveau score
+        this.checkScore();
+    }
+
+    /**
+     * Démarre un nouvel échange (Rally)
+     */
+    startRally() {
+        if (this.matchState.matchOver) return;
+
+        this.matchState.rallyInProgress = true;
+        this.matchState.incomingShotType = 'SERVE'; 
+        this.matchState.incomingSpin = false;
+        
+        // Côté de service (Pair = Droite, Impair = Gauche)
+        const serverScore = this.matchState.currentServer === 1 ? this.matchState.scoreP1 : this.matchState.scoreP2;
+        const serveSide = (serverScore % 2 === 0) ? 'RIGHT' : 'LEFT';
+
+        // Génération du scénario initial (qui servira de base au KinematicEngine)
+        // Note: C'est ici que tu utiliseras generatePlacementScenario()
+        this.currentScenario = this._generateInitialScenario(this.matchState.currentServer, serveSide);
+
+        console.log(`[SERVICE] Joueur ${this.matchState.currentServer} sert à ${serveSide}`);
+    }
+
+    _generateInitialScenario(serverId, side) {
+        // C'est un "stub" (une coquille vide) en attendant d'y brancher ton vrai générateur
+        return {
+            player1Pos: { x: 0, y: 0 },
+            player2Pos: { x: 0, y: 0 },
+            shuttlePos: { x: 0, y: 0 },
+            // etc...
+        };
     }
 }
