@@ -19,6 +19,8 @@
  * Coordinate system: normalized (0–1), converted via court.toCanvas().
  */
 
+import { sampleLoftedCurvePoint } from './trajectory.js';
+
 
 // ─── Timing constants ─────────────────────────────────────────────────────────
 
@@ -36,18 +38,8 @@ const FEEDBACK_FADE_START = 0.55;
 
 // ─── Visual constants ─────────────────────────────────────────────────────────
 
-/** Peak height of the shuttle arc, as a fraction of the normalized distance */
-const ARC_HEIGHT_RATIO = 0.28;
-
-/** Minimum arc peak in normalized units (so short shots still look arced) */
-const ARC_MIN_HEIGHT = 0.06;
-
 /** Shuttle radius during flight (fraction of court width) */
 const SHUTTLE_RADIUS_RATIO = 0.022;
-
-/** Trail dot count behind the shuttle during flight */
-const TRAIL_DOTS = 6;
-const TRAIL_DOT_SPACING = 0.06;  // fraction of total progress per dot
 
 // Feedback overlay colors
 const FEEDBACK_COLOURS = {
@@ -100,16 +92,18 @@ export class Animator {
    * @param {{ x: number, y: number }} from   normalized start position
    * @param {{ x: number, y: number }} to     normalized end position
    * @param {'slow'|'medium'|'fast'}   speed
-   * @param {'low'|'normal'|'high'}    height — affects arc peak
+   * @param {'low'|'normal'|'high'}    height — legacy arc hint
+   * @param {string}                   shotType
    * @returns {Promise<void>}
    */
-  flyShuttle(from, to, speed = 'medium', height = 'normal') {
+  flyShuttle(from, to, speed = 'medium', height = 'normal', shotType = null) {
     return new Promise(resolve => {
       this._flight = {
         from:     { x: from.x, y: from.y },
         to:       { x: to.x,   y: to.y   },
         duration: FLIGHT_DURATION[speed] ?? FLIGHT_DURATION.medium,
         height,
+        shotType,
         startMs:  null,
         resolve,
       };
@@ -229,37 +223,9 @@ export class Animator {
   _drawFlightFrame(f, t) {
     const { ctx, court } = this;
 
-    // Parabolic arc: lerp x linearly, lerp y with an added sine arc
-    const nx = f.from.x + (f.to.x - f.from.x) * t;
-    const ny = f.from.y + (f.to.y - f.from.y) * t;
-
-    // Arc peak height based on distance and height parameter
-    const dist = Math.hypot(f.to.x - f.from.x, f.to.y - f.from.y);
-    const arcH = Math.max(ARC_MIN_HEIGHT, dist * ARC_HEIGHT_RATIO) *
-                 (f.height === 'high' ? 1.5 : f.height === 'low' ? 0.5 : 1.0);
-    const arcY = ny - arcH * Math.sin(Math.PI * t);  // bell curve over flight
-
-    const pos    = court.toCanvas(nx, arcY);
+    const current = this._sampleFlightPoint(f, t);
+    const pos    = court.toCanvas(current.x, current.y);
     const r      = court.courtW * SHUTTLE_RADIUS_RATIO;
-
-    // ── Trail dots ──────────────────────────────────────────────────────────
-    for (let i = TRAIL_DOTS; i >= 1; i--) {
-      const tTrail = Math.max(0, t - i * TRAIL_DOT_SPACING);
-      const tnx    = f.from.x + (f.to.x - f.from.x) * tTrail;
-      const tny    = f.from.y + (f.to.y - f.from.y) * tTrail;
-      const tarc   = tny - arcH * Math.sin(Math.PI * tTrail);
-      const tp     = court.toCanvas(tnx, tarc);
-      const alpha  = (1 - i / (TRAIL_DOTS + 1)) * 0.4;
-      const tr     = r * (1 - i / (TRAIL_DOTS + 1)) * 0.7;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fill();
-      ctx.restore();
-    }
 
     // ── Shuttle circle ──────────────────────────────────────────────────────
     ctx.save();
@@ -284,6 +250,25 @@ export class Animator {
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  _sampleFlightPoint(f, t) {
+    const curveType = f.shotType ?? this._legacyHeightType(f.height);
+    if (curveType === 'CLEAR' || curveType === 'DROP' || curveType === 'NET_DROP') {
+      const { court } = this;
+      return sampleLoftedCurvePoint(f.from, f.to, t, court, curveType);
+    }
+
+    return {
+      x: f.from.x + (f.to.x - f.from.x) * t,
+      y: f.from.y + (f.to.y - f.from.y) * t,
+    };
+  }
+
+  _legacyHeightType(height) {
+    if (height === 'high') return 'CLEAR';
+    if (height === 'low') return 'NET_DROP';
+    return 'DROP';
   }
 
   // ─── Movement animation ───────────────────────────────────────────────────────

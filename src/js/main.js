@@ -42,10 +42,25 @@ import {
   DEFAULT_OPPONENT_NAMES,
 } from './match-runtime.js';
 
+// Real doubles player names used in exercise mode (no rank context)
+const EXERCISE_OPP_NAMES = [
+  'Kevin', 'Marcus', 'Hendra', 'Ahsan', 'Fajar', 'Rian',
+  'Lee Yang', 'Chi-lin', 'Satwik', 'Chirag', 'Takeshi', 'Keigo',
+  'Kamura', 'Sonoda', 'Gideon', 'Sukamuljo', 'Setiawan', 'Alfian',
+];
+
+function pickExerciseOppNames() {
+  const pool = [...EXERCISE_OPP_NAMES];
+  const i = Math.floor(Math.random() * pool.length);
+  pool.splice(i, 1);
+  const j = Math.floor(Math.random() * pool.length);
+  return [EXERCISE_OPP_NAMES[i], pool[j]];
+}
+
 const COURT_WIDTH_M = 6.10;
 const FULL_COURT_LENGTH_M = 13.40;
 const MOVE_RADIUS_STROKE = 'rgba(94, 234, 212, 0.42)';
-const UI_SHOT_TYPES = ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP'];
+const UI_SHOT_TYPES = ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP', 'NET_CLEAR'];
 const kinematicEngine = new KinematicEngine();
 const impactSpawnEngine = new AISpawnEngine(null, new PlacementEngine(), kinematicEngine);
 const SHOT_PROFILES = kinematicEngine.SHOT_PARAMS;
@@ -203,7 +218,7 @@ function buildImpactOptionsForTurn(turn) {
   getBusinessAllowedShotTypes(turn).forEach(type => {
     const points = getImpactPointsForShotType(turn, type);
     pointsByType.set(type, points);
-    if (points.length > 0) validTypes.push(type);
+    validTypes.push(type);
   });
 
   if (validTypes.length === 0 && turn.shuttlecock?.position) {
@@ -218,6 +233,7 @@ function buildImpactOptionsForTurn(turn) {
 
 function setActiveImpactPoints(turn, shotType) {
   const points = currentImpactPointsByType.get(shotType) ?? [];
+  drag.setShotType(shotType);
   if (turn?.shuttlecock) {
     turn.shuttlecock.validImpactPoints = points;
     turn.shuttlecock.activeImpactPoint = null;
@@ -464,6 +480,10 @@ async function resolvePositioningTimeout(turn) {
   const isCorrect = currentWorkshop === 'match' ? false : feedback.totalScore >= (turn.passingScore ?? 70);
   const awardedScore = currentWorkshop === 'match' ? 0 : feedback.totalScore;
   recordPlacementFeedback(feedback);
+  hud.updateTurnStats('positioning', {
+    accuracy: feedback.totalScore,
+    partnerDist: feedback.details?.realDistance,
+  });
 
   renderFeedbackFrame(turn, {
     correctionFrom: fallbackPos,
@@ -485,7 +505,7 @@ async function resolvePositioningTimeout(turn) {
   );
 
   const timeoutLines = ['Time expired: your starting position was kept.'];
-  if (feedback.message) timeoutLines.push(feedback.message);
+  if (feedback.messages?.[0]) timeoutLines.push(feedback.messages[0]);
   if (currentWorkshop === 'match') await showPointResult({ winner: 'opp', reason: 'TIME' });
 
   await hud.showMessages(
@@ -619,6 +639,10 @@ async function onPositionClick(e) {
   const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
   recordPlacementFeedback(feedback);
+  hud.updateTurnStats('positioning', {
+    accuracy: feedback.totalScore,
+    partnerDist: feedback.details?.realDistance,
+  });
 
   // Tier governs the choice-marker color in drawChoiceVsOptimal.
   const tier =
@@ -645,7 +669,7 @@ async function onPositionClick(e) {
   );
 
   await hud.showMessages(
-    buildScoreLines(feedback.totalScore, feedback.message ? [feedback.message] : []),
+    buildScoreLines(feedback.totalScore, feedback.messages ?? []),
     isCorrect ? '#34d399' : '#f87171',
   );
 
@@ -669,7 +693,7 @@ async function startShotTurn(turn) {
   shotTypeSelector.show();
   // Animate incoming shuttle
   await runAnims(
-    [() => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high')],
+    [() => anim.flyShuttle(turn.shuttlecock.from, turn.shuttlecock.position, turn.shuttlecock.speed, 'high', turn.shuttlecock.type)],
     () => renderBase(turn, { showShuttle: false }),
   );
   renderBase(turn);
@@ -692,7 +716,7 @@ async function onShotFired(shot) {
   // visualised flight matches the player's stated intent. aimPoint and spin
   // remain untouched.
   const forcedType = shotTypeSelector.getSelected();
-  const bridedShot = { ...shot, power: clampPowerForType(shot.power, forcedType) };
+  const bridedShot = { ...shot, type: forcedType, power: clampPowerForType(shot.power, forcedType) };
   const impactPoint = bridedShot.impactPoint ?? turn.shuttlecock.position;
   if (turn.shuttlecock) {
     turn.shuttlecock.activeImpactPoint = impactPoint;
@@ -709,7 +733,7 @@ async function onShotFired(shot) {
 
   await runAnims(
     [
-      () => anim.flyShuttle(impactPoint, bridedShot.aimPoint, flightSpeed, 'low'),
+      () => anim.flyShuttle(impactPoint, bridedShot.aimPoint, flightSpeed, 'low', bridedShot.type),
       () => anim.movePlayer(opp1, opp1Target, false),
       () => anim.movePlayer(opp2, opp2Target, false),
     ],
@@ -722,6 +746,12 @@ async function onShotFired(shot) {
   );
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
   recordTacticalFeedback(feedback);
+  hud.updateTurnStats('shot', {
+    accuracy: feedback.totalScore,
+    isBackhand: feedback.flags?.isBackhandTargeted ?? false,
+    isBody: feedback.flags?.isBodyHit ?? false,
+    bonus: feedback.details?.breakdown?.bonus ?? 0,
+  });
 
   // Freeze result frame
   renderFeedbackFrame(turn, {
@@ -773,6 +803,13 @@ function applyScore(pts, isCorrect) {
   } else if (turn?.type === 'positioning') {
     scorePlacementSum += pts; countPlacement++;
   }
+
+  hud.updateRallyStats({
+    score,
+    correct,
+    total: countTactical + countPlacement,
+    malus: totalMalus,
+  });
 }
 
 // ─── Extended stat recorders (called by Logic engine integration) ──────────
@@ -860,7 +897,7 @@ export async function handleStopSignal(signal) {
 function nextTurn() {
   stopTurnTimer();
   turnActive = false;
-  hud.hideInstruction();  // clear immediately, new turn will set its own
+  hud.clearFeedback();  // remove feedback colour without collapsing the panel
 
   if (currentWorkshop === 'match' && currentMatchState) {
     if (isMatchComplete(currentMatchState)) {
@@ -993,6 +1030,7 @@ async function startGame(workshop) {
   hud.setInstruction({ type: 'positioning', label: 'Loading', text: 'Loading scenarios...' });
   hud.showMatchHud(workshop === 'match');
   hud.update(score, 0, 1, 0);
+  hud.updateRallyStats({ score: 0, correct: 0, total: 0, malus: 0 });
   court.draw();
 
   try {
@@ -1006,6 +1044,11 @@ async function startGame(workshop) {
         playerRating: initPayload.rating,
       });
       hud.setMatchState(currentMatchState);
+      const styles = currentMatchState.opponentStyles;
+      hud.updateOpponents(styles.opp1.name, styles.opp2.name);
+    } else {
+      const [n1, n2] = pickExerciseOppNames();
+      hud.updateOpponents(n1, n2);
     }
   } catch (error) {
     console.error('Unable to load rally', error);

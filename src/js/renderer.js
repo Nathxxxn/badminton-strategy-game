@@ -14,6 +14,8 @@
  * This module is purely visual — it does not own game state.
  */
 
+import { loftedCurveControl } from './trajectory.js';
+
 
 // ── Player colors — Rally design ───────────────────────────────────────────
 
@@ -84,7 +86,7 @@ export class Renderer {
    */
   drawScene(players, shuttlecock, activePlayerId = null, equipment = null) {
     if (shuttlecock) this._drawTrajectory(shuttlecock);
-    if (shuttlecock?.validImpactPoints?.length) {
+    if (shuttlecock?.showImpactWindow && shuttlecock?.validImpactPoints?.length) {
       this.drawValidImpactSegments(shuttlecock.validImpactPoints, shuttlecock.activeImpactPoint ?? null);
     }
     this._drawPlayers(players, activePlayerId, equipment);
@@ -249,8 +251,9 @@ export class Renderer {
 
   /**
    * Draw minimal choice-vs-optimal feedback:
-   *  - dashed ink line between choice and optimal
-   *  - distance pill at midpoint (no large disc markers)
+   *  - dot at choice position (amber) and optimal position (green)
+   *  - dashed ink line between them
+   *  - distance pill at midpoint
    *
    * @param {{x:number,y:number}} choice
    * @param {{x:number,y:number}} optimal
@@ -272,6 +275,43 @@ export class Renderer {
     const distM = Math.hypot(dxM, dyM);
 
     ctx.save();
+
+    const fontSize = Math.round(court.courtW * 0.026);
+
+    // Outward unit vector from other → this point (so labels flee each other)
+    const dx = c.x - o.x;
+    const dy = c.y - o.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    const drawLabel = (px, py, outX, outY, fill, label) => {
+      ctx.font = `bold ${fontSize}px "JetBrains Mono", ui-monospace, monospace`;
+      const padX = 6, padY = 3;
+      const tw = ctx.measureText(label).width;
+      const pw = tw + padX * 2;
+      const ph = fontSize + padY * 2;
+      const cx = px + outX * (ph / 2 + 4);
+      const cy = py + outY * (ph / 2 + 4);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.roundRect(cx - pw / 2, cy - ph / 2, pw, ph, 4);
+      ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx, cy + 0.5);
+    };
+
+    // ─── YOU label (amber) — pushed away from optimal ───────────────────
+    drawLabel(c.x, c.y, ux, uy, YOU_FILL, 'YOU');
+
+    // ─── OPTIMAL label (green) — pushed away from choice ────────────────
+    drawLabel(o.x, o.y, -ux, -uy, '#1f8a4c', 'OPTIMAL');
 
     // ─── Dashed ink line between choice and optimal ─────────────────────
     ctx.setLineDash([6, 5]);
@@ -585,19 +625,19 @@ export class Renderer {
         break;
 
       case 'CLEAR':
-        this._strokeCurve(ctx, visible, [], 2.0, TRAJ_COLOUR);
+        this._strokeCurve(ctx, visible, [], 2.0, TRAJ_COLOUR, type);
         break;
 
       case 'DROP':
-        this._strokeCurve(ctx, visible, [8, 6], 1.8, TRAJ_COLOUR);
+        this._strokeCurve(ctx, visible, [8, 6], 1.8, TRAJ_COLOUR, type);
         break;
 
       case 'NET_DROP':
         if (spinApplied) {
-          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR);
+          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR, type);
           this._drawSpinLoops(ctx, visible, TRAJ_COLOUR);
         } else {
-          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR);
+          this._strokeCurve(ctx, visible, [3, 5], 1.5, TRAJ_COLOUR, type);
         }
         break;
 
@@ -631,21 +671,18 @@ export class Renderer {
    * Stroke a quadratic bezier curve through the visible points.
    * The control point is raised upward to suggest a lofted trajectory.
    */
-  _strokeCurve(ctx, pts, dash, width, colour) {
+  _strokeCurve(ctx, pts, dash, width, colour, type = 'DROP') {
     if (pts.length < 2) return;
     const start = pts[0];
     const end   = pts[pts.length - 1];
-    const mx    = (start.x + end.x) / 2;
-    // Raise control point upward (negative y in canvas = up on screen)
-    const liftPx = this.court.courtH * 0.06;
-    const my    = (start.y + end.y) / 2 - liftPx;
+    const control = loftedCurveControl(this.court, start, end, type);
 
     ctx.strokeStyle = colour;
     ctx.lineWidth   = width;
     ctx.setLineDash(dash);
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
-    ctx.quadraticCurveTo(mx, my, end.x, end.y);
+    ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
     ctx.stroke();
   }
 

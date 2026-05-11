@@ -1,4 +1,10 @@
 import { MOCK_EXERCISES, MOCK_RALLIES } from './mock-data.js';
+import { KinematicEngine }    from './logic/KinematicEngine.js';
+import { TacticalEngine }     from './logic/TacticalEngine.js';
+import { PlacementEngine }    from './logic/PlacementEngine.js';
+import { AISpawnEngine }      from './logic/AISpawnEngine.js';
+import { ScenarioGenerator }  from './logic/ScenarioGenerator.js';
+import { toFullCourtAlly, toFullCourtOpp } from './coord-adapter.js';
 
 const DATA_FILES = {
   positioning: 'data/positioning.json',
@@ -356,6 +362,213 @@ async function loadCatalogFromDataFiles() {
   return validateAndBuildCatalog(positioning, shots, matches);
 }
 
+// ─── Dynamic scenario generation ──────────────────────────────────────────────
+
+let _generator = null;
+let _genEngines = null;
+
+function getGenerator() {
+  if (_generator) return _generator;
+  const kinematic = new KinematicEngine();
+  const tactical  = new TacticalEngine();
+  const placement = new PlacementEngine();
+  const aiSpawn   = new AISpawnEngine(tactical, placement, kinematic);
+  _genEngines = { kinematic, placement };
+  _generator  = new ScenarioGenerator(tactical, placement, aiSpawn);
+  return _generator;
+}
+
+function shotSpeed(type) {
+  return { SMASH: 'fast', KILL: 'fast', DRIVE: 'fast', CLEAR: 'medium', DROP: 'slow', NET_DROP: 'slow', NET_CLEAR: 'slow' }[type] ?? 'medium';
+}
+
+function shotInstructionText(type) {
+  const map = {
+    SMASH:    'The opponent smashes. Choose the best response.',
+    CLEAR:    'The opponent lifts deep. Choose the best response.',
+    DROP:     'The opponent plays a drop. Choose the best response.',
+    DRIVE:    'The opponent drives flat. Choose the best response.',
+    NET_DROP: 'The opponent net-drops. Choose the best response.',
+  };
+  return map[type] ?? 'Choose the best shot.';
+}
+
+function placementInstructionText(type) {
+  const label = type.toLowerCase().replace('_', ' ');
+  return `You just played a ${label}. Move to the best position.`;
+}
+
+function adaptTacticalScenario(gen, workshop, kinematic) {
+  const { incoming, players } = gen;
+  const { user, partner, opponents } = players;
+
+  const positions = {
+    player:  user.pos,
+    partner: partner.pos,
+    opp1:    opponents[0].pos,
+    opp2:    opponents[1].pos,
+  };
+
+  const equipment = {
+    player:  { hand: user.hand        ?? 'right' },
+    partner: { hand: partner.hand     ?? 'right' },
+    opp1:    { hand: opponents[0].hand ?? 'right' },
+    opp2:    { hand: opponents[1].hand ?? 'right' },
+  };
+
+  const incomingShuttle = {
+    type:     incoming.type,
+    startPos: incoming.startPos,
+    endPos:   incoming.endPos,
+  };
+
+  const playerReach = kinematic.shotPossibility(incoming.type).allowedReach;
+
+  return {
+    id:           `GEN-T-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type:         'shot',
+    workshop,
+    label:        'Tactical',
+    text:         shotInstructionText(incoming.type),
+    passingScore: 70,
+    positions,
+    equipment,
+    incomingShuttle,
+    playerReach,
+    players: {
+      ally1:     { ...toFullCourtAlly(user.pos), label: 'YOU' },
+      ally2:     toFullCourtAlly(partner.pos),
+      opponent1: toFullCourtOpp(opponents[0].pos),
+      opponent2: toFullCourtOpp(opponents[1].pos),
+    },
+    shuttlecock: {
+      position: toFullCourtAlly(incoming.endPos),
+      from:     toFullCourtOpp(incoming.startPos),
+      type:     incoming.type,
+      speed:    shotSpeed(incoming.type),
+    },
+  };
+}
+
+function adaptPlacementScenario(gen, workshop, kinematic, placement) {
+  const { playerStart, shotPlayed, partnerStart, opponents, target } = gen;
+
+  const positions = {
+    player:  playerStart,
+    partner: partnerStart,
+    opp1:    opponents[0].pos,
+    opp2:    opponents[1].pos,
+  };
+
+  const equipment = {
+    player:  { hand: 'right' },
+    partner: { hand: 'right' },
+    opp1:    { hand: opponents[0].hand ?? 'right' },
+    opp2:    { hand: opponents[1].hand ?? 'right' },
+  };
+
+  const playedShuttle = {
+    type:     shotPlayed.type,
+    startPos: playerStart,
+    endPos:   shotPlayed.endPos,
+  };
+
+  const partnerIdeal = placement.evaluateGlobalPlacement(
+    partnerStart, playerStart,
+    { type: shotPlayed.type, endPos: shotPlayed.endPos },
+    false,
+  ).ideal;
+
+  const partnerMovement = { from: partnerStart, to: partnerIdeal };
+  const moveRadius = kinematic.movementPossibility(shotPlayed.type).allowedRadius;
+
+  return {
+    id:           `GEN-P-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type:         'positioning',
+    workshop,
+    label:        'Placement',
+    text:         placementInstructionText(shotPlayed.type),
+    passingScore: 70,
+    positions,
+    equipment,
+    playedShuttle,
+    partnerMovement,
+    isHitter:     true,
+    moveRadius,
+    idealPosition: target,
+    players: {
+      ally1:     { ...toFullCourtAlly(playerStart), label: 'YOU' },
+      ally2:     { ...toFullCourtAlly(partnerStart), movingTo: toFullCourtAlly(partnerIdeal) },
+      opponent1: toFullCourtOpp(opponents[0].pos),
+      opponent2: toFullCourtOpp(opponents[1].pos),
+    },
+    shuttlecock: {
+      position: toFullCourtOpp(shotPlayed.endPos),
+      from:     toFullCourtAlly(playerStart),
+      type:     shotPlayed.type,
+      speed:    shotSpeed(shotPlayed.type),
+    },
+  };
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function workshopTitle(workshop) {
+  return { attack: 'Tactic Training', defense: 'Placement Training', match: 'Match Mode' }[workshop] ?? 'Training';
+}
+
+function generateWorkshopRally(workshop) {
+  const gen = getGenerator();
+  const { kinematic, placement } = _genEngines;
+
+  // attack  = shot turns only   (Tactic Training)
+  // defense = positioning turns only (Placement Training)
+  // match   = alternating pairs of both
+  const counts =
+    workshop === 'attack'  ? { tactical: 10, placement: 0 } :
+    workshop === 'defense' ? { tactical: 0,  placement: 10 } :
+                             { tactical: 4,  placement: 4 };
+
+  const exercises = [];
+
+  for (let i = 0; i < counts.tactical; i++) {
+    const raw = gen.generateTacticalScenario();
+    if (raw) exercises.push(adaptTacticalScenario(raw, workshop, kinematic));
+  }
+  for (let i = 0; i < counts.placement; i++) {
+    const raw = gen.generatePlacementScenario();
+    if (raw) exercises.push(adaptPlacementScenario(raw, workshop, kinematic, placement));
+  }
+
+  // match: interleave tactical + placement for realistic rally flow
+  if (workshop === 'match') {
+    const tactical  = exercises.filter(e => e.type === 'shot');
+    const posit     = exercises.filter(e => e.type === 'positioning');
+    exercises.length = 0;
+    for (let i = 0; i < Math.max(tactical.length, posit.length); i++) {
+      if (tactical[i])  exercises.push(tactical[i]);
+      if (posit[i])     exercises.push(posit[i]);
+    }
+  }
+
+  const matchId = `${workshop}-${Date.now()}`;
+  return exercises.map((ex, idx) => ({
+    ...ex,
+    turn:             idx + 1,
+    matchId,
+    matchTitle:       workshopTitle(workshop),
+    opponentRank:     null,
+    timeLimitMs:      null,
+    timeLimitSeconds: null,
+    timePressure:     { enabled: false },
+  }));
+}
+
 export async function loadScenarioCatalog({ forceRefresh = false } = {}) {
   if (!catalogPromise || forceRefresh) {
     catalogPromise = (async () => {
@@ -379,7 +592,7 @@ export async function warmScenarioCatalog() {
   return loadScenarioCatalog();
 }
 
-export async function loadWorkshopRally(workshop) {
+async function loadWorkshopRallyFromCatalog(workshop) {
   const catalog = await loadScenarioCatalog();
   let match = catalog.matches.find(entry => entry.workshop === workshop);
 
@@ -424,4 +637,13 @@ export async function loadWorkshopRally(workshop) {
       timePressure: match.timePressure ?? { ...DEFAULT_TIME_PRESSURE },
     };
   });
+}
+
+export async function loadWorkshopRally(workshop) {
+  try {
+    return generateWorkshopRally(workshop);
+  } catch (error) {
+    console.warn('exercises.js: generator failed, falling back to JSON catalog', error);
+    return loadWorkshopRallyFromCatalog(workshop);
+  }
 }

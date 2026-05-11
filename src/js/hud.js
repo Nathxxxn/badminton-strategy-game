@@ -13,6 +13,29 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+const COACH_TIPS = [
+  'Keep your racket up between shots — it shortens your reaction time.',
+  'Move back to the T-position after every shot to stay central.',
+  'Vary your tempo: slow down your wrist just before contact to deceive.',
+  'A good clear buys time — use it to reset your position.',
+  'Target the junction between your opponents to create confusion.',
+  'Use a short follow-through on net shots to stay deceptive.',
+  'Watch the opponents\' racket angle, not the shuttle, to read shots early.',
+  'Attack the shuttle early — the higher the contact point, the steeper the angle.',
+  'Rotate as a pair: when one attacks, the other steps back to cover.',
+  'A flat drive keeps opponents under pressure and breaks their rhythm.',
+  'Disguise your drops: same swing as a smash for as long as possible.',
+  'The back court is your launchpad — smash from a high, comfortable position.',
+  'Communication between partners is as important as individual shot quality.',
+  'Stay on the balls of your feet; a heel-down stance slows your first step.',
+  'A cross-net shot is riskier but harder to attack — use it selectively.',
+  'When pushed wide, play a defensive clear to survive and recover.',
+  'Anticipation wins rallies — identify patterns in your opponents\' play.',
+  'A tight net shot lands close to the tape and forces a lift.',
+];
+
+let _tipIndex = Math.floor(Math.random() * COACH_TIPS.length);
+
 export class HUD {
   constructor() {
     this._scoreEl    = document.getElementById('hud-score');
@@ -228,9 +251,14 @@ export class HUD {
     return null;
   }
 
-  /** Hide the instruction card. */
+  /** Hide the instruction card (collapses layout — use only outside active turns). */
   hideInstruction() {
     this._instrEl.classList.add('hidden');
+    this._instrEl.classList.remove('feedback-correct', 'feedback-wrong', 'feedback-near');
+  }
+
+  /** Clear feedback styling without collapsing the panel (use between turns). */
+  clearFeedback() {
     this._instrEl.classList.remove('feedback-correct', 'feedback-wrong', 'feedback-near');
   }
 
@@ -335,6 +363,96 @@ export class HUD {
       this._levelChipEl.classList.add('level-up');
     }
     this._prevLevel = level;
+  }
+
+  // ─── Live stats rails ─────────────────────────────────────────────────────
+
+  /**
+   * Update the "This turn" left-rail card after each turn evaluation.
+   * @param {'shot'|'positioning'} turnType
+   * @param {{ accuracy: number, isBackhand?: boolean, isBody?: boolean, partnerDist?: number, bonus?: number }} data
+   */
+  updateTurnStats(turnType, data) {
+    const accEl = document.getElementById('rail-turn-accuracy');
+    if (accEl) {
+      const pct = Math.round(data.accuracy ?? 0);
+      accEl.textContent = `${pct}%`;
+      accEl.className = `stat-v ${pct >= 85 ? 'good' : pct < 55 ? 'bad' : ''}`;
+    }
+
+    const backRow = document.getElementById('rail-turn-backhand-row');
+    const backVal = document.getElementById('rail-turn-backhand');
+    if (backRow && backVal) {
+      if (turnType === 'shot') {
+        backRow.hidden = false;
+        backVal.textContent = data.isBackhand ? 'Yes' : 'No';
+        backVal.className = `stat-v ${data.isBackhand ? 'good' : ''}`;
+      } else {
+        backRow.hidden = true;
+      }
+    }
+
+    const bodyRow = document.getElementById('rail-turn-body-row');
+    if (bodyRow) bodyRow.hidden = !(turnType === 'shot' && data.isBody);
+
+    const distRow = document.getElementById('rail-turn-dist-row');
+    const distVal = document.getElementById('rail-turn-dist');
+    if (distRow && distVal) {
+      if (turnType === 'positioning' && data.partnerDist != null) {
+        distRow.hidden = false;
+        const d = parseFloat(data.partnerDist).toFixed(1);
+        distVal.textContent = `${d} m`;
+        const ok = data.partnerDist >= 2.5 && data.partnerDist <= 3.5;
+        distVal.className = `stat-v ${ok ? 'good' : 'bad'}`;
+      } else {
+        distRow.hidden = true;
+      }
+    }
+
+    const bonusRow = document.getElementById('rail-turn-bonus-row');
+    const bonusVal = document.getElementById('rail-turn-bonus');
+    if (bonusRow && bonusVal) {
+      const b = data.bonus ?? 0;
+      bonusRow.hidden = b <= 0;
+      if (b > 0) bonusVal.textContent = `+${b}`;
+    }
+
+    const tipEl = document.querySelector('.coach-tip');
+    if (tipEl) {
+      _tipIndex = (_tipIndex + 1) % COACH_TIPS.length;
+      tipEl.textContent = COACH_TIPS[_tipIndex];
+    }
+  }
+
+  /**
+   * Update the "Rally" right-rail card — call after applyScore().
+   * @param {{ score: number, correct: number, total: number, malus: number }} data
+   */
+  updateRallyStats(data) {
+    const scoreEl = document.getElementById('rail-rally-score');
+    if (scoreEl) scoreEl.textContent = data.score ?? 0;
+
+    const correctEl = document.getElementById('rail-rally-correct');
+    if (correctEl) correctEl.textContent = `${data.correct ?? 0} / ${data.total ?? 0}`;
+
+    const penaltyRow = document.getElementById('rail-rally-penalty-row');
+    const penaltyVal = document.getElementById('rail-rally-penalty');
+    if (penaltyRow && penaltyVal) {
+      penaltyRow.hidden = !(data.malus > 0);
+      if (data.malus > 0) penaltyVal.textContent = `−${data.malus}`;
+    }
+  }
+
+  /**
+   * Update the opponents name panel in the right rail.
+   * @param {string} opp1Name
+   * @param {string} opp2Name
+   */
+  updateOpponents(opp1Name, opp2Name) {
+    const el1 = document.getElementById('rail-opp1-name');
+    const el2 = document.getElementById('rail-opp2-name');
+    if (el1) el1.textContent = opp1Name ?? '—';
+    if (el2) el2.textContent = opp2Name ?? '—';
   }
 
   // ─── Mode chip / back button ──────────────────────────────────────────────

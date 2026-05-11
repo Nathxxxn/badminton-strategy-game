@@ -3,611 +3,612 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Shot Test — Badminton Strategy</title>
+  <meta name="theme-color" content="#f4ecd8">
+  <title>Shot Lab — Rally</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/css/style.css">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a2e; overflow: hidden; }
-    #canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
-    #hint {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.4);
-      font: 13px/1 system-ui, sans-serif;
+    html,
+    body {
+      overflow: hidden;
+    }
+
+    #app.shot-lab-app {
+      background: var(--rally-cream);
+    }
+
+    #app.shot-lab-app::before {
+      z-index: 0;
+    }
+
+    .shot-lab-stage-wrap {
+      padding: 20px;
+    }
+
+    .shot-lab-stage {
+      min-height: 0;
+    }
+
+    .shot-lab-stage::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.16);
+    }
+
+    .shot-lab-topbar {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      z-index: 8;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .shot-lab-chip {
+      padding: 8px 10px;
+      border: 3px solid var(--rally-ink);
+      border-radius: 10px;
+      background: var(--rally-feather);
+      color: var(--rally-ink);
+      box-shadow: 3px 3px 0 0 var(--rally-ink);
+      font: 800 11px/1 var(--font-rally-mono);
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      pointer-events: none;
-      transition: opacity 0.4s;
-      white-space: nowrap;
     }
-    #shot-selector {
-      position: fixed;
-      right: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: all;
-      user-select: none;
+
+    #tuning-panel {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 8;
+      width: min(340px, calc(100% - 32px));
+      padding: 14px;
+      border: 3px solid var(--rally-ink);
+      border-radius: 12px;
+      background: rgba(255, 248, 225, 0.94);
+      color: var(--rally-ink);
+      box-shadow: 4px 4px 0 0 var(--rally-ink);
+      font-family: var(--font-rally);
     }
-    .shot-btn {
-      padding: 9px 14px;
-      border-radius: 20px;
-      border: 1.5px solid rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.45);
-      font: 600 11px/1 system-ui, sans-serif;
-      letter-spacing: 0.10em;
+
+    #tuning-panel h1 {
+      margin: 0 0 12px;
+      font: 800 14px/1 var(--font-rally-mono);
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.18s;
+    }
+
+    .lab-control {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .lab-control label {
+      color: var(--rally-ink-soft);
+      font: 800 10px/1 var(--font-rally-mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .lab-control output {
+      font: 800 12px/1 var(--font-rally-mono);
+    }
+
+    .lab-control input {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: var(--rally-danger);
+    }
+
+    .lab-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .lab-stat {
+      min-width: 0;
+      padding: 9px;
+      border: 2px solid var(--rally-ink);
+      border-radius: 8px;
+      background: var(--rally-cream-2);
+    }
+
+    .lab-stat span {
+      display: block;
+      color: var(--rally-ink-soft);
+      font: 800 9px/1 var(--font-rally-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .lab-stat strong {
+      display: block;
+      min-height: 18px;
+      margin-top: 5px;
+      overflow: hidden;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-overflow: ellipsis;
       white-space: nowrap;
-      text-align: center;
     }
-    .shot-btn:hover {
-      background: rgba(255,255,255,0.12);
-      color: rgba(255,255,255,0.80);
+
+    .lab-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
     }
-    .shot-btn.selected {
-      background: rgba(255,255,255,0.16);
-      border-color: rgba(255,255,255,0.50);
-      color: #fff;
+
+    .lab-actions .btn {
+      min-height: 36px;
+      flex: 1;
+      padding: 8px 10px;
+      border-width: 2px;
+      border-radius: 8px;
+      box-shadow: 2px 2px 0 0 var(--rally-ink);
+      font-size: 12px;
+    }
+
+    .shot-lab-help {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      z-index: 8;
+      max-width: 300px;
+      padding: 10px 12px;
+      border: 3px solid var(--rally-ink);
+      border-radius: 10px;
+      background: rgba(15, 26, 20, 0.92);
+      color: var(--rally-feather);
+      box-shadow: 3px 3px 0 0 var(--rally-accent);
+      font: 800 11px/1.35 var(--font-rally-mono);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    @media (max-width: 700px) {
+      .shot-lab-stage-wrap {
+        padding: 12px;
+      }
+
+      #tuning-panel,
+      .shot-lab-help {
+        position: fixed;
+      }
+
+      .shot-lab-help {
+        display: none;
+      }
+
+      .shot-type-selector {
+        right: 8px;
+      }
     }
   </style>
 </head>
 <body>
-  <canvas id="canvas"></canvas>
-  <div id="shot-selector">
-    <button class="shot-btn" data-shot="drop">Drop</button>
-    <button class="shot-btn selected" data-shot="drive">Drive</button>
-    <button class="shot-btn" data-shot="clear">Clear</button>
-    <button class="shot-btn" data-shot="smash">Smash</button>
+  <div id="app" class="shot-lab-app">
+    <div id="game-stage-wrap" class="shot-lab-stage-wrap">
+      <div class="stage-row shot-lab-stage-row">
+        <div class="stage shot-lab-stage" id="stage">
+          <canvas id="game-canvas"></canvas>
+
+          <div class="shot-lab-topbar" aria-hidden="true">
+            <span class="shot-lab-chip">Current shot mechanic</span>
+            <span class="shot-lab-chip" id="phase-chip">Ready</span>
+          </div>
+
+          <div class="shot-type-selector" id="shot-type-selector">
+            <button class="shot-type-btn is-active" data-shot-type="SMASH" type="button">SMASH</button>
+            <button class="shot-type-btn" data-shot-type="DROP" type="button">DROP</button>
+            <button class="shot-type-btn" data-shot-type="DRIVE" type="button">DRIVE</button>
+            <button class="shot-type-btn" data-shot-type="CLEAR" type="button">CLEAR</button>
+            <button class="shot-type-btn" data-shot-type="KILL" type="button">KILL</button>
+            <button class="shot-type-btn" data-shot-type="NET_DROP" type="button">NET DROP</button>
+          </div>
+
+          <aside id="tuning-panel" aria-label="Shot tuning lab">
+            <h1>Shot lab</h1>
+            <div class="lab-control">
+              <label for="replay-speed">Replay speed</label>
+              <output id="replay-speed-value">1.00x</output>
+              <input id="replay-speed" type="range" min="0.5" max="1.75" step="0.05" value="1">
+            </div>
+            <div class="lab-stats">
+              <div class="lab-stat"><span>Shots</span><strong id="shot-count">0</strong></div>
+              <div class="lab-stat"><span>Type</span><strong id="last-type">--</strong></div>
+              <div class="lab-stat"><span>Power</span><strong id="last-power">--</strong></div>
+            </div>
+            <div class="lab-stats" style="margin-top:8px">
+              <div class="lab-stat"><span>Spin</span><strong id="last-spin">--</strong></div>
+              <div class="lab-stat"><span>Impact</span><strong id="last-impact">--</strong></div>
+              <div class="lab-stat"><span>Aim</span><strong id="last-aim">--</strong></div>
+            </div>
+            <div class="lab-actions">
+              <button class="btn" id="reset-lab" type="button">Reset</button>
+              <button class="btn primary" id="center-lab" type="button">Center</button>
+            </div>
+          </aside>
+
+          <div class="shot-lab-help">Grab the highlighted impact window, pull back, release, repeat.</div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div id="hint">Press the shuttle · pull back to aim · release to hit</div>
 
-  <script>
-    // ─── court.js inlined (avoids file:// CORS block on ES modules) ──────────
+  <script type="module">
+    import { Court } from './src/js/court.js';
+    import { Renderer } from './src/js/renderer.js';
+    import { DragShooter } from './src/js/drag.js';
+    import { ShotTypeSelector, clampPowerForType } from './src/js/shot-type-selector.js';
+    import { loftedCurveControl, sampleLoftedCurvePoint } from './src/js/trajectory.js';
 
-    const COURT_LENGTH = 13.4;
-    const COURT_WIDTH  = 6.1;
-    const NET_Y        = 0.5;
-    const SHORT_SVC_DIST    = 1.98  / COURT_LENGTH;
-    const LONG_SVC_DBL_DIST = 0.76  / COURT_LENGTH;
-    const SINGLES_SIDE_DIST = 0.46  / COURT_WIDTH;
-    const SHORT_SVC_TOP  = NET_Y - SHORT_SVC_DIST;
-    const SHORT_SVC_BOT  = NET_Y + SHORT_SVC_DIST;
-    const LONG_SVC_TOP   = LONG_SVC_DBL_DIST;
-    const LONG_SVC_BOT   = 1 - LONG_SVC_DBL_DIST;
-    const SINGLES_LEFT   = SINGLES_SIDE_DIST;
-    const SINGLES_RIGHT  = 1 - SINGLES_SIDE_DIST;
-    const COLOUR = {
-      pageBg: '#1a1a2e', surfaceA: '#0d2b0d', surfaceB: '#0f3d0f',
-      lines: '#dde8dd', net: '#ffffff', netGlow: 'rgba(255,255,255,0.18)',
+    const RESET_SHUTTLE = Object.freeze({ x: 0.50, y: 0.72 });
+    const CENTER_SHUTTLE = Object.freeze({ x: 0.50, y: 0.62 });
+    const ALL_SHOT_TYPES = ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP'];
+    const FLIGHT_MS = {
+      SMASH: 280,
+      DROP: 640,
+      DRIVE: 360,
+      CLEAR: 760,
+      KILL: 240,
+      NET_DROP: 520,
     };
-    const LINE_W = 1.5, NET_W = 3;
-    const PAD = { top: 48, right: 32, bottom: 48, left: 32 };
-
-    class Court {
-      constructor(canvas) {
-        this.canvas = canvas;
-        this.ctx    = canvas.getContext('2d');
-        this.courtX = 0; this.courtY = 0; this.courtW = 0; this.courtH = 0;
-        this._resize();
-        this._onResize = () => { this._resize(); this.draw(); };
-        window.addEventListener('resize', this._onResize);
-      }
-      destroy() { window.removeEventListener('resize', this._onResize); }
-      toCanvas(nx, ny) {
-        return { x: this.courtX + nx * this.courtW, y: this.courtY + ny * this.courtH };
-      }
-      toNormalized(px, py) {
-        return { x: (px - this.courtX) / this.courtW, y: (py - this.courtY) / this.courtH };
-      }
-      draw() {
-        const { ctx, canvas } = this;
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = canvas.width / dpr, cssH = canvas.height / dpr;
-        ctx.clearRect(0, 0, cssW, cssH);
-        ctx.fillStyle = COLOUR.pageBg; ctx.fillRect(0, 0, cssW, cssH);
-        ctx.fillStyle = COLOUR.surfaceA; ctx.fillRect(this.courtX, this.courtY, this.courtW, this.courtH * 0.5);
-        ctx.fillStyle = COLOUR.surfaceB; ctx.fillRect(this.courtX, this.courtY + this.courtH * 0.5, this.courtW, this.courtH * 0.5);
-        ctx.strokeStyle = COLOUR.lines; ctx.lineWidth = LINE_W; ctx.lineCap = 'square';
-        this._hLine(0,1,0); this._hLine(0,1,1); this._vLine(0,0,1); this._vLine(1,0,1);
-        this._vLine(SINGLES_LEFT,0,1); this._vLine(SINGLES_RIGHT,0,1);
-        this._hLine(0,1,SHORT_SVC_TOP); this._hLine(0,1,SHORT_SVC_BOT);
-        this._hLine(0,1,LONG_SVC_TOP); this._hLine(0,1,LONG_SVC_BOT);
-        this._vLine(0.5,0,SHORT_SVC_TOP); this._vLine(0.5,SHORT_SVC_BOT,1);
-        const l = this.toCanvas(0, NET_Y), r = this.toCanvas(1, NET_Y);
-        ctx.save();
-        ctx.strokeStyle = COLOUR.netGlow; ctx.lineWidth = NET_W + 6; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
-        ctx.strokeStyle = COLOUR.net; ctx.lineWidth = NET_W; ctx.lineCap = 'square';
-        ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(r.x,r.y); ctx.stroke();
-        ctx.restore();
-      }
-      _hLine(x0,x1,ny) { const a=this.toCanvas(x0,ny),b=this.toCanvas(x1,ny); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
-      _vLine(nx,y0,y1) { const a=this.toCanvas(nx,y0),b=this.toCanvas(nx,y1); this.ctx.beginPath(); this.ctx.moveTo(a.x,a.y); this.ctx.lineTo(b.x,b.y); this.ctx.stroke(); }
-      _resize() {
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = this.canvas.clientWidth, cssH = this.canvas.clientHeight;
-        if (cssW === 0 || cssH === 0) return;
-        this.canvas.width  = Math.round(cssW * dpr);
-        this.canvas.height = Math.round(cssH * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this._updateLayout(cssW, cssH);
-      }
-      _updateLayout(cssW, cssH) {
-        const availW = cssW - PAD.left - PAD.right;
-        const availH = cssH - PAD.top  - PAD.bottom;
-        const courtAspect = COURT_WIDTH / COURT_LENGTH;
-        const availAspect = availW / availH;
-        let courtW, courtH;
-        if (availAspect > courtAspect) { courtH = availH; courtW = courtH * courtAspect; }
-        else { courtW = availW; courtH = courtW / courtAspect; }
-        this.courtX = PAD.left + (availW - courtW) / 2;
-        this.courtY = PAD.top  + (availH - courtH) / 2;
-        this.courtW = courtW;
-        this.courtH = courtH;
-      }
-    }
-
-    // ─── Setup ────────────────────────────────────────────────────────────────
-    const canvas = document.getElementById('canvas');
-    const ctx    = canvas.getContext('2d');
-    const court  = new Court(canvas);
-    const hint   = document.getElementById('hint');
-
-    // ─── Constants ────────────────────────────────────────────────────────────
-    const PLAYER_NORM  = { x: 0.50, y: 0.70 };
-    const ACTIVATION_R = 40;    // CSS px radius to activate drag
-    const MAX_DRAG_PX  = 160;   // drag length = full power
-
-    // Shot type definitions — landing band, arc style, flight speed
-    const SHOT_TYPES = {
-      drop:  { label: 'Drop',  targetYMin: 0.30, targetYMax: 0.48, arcMult: 0.55, flightSpeedBase: 850, flightSpeedRange: 150 },
-      drive: { label: 'Drive', targetYMin: 0.20, targetYMax: 0.35, arcMult: 0.10, flightSpeedBase: 450, flightSpeedRange: 150 },
-      clear: { label: 'Clear', targetYMin: 0.05, targetYMax: 0.15, arcMult: 0.70, flightSpeedBase: 700, flightSpeedRange: 200 },
-      smash: { label: 'Smash', targetYMin: 0.08, targetYMax: 0.38, arcMult: 0.08, flightSpeedBase: 200, flightSpeedRange:  80 },
-    };
-
-    // ─── Central state ────────────────────────────────────────────────────────
-    const S = {
-      phase:          'ready',
-      selectedShot:   'drive',
-      dragOrigin:     null,   // {x,y} canvas px — shuttle position at press
-      dragCurrent:    null,   // {x,y} canvas px — current pointer position
-      frozenArc:      null,   // {fromNorm, toNorm, power, shotType, colour}
-      flightT:        0,      // 0→1 flight progress
-      flightDuration: 550,
-      flightStartMs:  null,
-      landingMs:      null,
-      shuttleNorm:    { ...PLAYER_NORM },
-    };
-
-    // ─── Math helpers ─────────────────────────────────────────────────────────
-    const easeInOut = t => -(Math.cos(Math.PI * t) - 1) / 2;
-
-    // ─── Shot selector ────────────────────────────────────────────────────────
-    const shotBtns = document.querySelectorAll('.shot-btn');
-    function updateShotSelector() {
-      shotBtns.forEach(btn => {
-        btn.classList.toggle('selected', S.selectedShot === btn.dataset.shot);
-      });
-    }
-    shotBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        S.selectedShot = btn.dataset.shot;
-        updateShotSelector();
-      });
+    const LAB_DRAG_PROFILES = Object.freeze({
+      SMASH: { maxDragPx: 205, deadzonePx: 18, tensionExponent: 1.25, targetYMin: 0.06, targetYMax: 0.42, lineWidthBoost: 1.22, ringBoost: 1.18 },
+      DROP: { maxDragPx: 120, deadzonePx: 10, tensionExponent: 0.82, targetYMin: 0.37, targetYMax: 0.49, lineWidthBoost: 0.82, ringBoost: 0.82 },
+      DRIVE: { maxDragPx: 145, deadzonePx: 12, tensionExponent: 0.95, targetYMin: 0.18, targetYMax: 0.34, lineWidthBoost: 1.00, ringBoost: 0.96 },
+      CLEAR: { maxDragPx: 230, deadzonePx: 20, tensionExponent: 1.45, targetYMin: 0.03, targetYMax: 0.12, lineWidthBoost: 1.34, ringBoost: 1.26 },
+      KILL: { maxDragPx: 115, deadzonePx: 12, tensionExponent: 0.72, targetYMin: 0.10, targetYMax: 0.28, lineWidthBoost: 1.28, ringBoost: 1.10 },
+      NET_DROP: { maxDragPx: 95, deadzonePx: 8, tensionExponent: 0.68, targetYMin: 0.44, targetYMax: 0.50, lineWidthBoost: 0.72, ringBoost: 0.74 },
     });
 
-    function canvasPos(e) {
-      const r = canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const canvas = document.getElementById('game-canvas');
+    const court = new Court(canvas);
+    const renderer = new Renderer(canvas, court);
+    const phaseChip = document.getElementById('phase-chip');
+    const replaySpeed = document.getElementById('replay-speed');
+    const replaySpeedValue = document.getElementById('replay-speed-value');
+    const readout = {
+      count: document.getElementById('shot-count'),
+      type: document.getElementById('last-type'),
+      power: document.getElementById('last-power'),
+      spin: document.getElementById('last-spin'),
+      impact: document.getElementById('last-impact'),
+      aim: document.getElementById('last-aim'),
+    };
+
+    const players = {
+      ally1: { x: 0.50, y: 0.82, label: 'YOU' },
+      ally2: { x: 0.28, y: 0.68, label: 'ALLY' },
+      opponent1: { x: 0.28, y: 0.26, label: 'O1' },
+      opponent2: { x: 0.72, y: 0.26, label: 'O2' },
+    };
+
+    const lab = {
+      shotCount: 0,
+      lastShot: null,
+      shuttlePos: { ...RESET_SHUTTLE },
+      flight: null,
+      flightProgress: 0,
+      landingUntil: 0,
+    };
+
+    const shotTypeSelector = new ShotTypeSelector(
+      document.getElementById('shot-type-selector'),
+      { onChange: () => armDrag() },
+    );
+    shotTypeSelector.setAllowedTypes(ALL_SHOT_TYPES);
+    shotTypeSelector.reset();
+    shotTypeSelector.show();
+
+    const drag = new DragShooter(canvas, court, onShotFired, {
+      profiles: LAB_DRAG_PROFILES,
+    });
+
+    function buildImpactWindow(center = lab.shuttlePos) {
+      return [
+        { x: center.x - 0.035, y: center.y - 0.025, t: 0.46 },
+        { x: center.x - 0.018, y: center.y - 0.012, t: 0.48 },
+        { x: center.x, y: center.y, t: 0.50 },
+        { x: center.x + 0.018, y: center.y + 0.012, t: 0.52 },
+        { x: center.x + 0.035, y: center.y + 0.025, t: 0.54 },
+      ].map(point => ({
+        x: Math.max(0.05, Math.min(0.95, point.x)),
+        y: Math.max(0.54, Math.min(0.92, point.y)),
+        t: point.t,
+      }));
     }
 
-    // Power → interpolated rgb colour
-    function powerColor(p) {
-      const stops = [
-        { t: 0.00, r: 74,  g: 222, b: 128 },
-        { t: 0.40, r: 74,  g: 222, b: 128 },
-        { t: 0.65, r: 250, g: 204, b: 21  },
-        { t: 0.85, r: 249, g: 115, b: 22  },
-        { t: 1.00, r: 239, g: 68,  b: 68  },
-      ];
-      let lo = stops[0], hi = stops[stops.length - 1];
-      for (let i = 0; i < stops.length - 1; i++) {
-        if (p >= stops[i].t && p <= stops[i + 1].t) { lo = stops[i]; hi = stops[i + 1]; break; }
-      }
-      const f = lo.t === hi.t ? 0 : (p - lo.t) / (hi.t - lo.t);
-      return `rgb(${Math.round(lo.r+(hi.r-lo.r)*f)},${Math.round(lo.g+(hi.g-lo.g)*f)},${Math.round(lo.b+(hi.b-lo.b)*f)})`;
-    }
-
-    // ─── Landing projection (swing inversé) ──────────────────────────────────
-    // The player drags AWAY from the target. Shot goes in the OPPOSITE direction.
-    // dragOrigin = shuttle canvas pos, dragCurrent = pointer canvas pos.
-    // shotType controls the landing depth band; power refines within the band.
-    function projectLanding(origin, current, shotType) {
-      const dx = current.x - origin.x;
-      const dy = current.y - origin.y;   // positive = downward on screen (toward player)
-
-      if (dy <= 0) return null;            // must drag downward (away from net)
-
-      const power = Math.min(1, Math.hypot(dx, dy) / MAX_DRAG_PX);
-      if (power < 0.05) return null;
-
-      // Landing depth within the type's band: low power = shallow end, high power = deep end
-      const def    = SHOT_TYPES[shotType];
-      const targetY = def.targetYMax - power * (def.targetYMax - def.targetYMin);
-
-      // Lateral: drag right → shot goes left. ratio = dx/dy applied in normalized space.
-      const sn    = S.shuttleNorm;
-      const ratio = dx / dy;
-      const landX = Math.max(0.03, Math.min(0.97, sn.x - ratio * (sn.y - targetY)));
-
-      return { landNorm: { x: landX, y: targetY }, power, shotType };
-    }
-
-    // ─── Arc geometry ─────────────────────────────────────────────────────────
-    function arcH(power, distPx, shotType) {
-      const def = SHOT_TYPES[shotType || 'drive'];
-      return Math.max(10, distPx * def.arcMult);
-    }
-
-    // Canvas position of the shuttle at normalised time t along the arc
-    function arcAt(fromC, toC, h, t) {
-      const te = easeInOut(t);
+    function currentShuttle() {
+      const impactPoints = lab.flight ? [] : buildImpactWindow(lab.shuttlePos);
       return {
-        x: fromC.x + (toC.x - fromC.x) * te,
-        y: fromC.y + (toC.y - fromC.y) * te - h * Math.sin(Math.PI * te),
+        position: lab.shuttlePos,
+        trajectory: lab.lastShot ? [lab.lastShot.impactPoint, lab.lastShot.aimPoint] : null,
+        speed: speedForPower(lab.lastShot?.power ?? 0.5),
+        height: 'normal',
+        type: lab.lastShot?.type ?? shotTypeSelector.getSelected(),
+        validImpactPoints: impactPoints,
       };
     }
 
-    // ─── Draw: parabolic arc (with glow) ──────────────────────────────────────
-    function tracePath(fromC, toC, h) {
-      ctx.beginPath();
-      for (let i = 0; i <= 40; i++) {
-        const t  = i / 40;
-        const px = fromC.x + (toC.x - fromC.x) * t;
-        const py = fromC.y + (toC.y - fromC.y) * t - h * Math.sin(Math.PI * t);
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    function speedForPower(power) {
+      if (power < 0.34) return 'slow';
+      if (power < 0.70) return 'medium';
+      return 'fast';
+    }
+
+    function updateLabReadout() {
+      replaySpeedValue.textContent = `${Number(replaySpeed.value).toFixed(2)}x`;
+      readout.count.textContent = String(lab.shotCount);
+      readout.type.textContent = lab.lastShot?.type ?? '--';
+      readout.power.textContent = lab.lastShot ? `${Math.round(lab.lastShot.power * 100)}%` : '--';
+      readout.spin.textContent = lab.lastShot ? lab.lastShot.spin.toFixed(2) : '--';
+      readout.impact.textContent = lab.lastShot ? formatPoint(lab.lastShot.impactPoint) : '--';
+      readout.aim.textContent = lab.lastShot ? formatPoint(lab.lastShot.aimPoint) : '--';
+      phaseChip.textContent = lab.flight ? 'Flying' : 'Ready';
+    }
+
+    function formatPoint(point) {
+      return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+    }
+
+    function armDrag() {
+      if (lab.flight) return;
+      drag.setShotType(shotTypeSelector.getSelected());
+      shotTypeSelector.show();
+      drag.activate(lab.shuttlePos, buildImpactWindow(lab.shuttlePos));
+    }
+
+    function resetLab(position = RESET_SHUTTLE) {
+      lab.flight = null;
+      lab.flightProgress = 0;
+      lab.landingUntil = 0;
+      lab.shuttlePos = { ...position };
+      armDrag();
+      updateLabReadout();
+    }
+
+    function onShotFired(shot) {
+      const type = shotTypeSelector.getSelected();
+      const impactPoint = shot.impactPoint ?? { ...lab.shuttlePos };
+      const aimPoint = {
+        x: Math.max(0, Math.min(1, shot.aimPoint.x)),
+        y: Math.max(0, Math.min(1, shot.aimPoint.y)),
+      };
+      const power = clampPowerForType(shot.power, type);
+      const duration = (FLIGHT_MS[type] ?? 450) / Number(replaySpeed.value);
+
+      drag.deactivate();
+      shotTypeSelector.hide();
+      lab.shotCount += 1;
+      lab.lastShot = {
+        type,
+        power,
+        spin: shot.spin,
+        impactPoint,
+        aimPoint,
+      };
+      lab.flight = {
+        from: impactPoint,
+        to: aimPoint,
+        type,
+        power,
+        startedAt: null,
+        duration,
+      };
+      lab.flightProgress = 0;
+      updateLabReadout();
+    }
+
+    function tickFlight(ts) {
+      if (!lab.flight) return;
+      const flight = lab.flight;
+      if (flight.startedAt === null) flight.startedAt = ts;
+
+      const t = Math.min(1, (ts - flight.startedAt) / flight.duration);
+      lab.flightProgress = t;
+      const eased = 0.5 - 0.5 * Math.cos(Math.PI * t);
+      lab.shuttlePos = isCurvedShot(flight.type)
+        ? sampleLoftedCurvePoint(flight.from, flight.to, eased, court, flight.type)
+        : {
+            x: flight.from.x + (flight.to.x - flight.from.x) * eased,
+            y: flight.from.y + (flight.to.y - flight.from.y) * eased,
+          };
+
+      if (t >= 1) {
+        lab.shuttlePos = { ...RESET_SHUTTLE };
+        lab.flight = null;
+        lab.flightProgress = 0;
+        lab.landingUntil = ts + 180;
+        armDrag();
+        updateLabReadout();
       }
     }
 
-    function drawArc(fromC, toC, h, colour, alpha, dashed, width = 2.2) {
-      ctx.save();
-      ctx.lineCap = 'round';
-      if (dashed) ctx.setLineDash([6, 5]);
-
-      // Glow pass
-      ctx.globalAlpha = alpha * 0.22;
-      ctx.strokeStyle = colour;
-      ctx.lineWidth   = width + 5;
-      ctx.filter      = 'blur(5px)';
-      tracePath(fromC, toC, h);
-      ctx.stroke();
-
-      // Sharp pass
-      ctx.filter      = 'none';
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth   = width;
-      tracePath(fromC, toC, h);
-      ctx.stroke();
-
-      ctx.setLineDash([]);
-      ctx.restore();
+    function isCurvedShot(type) {
+      return type === 'CLEAR' || type === 'DROP' || type === 'NET_DROP';
     }
 
-    // ─── Draw: landing indicator ──────────────────────────────────────────────
-    function drawLandingTarget(toC, colour, alpha, pulsing) {
-      const pulse = pulsing ? 1 + 0.2 * Math.sin(Date.now() / 200) : 1;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = colour;
+    function drawGroundedShuttle(point) {
+      if (lab.flight || !lab.lastShot) return;
 
-      // Radar ring (large, faint)
+      const ctx = canvas.getContext('2d');
+      const pos = court.toCanvas(point.x, point.y);
+      const r = Math.max(8, court.courtW * 0.023);
+      const corkR = Math.max(3, court.courtW * 0.008);
+
+      ctx.save();
+      ctx.globalAlpha = 0.94;
+
+      ctx.beginPath();
+      ctx.ellipse(pos.x + 2, pos.y + r * 0.95, r * 1.2, r * 0.32, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(15, 26, 20, 0.22)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 248, 225, 0.82)';
+      ctx.fill();
+      ctx.strokeStyle = '#0f1a14';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, corkR, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff8e1';
+      ctx.fill();
+      ctx.strokeStyle = '#0f1a14';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(toC.x, toC.y, 19 * pulse, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Main ring
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(toC.x, toC.y, 10 * pulse, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Crosshair
-      const s = 7 * pulse;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(toC.x - s, toC.y); ctx.lineTo(toC.x + s, toC.y);
-      ctx.moveTo(toC.x, toC.y - s); ctx.lineTo(toC.x, toC.y + s);
       ctx.stroke();
 
       ctx.restore();
     }
 
-    // ─── Draw: shuttlecock ────────────────────────────────────────────────────
-    function drawShuttle(normPos, alpha = 1) {
-      const { x, y } = court.toCanvas(normPos.x, normPos.y);
-      const r  = court.courtW * 0.022;
-      const cr = court.courtW * 0.008;
+    function drawLiveShotTrace(fromNorm, toNorm, type, power, alpha) {
+      if (alpha <= 0) return;
+
+      const from = court.toCanvas(fromNorm.x, fromNorm.y);
+      const to = court.toCanvas(toNorm.x, toNorm.y);
+      const points = tracePoints(from, to, type, power);
+      const ctx = canvas.getContext('2d');
+      const colour = powerColour(power);
+
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle   = 'rgba(251,191,36,0.28)';
-      ctx.fill();
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth   = 1.2;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(x, y, cr, 0, Math.PI * 2);
-      ctx.fillStyle   = '#fbbf24';
-      ctx.fill();
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth   = 1;
-      ctx.stroke();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.strokeStyle = colour;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      strokeShotTrace(ctx, points, type);
       ctx.restore();
     }
 
-    // ─── Draw: player ─────────────────────────────────────────────────────────
-    function drawPlayer() {
-      const { x, y } = court.toCanvas(PLAYER_NORM.x, PLAYER_NORM.y);
-      const r = court.courtW * 0.038;
-      ctx.save();
-      const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.4);
-      g.addColorStop(0, 'rgba(37,99,235,0.3)');
-      g.addColorStop(1, 'rgba(37,99,235,0)');
-      ctx.beginPath();
-      ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle   = '#2563eb';
-      ctx.fill();
-      ctx.strokeStyle = '#1d4ed8';
-      ctx.lineWidth   = 2;
-      ctx.stroke();
-      ctx.font         = `bold ${Math.round(r * 0.68)}px system-ui, sans-serif`;
-      ctx.fillStyle    = '#fff';
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', x, y + 0.5);
-      ctx.restore();
+    function tracePoints(from, to, type, power) {
+      return [from, to];
     }
 
-    // ─── Draw: aim line (pull-back indicator) ─────────────────────────────────
-    function drawAimLine(fromC, toC, power) {
-      const dx  = toC.x - fromC.x;
-      const dy  = toC.y - fromC.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 6) return;
-      const col = powerColor(power);
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.strokeStyle = col;
-      ctx.lineWidth   = 2.5;
-      ctx.lineCap     = 'round';
-      // Start ring at shuttle
-      ctx.beginPath();
-      ctx.arc(fromC.x, fromC.y, 9, 0, Math.PI * 2);
-      ctx.stroke();
-      // Drag line
-      ctx.beginPath();
-      ctx.moveTo(fromC.x, fromC.y);
-      ctx.lineTo(toC.x, toC.y);
-      ctx.stroke();
-      // End dot
-      ctx.beginPath();
-      ctx.arc(toC.x, toC.y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = col;
-      ctx.fill();
-      // Shot type label
-      const label = SHOT_TYPES[S.selectedShot].label;
-      const nx = -dy / len, ny = dx / len;
-      ctx.font        = `bold 11px system-ui, sans-serif`;
-      ctx.fillStyle   = col;
-      ctx.textAlign   = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, toC.x + nx * 18, toC.y + ny * 18);
-      ctx.restore();
+    function strokeShotTrace(ctx, points, type) {
+      switch (type) {
+        case 'SMASH':
+          strokeParallelTrace(ctx, points, 2, 3.5, 1.5);
+          break;
+        case 'KILL':
+          strokeParallelTrace(ctx, points, 3, 2.5, 1.4);
+          break;
+        case 'CLEAR':
+          strokeCurveTrace(ctx, points, [], 2, type);
+          break;
+        case 'DROP':
+          strokeCurveTrace(ctx, points, [8, 6], 1.8, type);
+          break;
+        case 'NET_DROP':
+          strokeCurveTrace(ctx, points, [3, 5], 1.5, type);
+          break;
+        case 'DRIVE':
+        default:
+          strokeTracePath(ctx, points, [], 1.8);
+          break;
+      }
     }
 
-    // ─── Render loop ──────────────────────────────────────────────────────────
+    function strokeCurveTrace(ctx, points, dash, width, type) {
+      const start = points[0];
+      const end = points[points.length - 1];
+      const control = loftedCurveControl(court, start, end, type);
+
+      ctx.setLineDash(dash);
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function strokeTracePath(ctx, points, dash, width) {
+      ctx.setLineDash(dash);
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      points.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function strokeParallelTrace(ctx, points, count, offsetPx, width) {
+      const start = points[0];
+      const end = points[points.length - 1];
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const mid = (count - 1) / 2;
+
+      for (let i = 0; i < count; i++) {
+        const offset = (i - mid) * offsetPx;
+        strokeTracePath(
+          ctx,
+          points.map(point => ({ x: point.x + nx * offset, y: point.y + ny * offset })),
+          [],
+          width,
+        );
+      }
+    }
+
+    function powerColour(power) {
+      if (power < 0.6) return '#4ade80';
+      if (power < 0.8) return '#facc15';
+      if (power < 0.92) return '#f97316';
+      return '#ef4444';
+    }
+
     function render(ts) {
-      requestAnimationFrame(render);
+      tickFlight(ts);
       court.draw();
-      drawPlayer();
+      renderer.drawScene(players, currentShuttle(), 'ally1');
+      if (lab.flight) drawLiveShotTrace(lab.flight.from, lab.flight.to, lab.flight.type, lab.flight.power, 1 - lab.flightProgress);
+      if (lab.lastShot) drawGroundedShuttle(lab.lastShot.aimPoint);
+      drag.draw();
 
-      // ── READY ──────────────────────────────────────────────────────────────
-      if (S.phase === 'ready') {
-        drawShuttle(S.shuttleNorm);
-        hint.style.opacity = '1';
-
-      // ── DRAGGING ───────────────────────────────────────────────────────────
-      } else if (S.phase === 'dragging') {
-        hint.style.opacity = '0';
-
-        const dx  = S.dragCurrent.x - S.dragOrigin.x;
-        const dy  = S.dragCurrent.y - S.dragOrigin.y;
-        const len = Math.hypot(dx, dy);
-        const rawPower = Math.min(1, len / MAX_DRAG_PX);
-
-        const proj = projectLanding(S.dragOrigin, S.dragCurrent, S.selectedShot);
-        if (proj) {
-          const { landNorm, power, shotType } = proj;
-          const fromC = court.toCanvas(S.shuttleNorm.x, S.shuttleNorm.y);
-          const toC   = court.toCanvas(landNorm.x, landNorm.y);
-          const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-          drawArc(fromC, toC, arcH(power, dist, shotType), powerColor(power), 0.65, true);
-          drawLandingTarget(toC, powerColor(power), 0.9, true);
-        }
-
-        drawShuttle(S.shuttleNorm);
-        drawAimLine(S.dragOrigin, S.dragCurrent, rawPower);
-
-      // ── FLYING ─────────────────────────────────────────────────────────────
-      } else if (S.phase === 'flying') {
-        if (S.flightStartMs === null) S.flightStartMs = ts;
-        S.flightT = Math.min(1, (ts - S.flightStartMs) / S.flightDuration);
-
-        const { fromNorm, toNorm, power, shotType, colour } = S.frozenArc;
-        const fromC  = court.toCanvas(fromNorm.x, fromNorm.y);
-        const toC    = court.toCanvas(toNorm.x, toNorm.y);
-        const dist   = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-        const h      = arcH(power, dist, shotType);
-
-        // Frozen arc (fades during flight: 0.45 → 0.15)
-        const arcAlpha = 0.45 - S.flightT * 0.30;
-        drawArc(fromC, toC, h, colour, arcAlpha, true, 2.5);
-        drawLandingTarget(toC, colour, 0.5 * (1 - S.flightT * 0.7), false);
-
-        // Trail dots
-        const TRAIL = 5;
-        for (let i = TRAIL; i >= 1; i--) {
-          const tTrail  = Math.max(0, S.flightT - i * 0.042);
-          const tp      = arcAt(fromC, toC, h, tTrail);
-          const tnorm   = court.toNormalized(tp.x, tp.y);
-          const tAlpha  = (1 - i / (TRAIL + 1)) * 0.5;
-          drawShuttle(tnorm, tAlpha);
-        }
-
-        // Flying shuttle
-        const pos  = arcAt(fromC, toC, h, S.flightT);
-        drawShuttle(court.toNormalized(pos.x, pos.y));
-
-        if (S.flightT >= 1) {
-          S.phase       = 'landing';
-          S.landingMs   = null;
-          S.shuttleNorm = { ...toNorm };
-        }
-
-      // ── LANDING ────────────────────────────────────────────────────────────
-      } else if (S.phase === 'landing') {
-        if (S.landingMs === null) S.landingMs = ts;
-        const elapsed = ts - S.landingMs;
-
-        const { fromNorm, toNorm, power, shotType, colour } = S.frozenArc;
-        const fromC = court.toCanvas(fromNorm.x, fromNorm.y);
-        const toC   = court.toCanvas(toNorm.x, toNorm.y);
-        const dist  = Math.hypot(toC.x - fromC.x, toC.y - fromC.y);
-        const h     = arcH(power, dist, shotType);
-
-        // Arc fades out in first 200ms of landing
-        const arcFadeT = Math.min(1, elapsed / 200);
-        if (arcFadeT < 1) {
-          drawArc(fromC, toC, h, colour, 0.15 * (1 - arcFadeT), true, 2.5);
-        }
-
-        // Shuttle stays at landing point
-        drawShuttle(S.shuttleNorm);
-
-        // Flash (radial gradient, 0–80ms)
-        if (elapsed < 80) {
-          const fa  = (1 - elapsed / 80) * 0.4;
-          const dpr = window.devicePixelRatio || 1;
-          const cW  = canvas.width / dpr;
-          const cH  = canvas.height / dpr;
-          const grad = ctx.createRadialGradient(toC.x, toC.y, 0, toC.x, toC.y, 65);
-          grad.addColorStop(0, `rgba(255,255,255,${fa})`);
-          grad.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.save();
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, cW, cH);
-          ctx.restore();
-        }
-
-        // 3 expanding rings
-        [
-          { maxR: 20, dur: 400, delay:   0, maxAlpha: 1.0 },
-          { maxR: 32, dur: 500, delay:  50, maxAlpha: 0.6 },
-          { maxR: 48, dur: 600, delay: 100, maxAlpha: 0.3 },
-        ].forEach(({ maxR, dur, delay, maxAlpha }) => {
-          const e = elapsed - delay;
-          if (e <= 0 || e >= dur) return;
-          const t = e / dur;
-          ctx.save();
-          ctx.globalAlpha = maxAlpha * (1 - t);
-          ctx.strokeStyle = colour;
-          ctx.lineWidth   = 2;
-          ctx.beginPath();
-          ctx.arc(toC.x, toC.y, 8 + (maxR - 8) * t, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-        });
-
-        // Reset after last ring finishes
-        if (elapsed > 720) {
-          S.phase       = 'ready';
-          S.shuttleNorm = { ...PLAYER_NORM };
-          S.frozenArc   = null;
-        }
+      if (lab.landingUntil > ts) {
+        const ctx = canvas.getContext('2d');
+        const marker = court.toCanvas(lab.lastShot.aimPoint.x, lab.lastShot.aimPoint.y);
+        const alpha = (lab.landingUntil - ts) / 180;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#ffd23f';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(marker.x, marker.y, 16 + (1 - alpha) * 12, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
+
+      requestAnimationFrame(render);
     }
 
-    // ─── Pointer events ───────────────────────────────────────────────────────
-    canvas.addEventListener('pointerdown', (e) => {
-      if (S.phase !== 'ready') return;
-      const pos  = canvasPos(e);
-      const sc   = court.toCanvas(S.shuttleNorm.x, S.shuttleNorm.y);
-      if (Math.hypot(pos.x - sc.x, pos.y - sc.y) > ACTIVATION_R) return;
+    replaySpeed.addEventListener('input', updateLabReadout);
+    document.getElementById('reset-lab').addEventListener('click', () => resetLab(RESET_SHUTTLE));
+    document.getElementById('center-lab').addEventListener('click', () => resetLab(CENTER_SHUTTLE));
 
-      S.phase       = 'dragging';
-      S.dragOrigin  = { x: sc.x, y: sc.y };
-      S.dragCurrent = { ...pos };
-      canvas.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    }, { passive: false });
-
-    canvas.addEventListener('pointermove', (e) => {
-      if (S.phase !== 'dragging') return;
-      S.dragCurrent = canvasPos(e);
-      e.preventDefault();
-    }, { passive: false });
-
-    canvas.addEventListener('pointerup', (e) => {
-      if (S.phase !== 'dragging') return;
-      S.dragCurrent = canvasPos(e);
-
-      const proj = projectLanding(S.dragOrigin, S.dragCurrent, S.selectedShot);
-      const len  = Math.hypot(
-        S.dragCurrent.x - S.dragOrigin.x,
-        S.dragCurrent.y - S.dragOrigin.y,
-      );
-
-      if (proj && len > 12) {
-        const { landNorm, power, shotType } = proj;
-        const def = SHOT_TYPES[shotType];
-        S.frozenArc = {
-          fromNorm: { ...S.shuttleNorm },
-          toNorm:   landNorm,
-          power,
-          shotType,
-          colour:   powerColor(power),
-        };
-        S.flightDuration = def.flightSpeedBase + (1 - power) * def.flightSpeedRange;
-        S.flightT        = 0;
-        S.flightStartMs  = null;
-        S.phase          = 'flying';
-      } else {
-        S.phase = 'ready';
-      }
-
-      S.dragOrigin = S.dragCurrent = null;
+    court.onGeometryChange(() => {
+      armDrag();
     });
 
-    canvas.addEventListener('pointercancel', () => {
-      if (S.phase === 'dragging') S.phase = 'ready';
-      S.dragOrigin = S.dragCurrent = null;
-    });
-
-    // ─── Boot ─────────────────────────────────────────────────────────────────
-    canvas.style.touchAction = 'none';
+    resetLab();
     requestAnimationFrame(render);
   </script>
 </body>

@@ -26,6 +26,7 @@
 
 import { snapToGrid }        from './snap.js';
 import { deriveShuttleType } from './payload-builder.js';
+import { loftedCurveControl } from './trajectory.js';
 
 // ─── Tuning constants ─────────────────────────────────────────────────────────
 
@@ -37,6 +38,16 @@ const MAX_DRAG_PX = 160;
  * tap, and gives the slingshot a tactile "engage" point.
  */
 const DEADZONE_PX = 14;
+
+const DEFAULT_DRAG_PROFILE = Object.freeze({
+  maxDragPx: MAX_DRAG_PX,
+  deadzonePx: DEADZONE_PX,
+  tensionExponent: 1,
+  targetYMin: 0.08,
+  targetYMax: 0.42,
+  lineWidthBoost: 1,
+  ringBoost: 1,
+});
 
 /**
  * Power threshold (post-easing) at which the max-tension cue appears.
@@ -83,12 +94,12 @@ const LINE_ALPHA = 0.88;
 
 /** Spin arc color */
 const SPIN_COLOUR = 'rgba(196, 181, 253, 0.7)';  // violet-300
+const TRAJ_COLOUR = 'rgba(15, 26, 20, 0.40)';
+const SHOT_TRACE_TYPES = new Set(['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP']);
 
 // Trajectory preview
 /** Number of points to sample along the preview arc */
 const TRAJ_PREVIEW_STEPS = 28;
-/** Dash pattern for the preview arc */
-const TRAJ_PREVIEW_DASH = [5, 5];
 /** Landing indicator outer radius (CSS px) */
 const LANDING_OUTER_R = 10;
 /** Landing indicator crosshair arm length (CSS px) */
@@ -104,11 +115,12 @@ export class DragShooter {
    *
    * @typedef {{ aimPoint: {x:number,y:number}, power: number, spin: number, impactPoint?: {x:number,y:number,t?:number} }} ShotDescriptor
    */
-  constructor(canvas, court, onShot) {
+  constructor(canvas, court, onShot, { profiles = null } = {}) {
     this.canvas  = canvas;
     this.ctx     = canvas.getContext('2d');
     this.court   = court;
     this.onShot  = onShot;
+    this._profiles = profiles && typeof profiles === 'object' ? profiles : null;
 
     /** Normalized position of the shuttlecock — set via activate() */
     this._shuttleNorm = null;
@@ -134,17 +146,22 @@ export class DragShooter {
     /** Whether the mechanic is armed for the current exercise turn */
     this._armed = false;
 
+    /** Selected intended shot type, used for type-specific preview traces. */
+    this._shotType = 'SMASH';
+
     // Bind listeners (kept so we can remove them in destroy())
     this._onPointerDown  = this._handlePointerDown.bind(this);
     this._onPointerMove  = this._handlePointerMove.bind(this);
     this._onPointerUp    = this._handlePointerUp.bind(this);
     this._onPointerLeave = this._handlePointerLeave.bind(this);
+    this._onPointerCancel = this._handlePointerCancel.bind(this);
     this._onKeyDown      = this._handleKeyDown.bind(this);
 
     canvas.addEventListener('pointerdown',  this._onPointerDown);
     canvas.addEventListener('pointermove',  this._onPointerMove);
     canvas.addEventListener('pointerup',    this._onPointerUp);
     canvas.addEventListener('pointerleave', this._onPointerLeave);
+    canvas.addEventListener('pointercancel', this._onPointerCancel);
     window.addEventListener('keydown',      this._onKeyDown);
 
     // Prevent default touch behavior (scroll, zoom) on the canvas
@@ -157,6 +174,7 @@ export class DragShooter {
     this.canvas.removeEventListener('pointermove',  this._onPointerMove);
     this.canvas.removeEventListener('pointerup',    this._onPointerUp);
     this.canvas.removeEventListener('pointerleave', this._onPointerLeave);
+    this.canvas.removeEventListener('pointercancel', this._onPointerCancel);
     window.removeEventListener('keydown',           this._onKeyDown);
   }
 
@@ -179,6 +197,15 @@ export class DragShooter {
     this._dragging = false;
     this._origin   = null;
     this._current  = null;
+  }
+
+  /**
+   * Set the intended shot type so the live drag preview matches the selected
+   * post-shot trace convention.
+   * @param {string} type
+   */
+  setShotType(type) {
+    if (SHOT_TRACE_TYPES.has(type)) this._shotType = type;
   }
 
   /**
@@ -244,8 +271,12 @@ export class DragShooter {
   }
 
   _handlePointerLeave() {
+    // Pointer capture keeps delivering move/up events after the pointer exits
+    // the canvas, which is required for bottom-court slingshot pulls.
+  }
+
+  _handlePointerCancel() {
     if (this._dragging) {
-      // Cancel the drag if pointer leaves the canvas
       this._dragging = false;
       this._origin   = null;
       this._current  = null;
@@ -267,6 +298,7 @@ export class DragShooter {
    * @returns {{ aimPoint: {x:number,y:number}, power: number, spin: number }}
    */
   _computeShot() {
+    const profile = this._activeProfile();
     const dx = this._current.x - this._origin.x;
     const dy = this._current.y - this._origin.y;
     const len = Math.hypot(dx, dy);
@@ -276,12 +308,14 @@ export class DragShooter {
     // symmetric cosine ease-in-out so the engage and the ceiling both feel
     // soft while the mid-pull is the steepest — matches "rope tightening".
     let power;
-    if (len <= DEADZONE_PX) {
+    if (len <= profile.deadzonePx) {
       power = 0;
     } else {
-      const tRaw = Math.min(1, (len - DEADZONE_PX) / (MAX_DRAG_PX - DEADZONE_PX));
+      const dragRange = Math.max(1, profile.maxDragPx - profile.deadzonePx);
+      const tRaw = Math.min(1, (len - profile.deadzonePx) / dragRange);
       // Ease-in-out (cosine): slow start, fast middle, slow finish.
-      power = 0.5 - 0.5 * Math.cos(Math.PI * tRaw);
+      const eased = 0.5 - 0.5 * Math.cos(Math.PI * tRaw);
+      power = Math.pow(eased, profile.tensionExponent);
     }
 
     // Spin: perpendicular deviation of the midpoint, normalized to [-1, 1]
@@ -303,11 +337,14 @@ export class DragShooter {
       );
     }
 
+    const landing = this._projectLanding(aimNorm, power);
+    const shotAimPoint = landing ?? aimNorm;
+
     return {
-      aimPoint: aimNorm,
+      aimPoint: shotAimPoint,
       power,
       spin,
-      shuttleType: deriveShuttleType({ power, aimPoint: aimNorm }),
+      shuttleType: deriveShuttleType({ power, aimPoint: shotAimPoint }),
       ...(this._selectedImpactPoint && { impactPoint: { ...this._selectedImpactPoint } }),
     };
   }
@@ -393,14 +430,18 @@ export class DragShooter {
    * @returns {{ x: number, y: number }|null}
    */
   _projectLanding(aimPoint, power) {
+    const profile = this._activeProfile();
     // Slingshot: the player drags AWAY from the target (downward, toward
     // themselves), so a valid backward drag has current.y > origin.y.
     if (!this._current || !this._origin ||
         this._current.y <= this._origin.y) return null;
 
-    // The aimPoint is already inverted in _computeShot. If it landed in the
-    // opponent's half via snap, use it directly.
-    if (aimPoint.y < 0.5) return { x: aimPoint.x, y: aimPoint.y };
+    // The aimPoint is already inverted in _computeShot. With the legacy profile,
+    // keep the old direct-aim behavior. Lab profiles intentionally constrain
+    // depth into type-specific bands so each shot keeps a strong identity.
+    if (aimPoint.y < 0.5 && !this._hasActiveCustomProfile()) {
+      return { x: aimPoint.x, y: aimPoint.y };
+    }
 
     // Project using the INVERTED raw direction (slingshot).
     const raw = this.court.toNormalized(this._current.x, this._current.y);
@@ -411,8 +452,8 @@ export class DragShooter {
 
     if (rdy >= 0) return null;  // guard: drag direction does not aim forward
 
-    // smash (power≈1): lands deep (y≈0.08) — drop (power≈0): lands close (y≈0.42)
-    const targetY = 0.08 + (1 - power) * 0.34;
+    // power≈1 lands toward targetYMin (deep); power≈0 lands toward targetYMax (nearer).
+    const targetY = profile.targetYMin + (1 - power) * (profile.targetYMax - profile.targetYMin);
     const t       = (targetY - sy) / rdy;
     const landX   = Math.max(0.02, Math.min(0.98, sx + t * rdx));
 
@@ -427,33 +468,14 @@ export class DragShooter {
     const from = court.toCanvas(this._shuttleNorm.x, this._shuttleNorm.y);
     const to   = court.toCanvas(landing.x, landing.y);
 
-    // Arc height: inversely proportional to power (drop = tall, smash = flat)
-    const arcFraction = 0.35 - power * 0.28;  // 0.35 (drop) → 0.07 (smash)
-    const dist = Math.hypot(to.x - from.x, to.y - from.y);
-    const arcH = Math.max(18, dist * arcFraction);
-
     const colour = this._powerColour(power);
+    const points = this._tracePoints(from, to, this._shotType, power);
 
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.strokeStyle = colour;
-    ctx.lineWidth   = 1.8;
-    ctx.setLineDash(TRAJ_PREVIEW_DASH);
-    ctx.lineCap     = 'round';
-
-    // Sample the parabolic arc and draw as polyline
-    ctx.beginPath();
-    for (let i = 0; i <= TRAJ_PREVIEW_STEPS; i++) {
-      const t  = i / TRAJ_PREVIEW_STEPS;
-      const px = from.x + (to.x - from.x) * t;
-      const py = from.y + (to.y - from.y) * t - arcH * Math.sin(Math.PI * t);
-      if (i === 0) ctx.moveTo(px, py);
-      else         ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
+    this._strokeShotTrace(points, this._shotType, TRAJ_COLOUR, 0.28);
+    this._strokeShotTrace(points, this._shotType, colour, 0.78);
 
     // Landing indicator: pulsing circle + crosshair
+    ctx.save();
     ctx.globalAlpha = 0.75;
     ctx.strokeStyle = colour;
     ctx.lineWidth   = 1.5;
@@ -473,15 +495,101 @@ export class DragShooter {
     ctx.restore();
   }
 
+  _tracePoints(from, to, type, power) {
+    return [from, to];
+  }
+
+  _strokeShotTrace(points, type, colour, alpha) {
+    if (!points || points.length < 2) return;
+
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = colour;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    switch (type) {
+      case 'SMASH':
+        this._strokeParallelTrace(points, 2, 3.5, 1.5);
+        break;
+      case 'KILL':
+        this._strokeParallelTrace(points, 3, 2.5, 1.4);
+        break;
+      case 'CLEAR':
+        this._strokeCurveTrace(points, [], 2);
+        break;
+      case 'DROP':
+        this._strokeCurveTrace(points, [8, 6], 1.8);
+        break;
+      case 'NET_DROP':
+        this._strokeCurveTrace(points, [3, 5], 1.5);
+        break;
+      case 'DRIVE':
+      default:
+        this._strokeTracePath(points, [], 1.8);
+        break;
+    }
+
+    ctx.restore();
+  }
+
+  _strokeCurveTrace(points, dash, width) {
+    const { ctx } = this;
+    const start = points[0];
+    const end = points[points.length - 1];
+    const control = loftedCurveControl(this.court, start, end, this._shotType);
+
+    ctx.setLineDash(dash);
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  _strokeTracePath(points, dash, width) {
+    const { ctx } = this;
+    ctx.setLineDash(dash);
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  _strokeParallelTrace(points, count, offsetPx, width) {
+    const start = points[0];
+    const end = points[points.length - 1];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const mid = (count - 1) / 2;
+
+    for (let i = 0; i < count; i++) {
+      const offset = (i - mid) * offsetPx;
+      const shifted = points.map(point => ({
+        x: point.x + nx * offset,
+        y: point.y + ny * offset,
+      }));
+      this._strokeTracePath(shifted, [], width);
+    }
+  }
+
   _drawAimLine(power, spin) {
     const { ctx } = this;
     const o = this._origin;
     const c = this._current;
     const colour = this._powerColour(power);
+    const profile = this._activeProfile();
 
     // Tension effect: line thickens and start ring grows as the slingshot is stretched.
-    const lineW    = LINE_W_MIN + (LINE_W_MAX - LINE_W_MIN) * power;
-    const ringR    = START_RING_R + (START_RING_R_MAX - START_RING_R) * power;
+    const lineW    = LINE_W_MIN + (LINE_W_MAX - LINE_W_MIN) * power * profile.lineWidthBoost;
+    const ringR    = START_RING_R + (START_RING_R_MAX - START_RING_R) * power * profile.ringBoost;
 
     ctx.save();
     ctx.globalAlpha = LINE_ALPHA;
@@ -627,6 +735,20 @@ export class DragShooter {
     const b     = Math.round(lo.b + (hi.b - lo.b) * f);
 
     return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  _activeProfile() {
+    const profile = this._profiles?.[this._shotType] ?? null;
+    if (!profile) return DEFAULT_DRAG_PROFILE;
+
+    return {
+      ...DEFAULT_DRAG_PROFILE,
+      ...profile,
+    };
+  }
+
+  _hasActiveCustomProfile() {
+    return Boolean(this._profiles?.[this._shotType]);
   }
 
   // ─── Utilities ────────────────────────────────────────────────────────────────

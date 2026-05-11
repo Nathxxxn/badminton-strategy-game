@@ -313,7 +313,7 @@ function renderDrillsPage(state) {
     })}
     <details class="tutorial-card card">
       <summary class="tutorial-summary">
-        <span class="tutorial-icon">📖</span>
+        <span class="tutorial-icon">${SVG_SHUTTLE}</span>
         <span>
           <strong>Tutoriel</strong>
           <span class="tutorial-sub">Déplacements · Coups · Spin · Exemples de coups ratés</span>
@@ -1351,7 +1351,7 @@ export class ScreenManager {
     const greeting = menu.querySelector('[data-home-greeting]');
     if (greeting) greeting.textContent = `Ready to play, ${firstName}?`;
     this._applyAvatarColor(menu, profile.avatarColor);
-    const dailyBonus = menu.querySelector('.daily-bonus');
+    const dailyBonus = menu.querySelector('.daily-actions-group');
     if (dailyBonus) dailyBonus.outerHTML = dailyBonusMarkup(this._state);
   }
 

@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#f4ecd8">
   <meta name="description" content="Rally, un hub d'entrainement strategique pour le badminton.">
   <title>Rally — Badminton Strategy</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -129,10 +130,11 @@
               </svg>
             </span>
           </div>
-          <div class="stat-row"><span class="stat-k">Accuracy</span><span class="stat-v good">82%</span></div>
-          <div class="stat-row"><span class="stat-k">Backhands targeted</span><span class="stat-v">2 / 3</span></div>
-          <div class="stat-row"><span class="stat-k">Distance ally</span><span class="stat-v">3.1 m</span></div>
-          <div class="stat-row"><span class="stat-k">Bonus</span><span class="stat-v good">+40</span></div>
+          <div class="stat-row"><span class="stat-k">Accuracy</span><span id="rail-turn-accuracy" class="stat-v">—</span></div>
+          <div id="rail-turn-backhand-row" class="stat-row" hidden><span class="stat-k">Backhand targeted</span><span id="rail-turn-backhand" class="stat-v">—</span></div>
+          <div id="rail-turn-body-row" class="stat-row" hidden><span class="stat-k">Body hit</span><span id="rail-turn-body" class="stat-v">—</span></div>
+          <div id="rail-turn-dist-row" class="stat-row" hidden><span class="stat-k">Distance to partner</span><span id="rail-turn-dist" class="stat-v">—</span></div>
+          <div id="rail-turn-bonus-row" class="stat-row" hidden><span class="stat-k">Bonus</span><span id="rail-turn-bonus" class="stat-v good">—</span></div>
         </div>
 
         <div class="coach-card">
@@ -153,7 +155,6 @@
             <div class="legend-row"><span class="legend-sw ally"></span> Partner</div>
             <div class="legend-row"><span class="legend-sw opp"></span> Opponent</div>
             <div class="legend-row"><span class="legend-sw shuttle"></span> Shuttle</div>
-            <div class="legend-row"><span class="legend-sw target"></span> Target</div>
           </div>
         </div>
       </aside>
@@ -188,9 +189,9 @@
               </svg>
             </span>
           </div>
-          <div class="stat-row"><span class="stat-k">Score rally</span><span class="stat-v">340</span></div>
-          <div class="stat-row"><span class="stat-k">Good shots</span><span class="stat-v">3 / 4</span></div>
-          <div class="stat-row"><span class="stat-k">Penalty</span><span class="stat-v bad">−10</span></div>
+          <div class="stat-row"><span class="stat-k">Score rally</span><span id="rail-rally-score" class="stat-v">0</span></div>
+          <div class="stat-row"><span class="stat-k">Good shots</span><span id="rail-rally-correct" class="stat-v">— / —</span></div>
+          <div id="rail-rally-penalty-row" class="stat-row" hidden><span class="stat-k">Penalty</span><span id="rail-rally-penalty" class="stat-v bad">—</span></div>
         </div>
 
         <div class="rail-card">
@@ -198,11 +199,11 @@
           <div class="opp-grid">
             <div class="opp-cell">
               <span class="opp-dot opp1">O1</span>
-              <span class="opp-tag">BACKHAND</span>
+              <span id="rail-opp1-name" class="opp-tag">—</span>
             </div>
             <div class="opp-cell">
               <span class="opp-dot opp2">O2</span>
-              <span class="opp-tag">AGGRESSIVE</span>
+              <span id="rail-opp2-name" class="opp-tag">—</span>
             </div>
           </div>
         </div>

@@ -210,9 +210,12 @@ export function evaluatePlacementTurn(turn, logicPayload) {
   );
   const feedback = feedbackEngine.getPlacementFeedback(result);
   const realDistance = feedback.details.realDistance;
+  const messages = feedback.message ? [feedback.message] : [];
 
   return {
     ...feedback,
+    message: undefined,
+    messages,
     idealPositionRender: feedback.idealPosition ? toFullCourtAlly(feedback.idealPosition) : null,
     flags: {
       isTooClose: realDistance < 2.5,
