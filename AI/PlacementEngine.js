@@ -4,10 +4,11 @@
  */
 
 export class PlacementEngine {
-    constructor() {
+    constructor(kinematic) {
         this.WIDTH = 6.10;
         this.HALF_LENGTH = 6.70;
         this.GRID_CELL = 0.5; // Taille d'une case pour référence
+        this.kinematicEngine = kinematic;
     }
 
     /**
@@ -215,7 +216,7 @@ export class PlacementEngine {
      * Recherche la meilleure position possible sur le demi-terrain
      * en maximisant le score combiné (Partenaire + Formation).
      */
-    findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter) {
+    findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter, reachMeters = Infinity) {
         let best = { x: 0.5, y: 0.5, score: -1 };
 
         // Pas de 50cm environ pour la recherche
@@ -224,7 +225,11 @@ export class PlacementEngine {
 
         for (let x = 0.05; x <= 0.95; x += stepX) {
             for (let y = 0.05; y <= 0.95; y += stepY) {
-                const score = this._calculateRawScore({ x, y }, partnerPos, shotContext, isHitter);
+                const testPos = { x, y };
+
+                const dist = this.calculateDistMeters(playerPos, testPos);
+
+                const score = (dist <= reachMeters) ? this._calculateRawScore(testPos, partnerPos, shotContext, isHitter) : 0;
                 if (score > best.score) {
                     best = { x, y, score };
                 }
@@ -268,10 +273,11 @@ export class PlacementEngine {
         return (partnerScore * 0.3) + (formationScore * 0.7);
     }
 
-    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter) {
+    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter,opponents) {
         const shotType = shotContext.type;
         const shuttleEndPos = shotContext.endPos;
-        const bestPlacement = this.findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter);
+        const reachMeters = this.kinematicEngine.movementPossibility(shotContext,opponents);
+        const bestPlacement = this.findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter, reachMeters);
         const bestScore = bestPlacement.score;
 
         
