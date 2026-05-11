@@ -30,12 +30,12 @@ export class TacticalEngine {
     }
 
     /**
-     * @param {Object} incoming - Le coup adverse subit {type, endPos}
+     * @param {Object} incoming - Le coup adverse subit {type, startPos, endPos}
      * @param {Object} user - Le coup qu'on évalue {type, endPos}
      * @param {Array} opponents - Positions des adversaires
-     * @param {Object} impactPos - Position OÙ le joueur frappe le volant {x, y}
+     * @param {Object} startPos - Position OÙ le joueur frappe le volant {x, y}
      */
-    evaluateSituation(incoming, user, opponents, impactPos = {x: 0.5, y: 0.5}) {
+    evaluateSituation(incoming, user, opponents, startPos = {x: 0.5, y: 0.5}) {
         const rules = SHOT_PARAMS[user.type];
         const incomingRules = SHOT_PARAMS[incoming.type];
 
@@ -61,7 +61,7 @@ export class TacticalEngine {
         
 
         // SMASH : Interdit dans le 1er tiers (risque de filet ou trajectoire impossible)
-        if (user.type === 'SMASH' && impactPos.y < this.FIRST_THIRD) {
+        if (user.type === 'SMASH' && startPos.y < this.FIRST_THIRD) {
             return faultResult(user.type, "Fault: too close to smash.", rules);
         }
 
@@ -116,7 +116,7 @@ export class TacticalEngine {
                 totalScore -= penalty; // Décroît très vite après 1.98m
             }
             // Si frappé du fond du court, c'est un "Clear raté"
-            if (impactPos.y > 0.6) {
+            if (startPos.y > 0.6) {
                 totalScore = 5; // Quasi inutile tactiquement
             }
         }
@@ -163,7 +163,7 @@ export class TacticalEngine {
         };
     }
 
-    findBestShotExhaustive(incoming, opponents, impactPos) {
+    findBestShotExhaustive(incoming, opponents, startPos) {
         const shotTypes = Object.keys(SHOT_PARAMS);
         let best = { score: -1, type: '', endPos: { x: 0.5, y: 0.5 } };
 
@@ -177,8 +177,8 @@ export class TacticalEngine {
 
             for (let x = 0.05; x <= 0.95; x += stepX) {
                 for (let y = 0.05; y <= 0.95; y += stepY) {
-                    // 2. On passe l'impactPos pour que evaluateSituation applique les règles Kill/Smash
-                    const res = this.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, impactPos);
+                    // 2. On passe l'startPos pour que evaluateSituation applique les règles Kill/Smash
+                    const res = this.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, startPos);
                     
                     if (res.score > best.score) {
                         best = { score: res.score, type: type, endPos: {x, y}, details: res };
@@ -192,13 +192,13 @@ export class TacticalEngine {
      * @param {Object} incoming - {type, endPos}
      * @param {Object} user - {type, endPos}
      * @param {Array} opponents - [{x, y, hand}]
-     * @param {Object} impactPos - {x, y} Point où le joueur a frappé
+     * @param {Object} startPos - {x, y} Point où le joueur a frappé
      */
     // TacticalEngine.js
 
-    getCompleteAnalysis(incoming, user, opponents, impactPos) {
-    const playerAnalysis = this.evaluateSituation(incoming, user, opponents, impactPos);
-    const bestPossible = this.findBestShotExhaustive(incoming, opponents, impactPos);
+    getCompleteAnalysis(incoming, user, opponents, startPos) {
+    const playerAnalysis = this.evaluateSituation(incoming, user, opponents, startPos);
+    const bestPossible = this.findBestShotExhaustive(incoming, opponents, startPos);
     
     const bestScore = bestPossible.score;
     // Si le bestScore est 0 (cas improbable mais par sécurité), on évite la division par zéro

@@ -55,18 +55,29 @@ export class AISpawnEngine {
      * GÉNÉRATION DE COUP IA
      */
     
-    generateBestShot(incoming, opponents, rank, impactPos = {x: 0.5, y: 0.5}) {
+    generateBestShot(incoming, opponents, rank, startPos = {x: 0.5, y: 0.5}) {
         const windowSize = this.getRankWindowSize(rank);
         const allPossibleShots = [];
         const step = 0.1; 
         const types = Object.keys(this.tactical.SHOT_PARAMS);
 
+        
+        const spinProbabilities = {
+            'P12': 0.00, 'P11': 0.01, 'P10': 0.02,
+            'D9': 0.05,  'D8': 0.08,  'D7': 0.11,
+            'R6': 0.17,  'R5': 0.23,  'R4': 0.29,
+            'N3': 0.38,  'N2': 0.47,  'N1': 0.56
+        };
+
+
         types.forEach(type => {
             for (let x = 0.05; x <= 0.95; x += step) {
                 for (let y = 0.05; y <= 0.95; y += step) {
-                    // TRANSMETTRE impactPos ICI 👇
-                    const res = this.tactical.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, impactPos);
-                    allPossibleShots.push({ type, endPos: {x, y}, score: res.score });
+                    const res = this.tactical.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, startPos);
+                    // Application
+                    const rankProb = spinProbabilities[strikerRank] || 0.0;
+                    const hasSpin = (type === 'NET_DROP') ? (Math.random() < rankProb) : false;
+                    allPossibleShots.push({ type, startPos : startPos, endPos: {x, y}, score: res.score, hasSpin : hasSpin });
                 }
             }
         });
@@ -79,18 +90,18 @@ export class AISpawnEngine {
     /**
      * GÉNÉRATION DE PLACEMENT IA - Version avec contraintes cinématiques
      */
-    generateBestPlacement(shotContext, playerPos, partnerPos, isHitter, rank) {
+    generateBestPlacement(shotContext, playerPos, partnerPos, isHitter, rank, opponents) {
         const windowSize = this.getRankWindowSize(rank);
         const candidates = [];
         
         // 1. Récupérer la range autorisée (définie dans KinematicEngine selon le coup joué)
         // On suppose que kinematicEngine est accessible via this.kinematic
-        const maxDist = this.kinematic.MOVING_RADII[shotContext.type] || 3.0;
+        const maxDist = this.kinematic.movementPossibility(shotContext, opponents) || 3.0;
 
         // Calcul de la position idéale théorique pour le fallback
         const ideal = this.getIdealPos(shotContext.type, shotContext.endPos, isHitter, playerPos, partnerPos);
 
-        if (isHitter) {
+        if (not (isHitter)) {
             // GÉNÉRATION DU NUAGE (Hitter)
             for (let i = 0; i < 200; i++) {
                 const p = {
@@ -153,7 +164,10 @@ export class AISpawnEngine {
     /**
      * CALCUL DU POINT D'IMPACT (Méthode par échantillonnage)
      */
-    getValidImpactPoints(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
+    getValidImpactPoints(shotContext, playerPos, reachMeters, fatigue = 1.0) {
+        const shuttleStart = shotContext.startPos;
+        const shuttleEnd = shotContext.endPos;
+        const shotType = shotContext.type;
         const windows = this.SHOT_WINDOWS[shotType];
         if (!windows) return [];
 
@@ -199,8 +213,8 @@ export class AISpawnEngine {
         return validPoints;
     }
 
-    getValidImpactPoint(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue = 1.0) {
-        const validPoints = this.getValidImpactPoints(shuttleStart, shuttleEnd, playerPos, reachMeters, shotType, fatigue) ?? [];
+    getValidImpactPoint(shotContext, playerPos, reachMeters, fatigue = 1.0) {
+        const validPoints = this.getValidImpactPoints(shotContext, playerPos, reachMeters, fatigue) ?? [];
 
         // Renvoie un point aléatoire parmi les points valides
         if (validPoints.length === 0) return null;
