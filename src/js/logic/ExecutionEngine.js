@@ -51,6 +51,45 @@ class ExecutionEngine {
         this._initializeAllTables();
     
     }
+    /**
+     * Calcule le déplacement réel effectué par un joueur.
+     * @param {Object} intendedPos {x, y} - La destination voulue.
+     * @param {number} fatigue - Entre 0.0 et 1.0.
+     * @param {Object} currentPos {x, y} - Position actuelle du joueur.
+     * @returns {Object} { actualPos: {x, y}, distanceCovered: number }
+     */
+    executeMovement(intendedPos, fatigue, currentPos) {
+        const dx = intendedPos.x - currentPos.x;
+        const dy = intendedPos.y - currentPos.y;
+        const intendedDistance = Math.sqrt(dx * dx + dy * dy);
+
+        if (intendedDistance === 0) return { actualPos: intendedPos, distanceCovered: 0 };
+
+        // Logique de fatigue : 
+        // On ne commence à avoir un risque de "rater" son placement qu'au delà de 0.75 de fatigue
+        // et pour des distances supérieures à 4 mètres.
+        let distanceFactor = 1.0;
+        
+        if (fatigue > 0.70 && intendedDistance > 4.0) {
+            // Probabilité de réussite baisse avec la fatigue
+            const failChance = (fatigue - 0.70) * 0.5; // ex: à 0.8 de fatigue, 10% de chance de rater
+            if (Math.random() < failChance) {
+                // Le joueur arrive entre 85% et 95% de la distance prévue
+                distanceFactor = 0.85 + Math.random() * 0.10;
+            }
+        }
+
+        const actualDistance = intendedDistance * distanceFactor;
+        const ratio = actualDistance / intendedDistance;
+
+        return {
+            actualPos: {
+                x: currentPos.x + dx * ratio,
+                y: currentPos.y + dy * ratio
+            },
+            distanceCovered: actualDistance
+        };
+    }
 
     /**
      * Moteur principal qui transforme l'intention en coup réel
@@ -59,7 +98,7 @@ class ExecutionEngine {
         let finalShot = { 
             type: intent.type, 
             endPos: { ...intent.endPos },
-            impactPos: { ...intent.impactPos },
+            startPos: { ...intent.startPos },
             spin: intent.spin || false,
             status: 'OK',
             wasMishit: false 
@@ -92,8 +131,8 @@ class ExecutionEngine {
         // ==========================================
         let netFaultProb = this.NET_FAULT_PROB[rank][incomingShotType][finalShot.type] + expFatiguePenalty;
         
-        if (finalShot.type === 'CLEAR' && finalShot.impactPos.y <= 0.15) {
-            netFaultProb += this._getClearNetProb(finalShot.impactPos.y, rank);
+        if (finalShot.type === 'CLEAR' && finalShot.startPos.y <= 0.15) {
+            netFaultProb += this._getClearNetProb(finalShot.startPos.y, rank);
         }
 
         if (Math.random() < netFaultProb) {

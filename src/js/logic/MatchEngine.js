@@ -49,61 +49,16 @@ export const RATING_COLORS = {
 
 
 
-/**
- * Temps de réaction de base (ms).
- * N1 reçoit un KILL = 1600ms.
- */
-export const BASE_REACTION_TIMES = {
-    'P12': { CLEAR: 5500, DROP: 4600, DRIVE: 3900, SMASH: 3200, KILL: 2800, NET_DROP: 4200, NET_CLEAR: 5500 },
-    'P11': { CLEAR: 5200, DROP: 4300, DRIVE: 3600, SMASH: 3000, KILL: 2650, NET_DROP: 4000, NET_CLEAR: 5200 },
-    'P10': { CLEAR: 4900, DROP: 4000, DRIVE: 3400, SMASH: 2850, KILL: 2500, NET_DROP: 3800, NET_CLEAR: 4900 },
-    'D9':  { CLEAR: 4500, DROP: 3700, DRIVE: 3100, SMASH: 2600, KILL: 2350, NET_DROP: 3500, NET_CLEAR: 4500 },
-    'D8':  { CLEAR: 4200, DROP: 3400, DRIVE: 2900, SMASH: 2450, KILL: 2200, NET_DROP: 3300, NET_CLEAR: 4200 },
-    'D7':  { CLEAR: 3900, DROP: 3200, DRIVE: 2700, SMASH: 2300, KILL: 2050, NET_DROP: 3100, NET_CLEAR: 3900 },
-    'R6':  { CLEAR: 3500, DROP: 2900, DRIVE: 2450, SMASH: 2100, KILL: 1900, NET_DROP: 2800, NET_CLEAR: 3500 },
-    'R5':  { CLEAR: 3200, DROP: 2700, DRIVE: 2250, SMASH: 1950, KILL: 1850, NET_DROP: 2650, NET_CLEAR: 3200 },
-    'R4':  { CLEAR: 3000, DROP: 2500, DRIVE: 2100, SMASH: 1850, KILL: 1780, NET_DROP: 2500, NET_CLEAR: 3000 },
-    'N3':  { CLEAR: 2700, DROP: 2250, DRIVE: 1950, SMASH: 1750, KILL: 1720, NET_DROP: 2300, NET_CLEAR: 2700 },
-    'N2':  { CLEAR: 2500, DROP: 2100, DRIVE: 1800, SMASH: 1650, KILL: 1660, NET_DROP: 2150, NET_CLEAR: 2500 },
-    'N1':  { CLEAR: 2300, DROP: 1950, DRIVE: 1700, SMASH: 1600, KILL: 1600, NET_DROP: 2000, NET_CLEAR: 2300 }
-};
-
-/**
- * Calcule le temps accordé au joueur pour ce tour.
- * @param {number} baseTime - Le temps issu de BASE_REACTION_TIMES
- * @param {number} previousScore - Le score relatif du coup précédent (0-100)
- */
-export function calculateAdjustedTime(baseTime, previousScore) {
-    const score = Math.max(0, Math.min(100, previousScore));
-    let multiplier = 1.0;
-
-    if (score < 50) {
-        // Zone de Malus : De 0.25 (score 0) à 1.0 (score 50)
-        // Pente : (1 - 0.25) / 50 = 0.015
-        multiplier = 0.25 + (score * 0.015);
-    } 
-    else if (score <= 80) {
-        // Zone de Confort : Pas de changement
-        multiplier = 1.0;
-    } 
-    else {
-        // Zone de Bonus : De 1.0 (score 80) à 1.20 (score 100)
-        // Pente : (1.2 - 1.0) / (100 - 80) = 0.01
-        multiplier = 1.0 + ((score - 80) * 0.01);
-    }
-
-    return Math.round(baseTime * multiplier);
-}
-
-
 class MatchEngine {
     constructor(player1, player2, executionEngine) {
         this.executionEngine = executionEngine;
         
-        // Initialisation des joueurs avec un état de base
+        // teamA = [p1, p2], teamB = [p3, p4]
         this.players = {
-            1: { ...player1, fatigue: 0.0, position: { x: 0, y: 0 } },
-            2: { ...player2, fatigue: 0.0, position: { x: 0, y: 0 } }
+            1: { ...teamA[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A' },
+            2: { ...teamA[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A' },
+            3: { ...teamB[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B' },
+            4: { ...teamB[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B' }
         };
 
         this.matchState = {
@@ -203,22 +158,311 @@ class MatchEngine {
             this.players[id].fatigue = this.players[id].fatigue * factor;
         });
     }
+    // ==========================================
+    // LOGIQUE DE SCORE ET DE MATCH
+    // ==========================================
+
+    /**
+     * Appelée à la fin de chaque échange par _endRally()
+     * Vérifie si on déclenche une pause, une fin de set ou une fin de match.
+     */
+    checkScore() {
+        const { scoreP1, scoreP2 } = this.matchState;
+        const { pointsToWin, maxPoints, interval, setsToWin } = this.rules;
+
+        // 1. Vérifier la pause de mi-set
+        if (!this.matchState.intervalTaken && (scoreP1 === interval || scoreP2 === interval)) {
+            this.matchState.intervalTaken = true;
+            this.recoverFatigue('INTERVAL');
+            console.log(`[PAUSE] Mi-set atteinte à ${scoreP1}-${scoreP2}. Récupération de 25% de la fatigue accumulée.`);
+            return; // On s'arrête ici pour ce point
+        }
+
+        // 2. Vérifier la victoire du set
+        const maxScore = Math.max(scoreP1, scoreP2);
+        const diff = Math.abs(scoreP1 - scoreP2);
+
+        // Règle : Avoir atteint le score cible ET avoir 2 points d'écart, OU atteindre le plafond
+        if ((maxScore >= pointsToWin && diff >= 2) || maxScore === maxPoints) {
+            this._endSet(scoreP1 > scoreP2 ? 1 : 2);
+        } else {
+            // Le set continue, récupération normale entre deux points
+            this.recoverFatigue('POINT');
+        }
+    }
+
+    /**
+     * Gère la clôture d'un set
+     */
+    _endSet(winnerId) {
+        // Incrémentation des sets
+        if (winnerId === 1) this.matchState.setsP1++;
+        else this.matchState.setsP2++;
+
+        console.log(`[FIN DU SET] Remporté par Joueur ${winnerId} (${this.matchState.scoreP1}-${this.matchState.scoreP2})`);
+
+        // Vérifier la victoire du match
+        if (this.matchState.setsP1 === this.rules.setsToWin || this.matchState.setsP2 === this.rules.setsToWin) {
+            this._endMatch(winnerId);
+        } else {
+            // Préparation du set suivant
+            this.matchState.scoreP1 = 0;
+            this.matchState.scoreP2 = 0;
+            this.matchState.intervalTaken = false;
+            
+            // Récupération complète (50% de la fatigue)
+            this.recoverFatigue('SET');
+            
+            // En badminton, le vainqueur du set sert au début du set suivant
+            this.matchState.currentServer = winnerId;
+            
+            console.log(`[NOUVEAU SET] Début du set suivant. Le Joueur ${winnerId} sert.`);
+        }
+    }
+
+    /**
+     * Clôture le match et prépare les statistiques
+     */
+    
+    _endMatch(winnerId) {
+        this.matchState.matchOver = true;
+        this.matchReport.winner = (winnerId <= 2) ? "TEAM_A" : "TEAM_B";
+
+        // TODO plus tard : Calcul des nouveaux classements (rating) via le système Elo ou autre
+        // On remplit les stats finales avant de renvoyer
+        this.matchReport.finalStats = this._generateFinalStats();
+        
+        console.log("Match Terminé. Rapport généré.");
+        return this.matchReport; // C'est ici qu'on l'extrait pour l'UI
+    }
+
+
+    // ==========================================
+    // LOGIQUE DE JEU (Continuité)
+    // ==========================================
+    /**
+     * PHASE A : Le joueur ou son partenaire vient de frapper.
+     * Génère le placement du partenaire et calcule le chrono.
+     */
+    processPostShot(strikerId, shotContext, shotScore) {
+        const striker = this.players[strikerId];
+        const striker_rank = striker.rank
+        const shotType = shotContext.type
+        const partnerId = (strikerId === 1) ? 2 : 1; 
+        const aiShot = (strikerId === 2 ) ;
+        const partner = this.players[partnerId];
+
+        const opponents = {opp1: {x : this.players[3].position.x , y : this.players[3].position.y},
+                            opp2 :{x : this.players[4].position.x , y : this.players[4].position.y}};
+
+        // 1. Déplacement du partenaire (via AISpawnEngine)
+        const partnerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext, (aiShot) ? striker.position : partner.position, (aiShot) ? partner.position : striker.position, false, (aiShot) ? striker.rank : partner.rank, opponents);
+        const chosenPartnerPlacement = this._pickRandomFromList(partnerPlacements).pos;
+
+        const partnerExec = this.executionEngine.executeMovement(chosenPartnerPlacement, partner.fatigue, partner.position);
+        const finalPartnerPlacement = partnerExec.actualPos;
+
+        // 2. Calcul du temps de réflexion pour le joueur humain (ID 1)
+        // Note: getAdjustedReactionTime est maintenant dans KinematicEngine
+        const reactionTime = this.kinematicEngine.getAdjustedTime(this.kinematicEngine.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
+
+        return {
+            partnerTarget: finalPartnerPlacement,
+            reflectionTime: Math.max(reactionTime, 0.4) // Minimum 400ms
+        };
+    }
+
+    // Utilitaire simple pour piocher dans tes listes générées
+    _pickRandomFromList(list) {
+        if (!list || list.length === 0) return null;
+        const randomIndex = Math.floor(Math.random() * list.length);
+        return list[randomIndex];
+    }
+
+    /**
+     * PHASE B : L'équipe du joueur s'est replacée. 
+     * L'IA adverse joue, et on détermine qui réceptionnera de notre côté.
+     */
+    processPostMovement(shotContext, shotScore) {
+        // 1. Qui va frapper chez les IA (Équipe B : IDs 3 et 4) ?
+        const aiStrikerId = this._determineNextStriker(3, 4, shotContext);
+        // SÉCURITÉ : Si personne ne l'a, le point est fini pour l'équipe du joueur (Victoire !)
+        if (aiStrikerId === null) {
+            return { rallyOver: true, winnerId: 1, reason: 'UNREACHABLE_BY_AI' };
+        }
+
+        const aiStriker = this.players[aiStrikerId];
+        const opponents = {opp1: {x : this.players[1].position.x , y : this.players[1].position.y},
+                            opp2 :{x : this.players[2].position.x , y : this.players[2].position.y}};
+        const aiPartnerId = (aiStrikerId === 3) ? 4 : 3;
+        const aiPartner = this.players[aiPartnerId];
+
+        const reachMeters = this.kinematicEngine.movementPossibility(shotContext, opponents)
+        const startPos = this.aiSpawnEngine.getValidImpactPoint(shotContext, aiStriker.position, reachMeters, aiStriker.fatigue)
+
+        // 2. Choix du coup de l'IA adverse (via AISpawnEngine)
+        const aiShots = this.aiSpawnEngine.generateBestShot(shotContext, opponents, aiStriker.rank, startPos);
+        const chosenAiShot = this._pickRandomFromList(aiShots);
+
+
+        const aiShotExec = this.executionEngine.executeShot(chosenAiShot, aiStriker, shotContext.type, shotContext.hasSpin);
+        const finalAiShot = aiShotExec.shot; // Le coup avec ses trajectoires réelles
+
+        const striker_rank = aiStriker.rank
+        const shotType = finalAiShot.type
+
+
+
+        // 3. Déplacements des deux IA adverses
+        // Le striker se place par rapport au volant
+        const strikerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext,aiStriker.position, aiPartner.position, true, aiStriker.rank, opponents);
+        const chosenAiStrikerPlacement = this._pickRandomFromList(strikerPlacements).pos;
+
+        const strikerExec = this.executionEngine.executeMovement(chosenAiStrikerPlacement, aiStriker.fatigue, aiStriker.position);
+        const finalAiStrikerPlacement = strikerExec.actualPos;
+
+        // Le partenaire se place par rapport au volant ET au striker
+        const partnerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext,aiPartner.position, aiStriker.position, false, aiPartner.rank, opponents);
+        const chosenAiPartnerPlacement = this._pickRandomFromList(partnerPlacements).pos;
+
+        const partnerExec = this.executionEngine.executeMovement(chosenAiPartnerPlacement, aiPartner.fatigue, aiPartner.position);
+        const finalAiPartnerPlacement = partnerExec.actualPos;
+
+        // AJOUT DE LA FATIGUE POUR L'ÉQUIPE IA
+        this.addFatigue(aiStrikerId, strikerExec.distanceCovered, chosenAiShot.type);
+        this.addFatigue(aiPartnerId, partnerExec.distanceCovered, null);
+
+        // 4. Déterminer qui devra jouer le prochain coup dans notre équipe (1 ou 2)
+        const nextTeamAStrikerId = this._determineNextStriker(1, 2, chosenAiShot);
+        // SÉCURITÉ : Si le coup de l'IA est trop bon, l'IA gagne le point
+        if (nextTeamAStrikerId === null) {
+            return { rallyOver: true, winnerId: 3, reason: 'UNREACHABLE_BY_PLAYER' };
+        }
+
+        const reactionTime = this.kinematicEngine.getAdjustedTime(this.kinematicEngine.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
+
+        return {
+            aiIntent: finalAiShot,
+            aiMovements: {
+                [aiStrikerId]: finalAiStrikerPlacement,
+                [aiPartnerId]: finalAiPartnerPlacement
+            },
+            nextStrikerId: nextTeamAStrikerId,
+            reflectionTime: Math.max(reactionTime, 0.4) // Minimum 400ms, s'applique seulement si nextStirker est le partenaire
+        };
+    }
+
+
+    _determineNextStriker(playerId1, playerId2, shotContext) {
+        const p1 = this.players[playerId1];
+        const p2 = this.players[playerId2];
+
+        // 1. Définir les adversaires pour le calcul de la reach
+        const opponents = (playerId1 <= 2) ? 
+            { opp1: this.players[3].position, opp2: this.players[4].position } : 
+            { opp1: this.players[1].position, opp2: this.players[2].position };
+
+        // 2. Obtenir la reach via shotPossibility
+        const reachP1 = this.kinematicEngine.shotPossibility(shotContext.type, shotContext.startPos, opponents, p1.fatigue).allowedReach;
+        const reachP2 = this.kinematicEngine.shotPossibility(shotContext.type, shotContext.startPos, opponents, p2.fatigue).allowedReach;
+
+        // 3. Vérifier si les joueurs peuvent l'atteindre physiquement
+        // On suppose que getValidImpactPoint renvoie un tableau vide ou null si hors de portée
+        const impactsP1 = this.aiSpawnEngine.getValidImpactPoint(shotContext, p1.position, reachP1, p1.fatigue);
+        const impactsP2 = this.aiSpawnEngine.getValidImpactPoint(shotContext, p2.position, reachP2, p2.fatigue);
+
+        const canP1 = Array.isArray(impactsP1) ? impactsP1.length > 0 : impactsP1 !== null;
+        const canP2 = Array.isArray(impactsP2) ? impactsP2.length > 0 : impactsP2 !== null;
+
+        if (!canP1 && !canP2) return null; // Coup gagnant, personne ne l'a
+        if (canP1 && !canP2) return playerId1;
+        if (!canP1 && canP2) return playerId2;
+
+        // 4. Les deux peuvent l'avoir -> Analyse tactique
+        const p1DistToNet = Math.abs(p1.position.y);
+        const p2DistToNet = Math.abs(p2.position.y);
+        
+        const frontPlayerId = (p1DistToNet <= p2DistToNet) ? playerId1 : playerId2;
+        const backPlayerId = (p1DistToNet <= p2DistToNet) ? playerId2 : playerId1;
+
+        // Position de Défense (defpos) : Différence de Y inférieure ou égale à 2 mètres (côte à côte)
+        const isDefPos = Math.abs(p1.position.y - p2.position.y) <= 2.0;
+
+        // Joueur du côté du volant (en face de l'impact) : Différence en X
+        const distXP1 = Math.abs(p1.position.x - shotContext.endPos.x);
+        const distXP2 = Math.abs(p2.position.x - shotContext.endPos.x);
+        const sidePlayerId = (distXP1 <= distXP2) ? playerId1 : playerId2;
+
+        let targetPlayerId = frontPlayerId; // Cible par défaut
+        let proba = 0.5; // Probabilité par défaut
+
+        switch (shotContext.type) {
+            case 'NET_DROP':
+                if (isDefPos) {
+                    targetPlayerId = sidePlayerId;
+                    proba = 1.00;
+                } else {
+                    targetPlayerId = frontPlayerId;
+                    proba = 1.00;
+                }
+                break;
+            case 'NET_CLEAR':
+                if (isDefPos) {
+                    targetPlayerId = sidePlayerId;
+                    proba = 1.00;
+                } else {
+                    targetPlayerId = frontPlayerId;
+                    proba = 1.00;
+                }
+                break;
+            case 'KILL':
+                targetPlayerId = frontPlayerId;
+                proba = 0.50;
+                break;
+            case 'DROP':
+                if (isDefPos) {
+                    targetPlayerId = sidePlayerId;
+                    proba = 0.90;
+                } else {
+                    targetPlayerId = frontPlayerId;
+                    proba = 0.90;
+                }
+                break;
+            case 'SMASH':
+                targetPlayerId = sidePlayerId;
+                proba = 0.65;
+                break;
+            case 'CLEAR':
+                if (!isDefPos) {
+                    // Si pas en défense, l'arrière prend à 100% (proba 0 pour l'avant)
+                    targetPlayerId = backPlayerId;
+                    proba = 1.00; 
+                } else {
+                    // Si en défense, le joueur du côté de l'impact prend avec 85% de chance
+                    targetPlayerId = sidePlayerId;
+                    proba = 0.85;
+                }
+                break;
+            case 'DRIVE':
+                if (isDefPos) {
+                    targetPlayerId = sidePlayerId;
+                    proba = 0.80;
+                } else {
+                    targetPlayerId = frontPlayerId;
+                    proba = 0.40;
+                }
+                break;
+        }
+
+        // Tirage aléatoire pour appliquer la probabilité au joueur ciblé
+        const otherPlayerId = (targetPlayerId === playerId1) ? playerId2 : playerId1;
+        return (Math.random() <= proba) ? targetPlayerId : otherPlayerId;
+    }
+
 
     // ==========================================
     // BOUCLE DE JEU (Squelette)
     // ==========================================
-
-    /**
-     * Démarre un nouvel échange (Rally)
-     */
-    startRally() {
-        this.matchState.rallyInProgress = true;
-        this.matchState.incomingShotType = 'SERVE'; // On simulera un service
-        this.matchState.incomingSpin = false;
-        
-        // Reset des positions au centre ou en position de service (à implémenter)
-        // this._resetPositionsForServe();
-    }
 
     /**
      * Joue le tour d'un joueur (sera appelé en boucle)
@@ -256,7 +500,7 @@ class MatchEngine {
     }
 
     /**
-     * Termine l'échange et donne le point
+     * Termine l'échange et donne le point (Mise à jour)
      */
     _endRally(winnerId, reason) {
         this.matchState.rallyInProgress = false;
@@ -264,10 +508,43 @@ class MatchEngine {
         if (winnerId === 1) this.matchState.scoreP1++;
         else this.matchState.scoreP2++;
 
-        // Récupération de souffle entre chaque point (ex: -10% de fatigue)
-        this.recoverFatigue(0.10);
+        // Celui qui gagne le point prend le service
+        this.matchState.currentServer = winnerId;
 
-        // TODO: Vérifier si le set est gagné
-        console.log(`Point pour Joueur ${winnerId} ! (${reason}) - Score: ${this.matchState.scoreP1}-${this.matchState.scoreP2}`);
+        console.log(`Point Joueur ${winnerId} (${reason}) - Score: ${this.matchState.scoreP1}-${this.matchState.scoreP2}`);
+
+        // On vérifie immédiatement les conséquences de ce nouveau score
+        this.checkScore();
+    }
+
+    /**
+     * Démarre un nouvel échange (Rally)
+     */
+    startRally() {
+        if (this.matchState.matchOver) return;
+
+        this.matchState.rallyInProgress = true;
+        this.matchState.incomingShotType = 'SERVE'; 
+        this.matchState.incomingSpin = false;
+        
+        // Côté de service (Pair = Droite, Impair = Gauche)
+        const serverScore = this.matchState.currentServer === 1 ? this.matchState.scoreP1 : this.matchState.scoreP2;
+        const serveSide = (serverScore % 2 === 0) ? 'RIGHT' : 'LEFT';
+
+        // Génération du scénario initial (qui servira de base au KinematicEngine)
+        // Note: C'est ici que tu utiliseras generatePlacementScenario()
+        this.currentScenario = this._generateInitialScenario(this.matchState.currentServer, serveSide);
+
+        console.log(`[SERVICE] Joueur ${this.matchState.currentServer} sert à ${serveSide}`);
+    }
+
+    _generateInitialScenario(serverId, side) {
+        // C'est un "stub" (une coquille vide) en attendant d'y brancher ton vrai générateur
+        return {
+            player1Pos: { x: 0, y: 0 },
+            player2Pos: { x: 0, y: 0 },
+            shuttlePos: { x: 0, y: 0 },
+            // etc...
+        };
     }
 }
