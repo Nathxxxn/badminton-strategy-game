@@ -129,7 +129,7 @@ export class AISpawnEngine {
                     
                     let score = 0;
                     if (moveDist <= maxDist) {
-                        const res = this.placement.evaluateGlobalPlacement(p, partnerPos, shotContext, false);
+                        const res = this.placement.evaluateGlobalPlacement(p, partnerPos, shotContext, false,opponents);
                         score = res.total;
                     }
                     candidates.push({ pos: p, score: score });

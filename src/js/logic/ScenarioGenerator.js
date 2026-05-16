@@ -2,10 +2,11 @@
  * Générateur de Scénarios Tactiques et Placement
  */
 export class ScenarioGenerator {
-    constructor(tactical, placement, aiSpawn) {
+    constructor(tactical, placement, aiSpawn,kinematic) {
         this.tactical = tactical;
         this.placement = placement;
         this.aiSpawn = aiSpawn;
+        this.kinematicEngine = kinematic;
     }
 
     getRandomHand() {
@@ -65,7 +66,7 @@ export class ScenarioGenerator {
     /**
      * MODE TACTIQUE : Le joueur doit choisir le bon coup
      */
-    generateTacticalScenario() {
+    generateTacticalScenario(hand) {
         let scenario = null;
         let attempts = 0;
 
@@ -83,16 +84,16 @@ export class ScenarioGenerator {
 
             if (opp1Start.y <= limitY) {
                 possibleShots.push('NET_DROP');
+                possibleShots = possibleShots.filter(s => s !== 'SMASH');
             }
 
             const shotType = possibleShots[Math.floor(Math.random() * possibleShots.length)];
             const shotEnd = this.getRandomImpact(shotType);
-            const incomingShot = { type: shotType, startPos: opp1Start, endPos: shotEnd };
+            const incomingShot = { type: shotType, startPos: opp1Start, endPos: shotEnd, hasSpin : false };
 
-            // 3. Le partenaire adverse (Opponent 2) - Position idéale
-            const opp2Pos = this.placement.evaluateGlobalPlacement(
-                {x: 0.5, y: 0.5}, opp1Start, incomingShot, false
-            ).ideal;
+            
+
+            
 
             // 4. Position initiale basée sur le coup précédent du joueur/partenaire
             // On détermine ce que le camp du joueur a envoyé à Opp1 juste avant
@@ -107,21 +108,35 @@ export class ScenarioGenerator {
                 prevType, 
                 opp1Start, 
                 playerWasHitter, 
-                {x: 0.2, y: 0.5}, // Position fictive pour déterminer le côté gauche/droit
-                {x: 0.8, y: 0.5}
+                (playerWasHitter) ? {x: 0.2, y: 0.5} : {x: 0.8, y: 0.5} , // Position fictive pour déterminer le côté gauche/droit
+                (playerWasHitter) ? {x: 0.8, y: 0.5} : {x: 0.2, y: 0.5}
             );
+            
+            const team = [playerPos, (playerWasHitter)? {x: 0.8, y: 0.5} : {x: 0.2, y: 0.5} ];
+            // 3. Le partenaire adverse (Opponent 2) - Position idéale
+            const opp2Start = this.placement.evaluateGlobalPlacement(
+                {x: 0.5, y: 0.5}, opp1Start, incomingShot, false, team
+            ).ideal;
+            
+
+            // 5. VALIDATION : Le joueur peut-il intercepter ?
+            // On utilise un reach standard (ex: 2.0m)
+            const reachInfo = this.kinematicEngine.shotPossibility(shotType, opp1Start, {opp1: opp1Start, opp2: opp2Start}, 0.0);
+            const reachMeters = reachInfo.allowedReach
+            const impact = this.aiSpawn.getValidImpactPoint(incomingShot, playerPos, reachMeters, 0.0);
 
             const partnerPos = this.aiSpawn.getIdealPos(
                 prevType, 
                 opp1Start, 
                 !playerWasHitter, 
                 playerPos, 
-                {x: 0.5, y: 0.5} // On passe la position du joueur pour que l'équiper se place en fonction
+                (playerWasHitter) ? {x: 0.8, y: 0.5} : {x: 0.2, y: 0.5} // On passe la position du joueur pour que l'équiper se place en fonction
             );
 
-            // 5. VALIDATION : Le joueur peut-il intercepter ?
-            // On utilise un reach standard (ex: 2.0m)
-            const impact = this.aiSpawn.getValidImpactPoint(opp1Start, shotEnd, playerPos, 2.0, shotType);
+            const opp1Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp1Start, opp2Start, true, 'N1', {opp1: playerPos, opp2: partnerPos});
+            const opp1Pos = opp1Placements[0]; // On prend le meilleur pour un scénario fixe
+            const opp2Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp2Start, opp1Pos, false, 'N1', {opp1: playerPos, opp2: partnerPos});
+            const opp2Pos = opp2Placements[0]; // On prend le meilleur pour un scénario fixe
 
             if (impact) {
                 scenario = {
@@ -129,11 +144,11 @@ export class ScenarioGenerator {
                     incoming: incomingShot,
                     impactPoint: impact,
                     players: {
-                        user: { pos: playerPos, hand: 'right' }, // Le joueur est l'utilisateur
+                        user: { pos: impact, hand: hand }, // Le joueur est l'utilisateur
                         partner: { pos: partnerPos, hand: this.getRandomHand() },
                         opponents: [
-                            { pos: opp1Start, hand: opp1Hand, isHitter: true },
-                            { pos: opp2Pos, hand: this.getRandomHand(), isHitter: false }
+                            { posStart: opp1Start, posEnd : opp1Pos, hand: opp1Hand, isHitter: true },
+                            { posStart: opp2Start, posEnd : opp2Pos , hand: this.getRandomHand(), isHitter: false }
                         ]
                     }
                 };
@@ -142,74 +157,126 @@ export class ScenarioGenerator {
         return scenario;
     }
 
+
     /**
-     * MODE PLACEMENT : Le joueur doit se déplacer au bon endroit après avoir frappé
+     * MODE PLACEMENT : Le joueur doit se déplacer au bon endroit.
+     * Le coup peut être joué par le joueur OU par son partenaire (50/50).
      */
     generatePlacementScenario() {
-        // 1. Position aléatoire du joueur (pas trop au bord)
-        const playerPos = this.getRandomPos();
+        // 1. Définir les positions de base pour tester la validité des coups (proximité filet)
+        // On génère un point de départ temporaire pour tester si le KILL/NET_DROP est possible
+        const tempPlayerPos = this.getRandomPos(0.2); 
+        const opp1Start = this.getRandomPos(0.2);
+        const opp2Start = { x: 1 - opp1Start.x, y: opp1Start.y };
 
-        // 2. Génération d'un coup pour le joueur
-        const possibleShots = ['CLEAR', 'SMASH', 'DROP', 'DRIVE'];
-        const riverMeters = 1.98;
-        const limitY = (riverMeters + 1.0) / 6.70; // ~0.44 en normalisé
-
-        if (playerPos.y <= limitY) {
-            possibleShots.push('NET_DROP');
+        // 2. Détermination des coups possibles (Logique similaire à Tactical)
+        let possibleShots = ['CLEAR', 'SMASH', 'DROP', 'DRIVE'];
+        
+        // Test de proximité pour KILL et NET_DROP (si le joueur est proche du filet)
+        // On considère le filet à y=0 pour le joueur (en coordonnées normalisées inversées ou selon ton repère)
+        // Si y < 0.30, il est assez proche pour agresser
+        if (tempPlayerPos.y < 0.35) {
+            possibleShots.push('KILL', 'NET_DROP');
+            // Si on peut tuer au filet, le SMASH fond de court est exclu de la sélection
+            possibleShots = possibleShots.filter(s => s !== 'SMASH');
         }
 
         const userShotType = possibleShots[Math.floor(Math.random() * possibleShots.length)];
         const userShotEnd = this.getRandomImpact(userShotType);
-        const shotContext = { type: userShotType, endPos: userShotEnd };
+        const shotContext = { type: userShotType, startPos : tempPlayerPos, endPos: userShotEnd, hasSpin: false };
 
-        // 3. Adversaires placés selon le coup qu'ils ont fait AVANT le coup du joueur
-        const prevOppType = this.getPreviousShotType(userShotType);
-        // Le point d'impact du coup précédent des adversaires est la position de départ du joueur
-        const prevOppShotContext = { type: prevOppType, endPos: playerPos };
+        // 3. Déterminer qui frappe (50% Joueur, 50% Partenaire)
+        const isUserStriker = Math.random() > 0.5;
 
-        // On simule quel adversaire a frappé le coup précédent
-        const opp1WasHitter = Math.random() > 0.5;
+        // 4. Positions de départ cohérentes (Start)
+        let playerStart, partnerStart;
+        const isShortShot = ['KILL', 'NET_DROP'].includes(userShotType);
 
-        const opp1Pos = this.aiSpawn.getIdealPos(
-            prevOppType, 
-            playerPos, 
-            opp1WasHitter, 
-            {x: 0.2, y: 0.5}, 
-            {x: 0.8, y: 0.5}
-        );
-
-        const opp2Pos = this.aiSpawn.getIdealPos(
-            prevOppType, 
-            playerPos, 
-            !opp1WasHitter, 
-            opp1Pos, 
-            {x: 0.5, y: 0.5}
-        );
-
-        // 4. Partenaire du joueur (Logique de "l'attaque précédente")
-        // On simule qu'il était en position d'attaque (ex: Smash)
-        const isAttack = ['SMASH', 'DROP', 'KILL'].includes(userShotType);
-        let partnerStart;
-        
-        if (isAttack) {
-            // S'il attaque, le partenaire était probablement déjà en formation attaque (devant/derrière)
-            partnerStart = this.placement.getIdealSmashPos(userShotEnd, playerPos.y < 0.5);
+        if (isShortShot) {
+            // Formation Filet/Fond
+            playerStart = { x: 0.3 + Math.random() * 0.4, y: 0.10 + Math.random() * 0.15 };
+            partnerStart = { x: 0.5, y: 0.7 };
+        } else if (['SMASH', 'DROP'].includes(userShotType)) {
+            // Formation Attaque (un devant, un derrière)
+            playerStart = { x: 0.2 + Math.random() * 0.6, y: 0.7 + Math.random() * 0.2 };
+            partnerStart = { x: playerStart.x, y: 0.3 };
         } else {
-            // Sinon, position de défense neutre
-            partnerStart = { x: 1 - playerPos.x, y: playerPos.y }; 
+            // Défense neutre (Côte à côte avec léger décalage Y comme demandé)
+            playerStart = this.getRandomPos(0.2);
+            partnerStart = { 
+                x: 1 - playerStart.x, 
+                y: (playerStart.y < 0.5) ? playerStart.y + 0.25 : playerStart.y - 0.25 
+            };
         }
 
+        // Si le partenaire est le frappeur, on inverse les positions de départ
+        if (!isUserStriker) {
+            const temp = { ...playerStart };
+            playerStart = { ...partnerStart };
+            partnerStart = temp;
+        }
+        shotContext.startPos = isUserStriker ? playerStart : partnerStart;
+        // 5. Calcul des réactions des adversaires (End)
+        // 5. CALCUL DES RÉACTIONS DES ADVERSAIRES (CORRIGÉ)
+        // Pour les adversaires, le replacement (posEnd) dépend de ce qu'ILS ont joué avant
+        const prevOppType = this.getPreviousShotType(userShotType);
+        
+        // On crée le contexte du coup adverse précédent (ils ont visé le frappeur actuel)
+        const strikerStartPos = isUserStriker ? playerStart : partnerStart;
+        const prevOppShotContext = { 
+            type: prevOppType, 
+            endPos: strikerStartPos, 
+            hasSpin: false 
+        };
+
+        const opp1Start = this.getRandomPos(0.2);
+        const opp2Start = { x: 1 - opp1Start.x, y: opp1Start.y };
+
+        // On calcule où ils finissent leur mouvement de replacement après LEUR coup
+        // opp1 est considéré comme le frappeur du coup précédent (isHitter = true)
+        const opp1End = this.aiSpawn.generateBestPlacement(
+            prevOppShotContext, 
+            opp1Start, 
+            opp2Start, 
+            true, 
+            'N1', 
+            { player: playerStart, partner: partnerStart }
+        )[0];
+
+        const opp2End = this.aiSpawn.generateBestPlacement(
+            prevOppShotContext, 
+            opp2Start, 
+            opp1Start, 
+            false, 
+            'N1', 
+            { player: playerStart, partner: partnerStart }
+        )[0];
+
+        const currentOpps = [ opp1End, opp2End ];
+
+        // 6. Calcul du déplacement du partenaire
+        // Si l'utilisateur frappe (isUserStriker=true), le partenaire est "l'autre" (isHitter=false)
+        // Si le partenaire frappe (isUserStriker=false), le partenaire est "le frappeur" (isHitter=true)
+        const partnerEval = this.placement.evaluateGlobalPlacement(
+            partnerStart, 
+            playerStart, 
+            shotContext, 
+            !isUserStriker, 
+            currentOpps
+        );
+
+        // Note : On ne renvoie pas 'target' (playerEval.ideal) car DEV A le calculera dynamiquement.
         return {
             mode: 'PLACEMENT',
-            playerStart: playerPos,
-            shotPlayed: shotContext,
+            isUserStriker: isUserStriker, // Indique au moteur qui a la main sur le coup
+            playerStart: playerStart,
             partnerStart: partnerStart,
+            partnerEnd: partnerEval.ideal,
+            shotPlayed: shotContext,
             opponents: [
-                { pos: opp1Pos, hand: this.getRandomHand() },
-                { pos: opp2Pos, hand: this.getRandomHand() }
-            ],
-            // La solution attendue sera calculée par placement.evaluateGlobalPlacement
-            target: this.placement.evaluateGlobalPlacement(playerPos, partnerStart, shotContext, true).ideal
+                { posStart: opp1Start, posEnd: opp1End, hand: this.getRandomHand() },
+                { posStart: opp2Start, posEnd: opp2End, hand: this.getRandomHand() }
+            ]
         };
     }
 }
