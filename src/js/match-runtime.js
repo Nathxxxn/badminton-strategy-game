@@ -1,4 +1,5 @@
-import { BASE_REACTION_TIMES, calculateAdjustedTime, RATING_THRESHOLDS } from './logic/MatchEngine.js';
+import { BASE_REACTION_TIMES, calculateAdjustedTime } from './logic/KinematicEngine.js';
+import { RATING_THRESHOLDS } from './logic/RatingEngine.js';
 
 export const MATCH_TARGET_POINTS = 5;
 export const MATCH_POINT_CAP = 11;

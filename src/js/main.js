@@ -33,6 +33,7 @@ import { ShotTypeSelector, clampPowerForType } from './shot-type-selector.js';
 import { AISpawnEngine }          from './logic/AISpawnEngine.js';
 import { KinematicEngine }        from './logic/KinematicEngine.js';
 import { PlacementEngine }        from './logic/PlacementEngine.js';
+import { TacticalEngine }        from './logic/TacticalEngine.js';
 import {
   createMatchState,
   applyMatchPoint,
@@ -62,7 +63,7 @@ const FULL_COURT_LENGTH_M = 13.40;
 const MOVE_RADIUS_STROKE = 'rgba(94, 234, 212, 0.42)';
 const UI_SHOT_TYPES = ['SMASH', 'DROP', 'DRIVE', 'CLEAR', 'KILL', 'NET_DROP', 'NET_CLEAR'];
 const kinematicEngine = new KinematicEngine();
-const impactSpawnEngine = new AISpawnEngine(null, new PlacementEngine(), kinematicEngine);
+const impactSpawnEngine = new AISpawnEngine(new TacticalEngine(), new PlacementEngine(), kinematicEngine);
 const SHOT_PROFILES = kinematicEngine.SHOT_PARAMS;
 const ALL_SHOT_TYPES = UI_SHOT_TYPES.filter(type => SHOT_PROFILES[type]);
 const DEFAULT_PLAYER_PROFILE = Object.freeze({

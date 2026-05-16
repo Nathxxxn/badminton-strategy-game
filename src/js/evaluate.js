@@ -2,6 +2,7 @@ import { KinematicEngine } from './logic/KinematicEngine.js';
 import { PlacementEngine } from './logic/PlacementEngine.js';
 import { TacticalEngine } from './logic/TacticalEngine.js';
 import { FeedbackEngine } from './logic/FeedbackEngine.js';
+
 import {
   adaptExercise,
   toFullCourtAlly,
@@ -12,10 +13,13 @@ import {
 const DEFAULT_PASSING_SCORE = 70;
 const DEFAULT_HAND = 'right';
 
-const tacticalEngine = new TacticalEngine();
-const placementEngine = new PlacementEngine();
+
 const kinematicEngine = new KinematicEngine();
+const placementEngine = new PlacementEngine(kinematicEngine);
+const tacticalEngine = new TacticalEngine(); 
 const feedbackEngine = new FeedbackEngine();
+
+
 
 function cloneHandSpec(spec = {}) {
   return { hand: spec.hand ?? DEFAULT_HAND };

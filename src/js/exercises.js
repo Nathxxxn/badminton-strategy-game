@@ -1,9 +1,8 @@
 import { MOCK_EXERCISES, MOCK_RALLIES } from './mock-data.js';
-import { KinematicEngine }    from './logic/KinematicEngine.js';
-import { TacticalEngine }     from './logic/TacticalEngine.js';
-import { PlacementEngine }    from './logic/PlacementEngine.js';
-import { AISpawnEngine }      from './logic/AISpawnEngine.js';
-import { ScenarioGenerator }  from './logic/ScenarioGenerator.js';
+import { KinematicEngine } from './logic/KinematicEngine.js';
+import { PlacementEngine } from './logic/PlacementEngine.js';
+import { TacticalEngine } from './logic/TacticalEngine.js';
+import { ScenarioGenerator } from './logic/ScenarioGenerator.js';
 import { toFullCourtAlly, toFullCourtOpp } from './coord-adapter.js';
 
 const DATA_FILES = {
@@ -371,10 +370,10 @@ function getGenerator() {
   if (_generator) return _generator;
   const kinematic = new KinematicEngine();
   const tactical  = new TacticalEngine();
-  const placement = new PlacementEngine();
+  const placement = new PlacementEngine(kinematic);
   const aiSpawn   = new AISpawnEngine(tactical, placement, kinematic);
   _genEngines = { kinematic, placement };
-  _generator  = new ScenarioGenerator(tactical, placement, aiSpawn);
+  _generator  = new ScenarioGenerator(tactical, placement, aiSpawn,kinematic);
   return _generator;
 }
 

@@ -25,7 +25,7 @@ import {
   signupAsync,
 } from './app-state.js';
 import { showToast } from './ui-feedback.js';
-import { RATING_THRESHOLDS } from './logic/MatchEngine.js';
+import { RATING_THRESHOLDS } from './logic/RatingEngine.js';
 
 const INK = '#0f1a14';
 
