@@ -276,7 +276,8 @@ export class PlacementEngine {
     evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter,opponents) {
         const shotType = shotContext.type;
         const shuttleEndPos = shotContext.endPos;
-        const reachMeters = this.kinematicEngine.movementPossibility(shotContext,opponents);
+        const movementInfo = this.kinematicEngine.movementPossibility(shotContext, opponents);
+        const reachMeters = (movementInfo && typeof movementInfo === 'object' ? movementInfo.allowedReach : movementInfo) || 3.0;
         const bestPlacement = this.findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter, reachMeters);
         const bestScore = bestPlacement.score;
 

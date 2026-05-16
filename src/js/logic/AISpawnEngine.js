@@ -96,12 +96,14 @@ export class AISpawnEngine {
         
         // 1. Récupérer la range autorisée (définie dans KinematicEngine selon le coup joué)
         // On suppose que kinematicEngine est accessible via this.kinematic
-        const maxDist = this.kinematic.movementPossibility(shotContext, opponents) || 3.0;
+        // 1. Récupérer la range autorisée (Extraction sécurisée de la propriété de l'objet cinématique)
+        const movementInfo = this.kinematic.movementPossibility(shotContext, opponents);
+        const maxDist = (movementInfo && typeof movementInfo === 'object' ? movementInfo.allowedReach : movementInfo) || 3.0;
 
         // Calcul de la position idéale théorique pour le fallback
         const ideal = this.getIdealPos(shotContext.type, shotContext.endPos, isHitter, playerPos, partnerPos);
 
-        if (!(isHitter)) {
+        if ((isHitter)) {
             // GÉNÉRATION DU NUAGE (Hitter)
             for (let i = 0; i < 200; i++) {
                 const p = {
@@ -121,7 +123,7 @@ export class AISpawnEngine {
                 candidates.push({ pos: p, score: score });
             }
         } else {
-            // BALAYAGE GRID (Équipier)
+            // BALAYAGE GRID (Partner)
             for (let x = 0.05; x <= 0.95; x += 0.1) {
                 for (let y = 0.05; y <= 0.95; y += 0.1) {
                     const p = { x, y };
