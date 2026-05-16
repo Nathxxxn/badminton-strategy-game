@@ -7,7 +7,7 @@
  * Génère le tableau des temps de réaction avec une progression linéaire
  * entre N1 (Base) et P12 (Base x 4)
  */
-const generateReactionTimes = () => {
+export const generateReactionTimes = () => {
     const ranks = ['N1', 'N2', 'N3', 'R4', 'R5', 'R6', 'D7', 'D8', 'D9', 'P10', 'P11', 'P12'];
     
     // Valeurs de référence pour N1 (le niveau le plus rapide)
@@ -35,6 +35,7 @@ const generateReactionTimes = () => {
             table[rank][shot] = Math.round(n1Base[shot] * multiplier);
         }
     });
+    table['NC'] = table['D9'];
 
     return table;
 };

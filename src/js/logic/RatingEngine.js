@@ -27,13 +27,14 @@ export const RATING_COLORS = {
     'N':  '#f87171'  // Rouge
 };
 
-this.ELO_K_FACTOR = 500; // Facteur de lissage pour le gain de points
+
 
 /**
  * Calcule le gain de points de classement après une victoire
  */
 export class RatingEngine{
     calculateRankingGain(winnerPoints, loserPoints) {
+        this.ELO_K_FACTOR = 500; // Facteur de lissage pour le gain de points
         const base = 15;
         const diff = loserPoints - winnerPoints;
         return Math.max(1, Math.round(base * (1 + diff / this.ELO_K_FACTOR)));

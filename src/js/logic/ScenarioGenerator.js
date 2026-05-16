@@ -229,8 +229,6 @@ export class ScenarioGenerator {
             hasSpin: false 
         };
 
-        const opp1Start = this.getRandomPos(0.2);
-        const opp2Start = { x: 1 - opp1Start.x, y: opp1Start.y };
 
         // On calcule où ils finissent leur mouvement de replacement après LEUR coup
         // opp1 est considéré comme le frappeur du coup précédent (isHitter = true)
