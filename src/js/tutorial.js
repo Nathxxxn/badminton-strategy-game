@@ -439,7 +439,7 @@ export class TutorialManager {
         this._root.style.pointerEvents = '';
         if (backBtn) backBtn.removeEventListener('click', onBack);
         resolve();
-      }, 45000);
+      }, 30000);
 
       const observer = {
         onShotResult: ({ shot }) => {

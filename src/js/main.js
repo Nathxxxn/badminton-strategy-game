@@ -659,6 +659,11 @@ async function onPositionClick(e) {
     partnerDist: feedback.details?.realDistance,
   });
 
+  // In tutorial mode pin the optimal indicator to the declared goal zone center.
+  if (_tutorialMode && _tutorialGoalCenter) {
+    feedback.idealPositionRender = _tutorialGoalCenter;
+  }
+
   // Tier governs the choice-marker color in drawChoiceVsOptimal.
   const tier =
     feedback.totalScore >= 85 ? 'good' :
