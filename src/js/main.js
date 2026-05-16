@@ -118,8 +118,9 @@ const shotTypeSelector = new ShotTypeSelector(
 // ─── Game state ───────────────────────────────────────────────────────────────
 
 /** Tutorial mode: bypasses timer, scoring, and screen routing */
-let _tutorialMode     = false;
-let _tutorialObserver = null; // { onShotResult(data), onPositionResult(data) }
+let _tutorialMode      = false;
+let _tutorialObserver  = null; // { onShotResult(data), onPositionResult(data) }
+let _tutorialGoalCenter = null; // {x,y} normalized — overrides correctionRenderPos on shot feedback
 
 /** @type {Array|null} Active rally turn list */
 let currentRally    = null;
@@ -642,7 +643,15 @@ async function onPositionClick(e) {
 
   await animatePlacementResolution(turn, pos);
 
-  const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
+  let feedback;
+  try {
+    feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
+  } catch (err) {
+    if (!_tutorialMode) throw err;
+    // Tutorial scenarios may lack fields expected by the evaluator — use a
+    // minimal fallback so the visual pipeline (animation, feedback frame) still runs.
+    feedback = { totalScore: 0, messages: [], idealPositionRender: pos };
+  }
   const isCorrect = feedback.totalScore >= (turn.passingScore ?? 70);
   recordPlacementFeedback(feedback);
   hud.updateTurnStats('positioning', {
@@ -767,6 +776,11 @@ async function onShotFired(shot) {
     bonus: feedback.details?.breakdown?.bonus ?? 0,
   });
 
+  // In tutorial mode pin the optimal indicator to the declared goal zone center.
+  if (_tutorialMode && _tutorialGoalCenter) {
+    feedback.correctionRenderPos = _tutorialGoalCenter;
+  }
+
   // Freeze result frame
   renderFeedbackFrame(turn, {
     showShuttle: false,
@@ -840,9 +854,10 @@ function applyScore(pts, isCorrect) {
  * @param {Object} rawScenario  Frozen scenario object (will be deep-cloned)
  * @param {{ onShotResult: Function, onPositionResult: Function }} observer
  */
-export function startTutorialTurn(rawScenario, observer) {
+export function startTutorialTurn(rawScenario, observer, goalCenter = null) {
   _tutorialMode = true;
   _tutorialObserver = observer;
+  _tutorialGoalCenter = goalCenter;
   const cloned = structuredClone(rawScenario);
   const prepared = prepareTurnForRuntime(cloned);
   prepared.__raw = rawScenario;
@@ -881,6 +896,7 @@ export function retryTutorialTurn() {
 export function endTutorialMode() {
   _tutorialMode = false;
   _tutorialObserver = null;
+  _tutorialGoalCenter = null;
   stopTurnTimer();
   cleanupTurnListeners();
   turnActive = false;

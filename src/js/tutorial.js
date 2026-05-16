@@ -422,12 +422,24 @@ export class TutorialManager {
       };
       if (backBtn) backBtn.addEventListener('click', onBack, { once: true });
 
+      let autoAdvanceId = null;
+
       const advanceAfterSuccess = () => {
+        clearTimeout(autoAdvanceId);
         if (backBtn) backBtn.removeEventListener('click', onBack);
         this._root.style.pointerEvents = '';
         this._removeGoalHighlight();
         setTimeout(() => resolve(), 1200);
       };
+
+      // 45 s fallback — auto-advance even if the user never completes the exercise.
+      autoAdvanceId = setTimeout(() => {
+        endTutorialMode();
+        this._removeGoalHighlight();
+        this._root.style.pointerEvents = '';
+        if (backBtn) backBtn.removeEventListener('click', onBack);
+        resolve();
+      }, 45000);
 
       const observer = {
         onShotResult: ({ shot }) => {
@@ -446,7 +458,14 @@ export class TutorialManager {
         },
       };
 
-      startTutorialTurn(step.scenario, observer);
+      // Compute goal zone center to pin the optimal indicator inside the zone.
+      let goalCenter = null;
+      if (step.goalZone && ZONES[step.goalZone]) {
+        const z = ZONES[step.goalZone];
+        goalCenter = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 };
+      }
+
+      startTutorialTurn(step.scenario, observer, goalCenter);
 
       // Goal zone rendered after startTutorialTurn so canvas is initialised
       setTimeout(() => this._showGoalHighlight(step.goalZone), 400);
