@@ -78,7 +78,7 @@ export class ScenarioGenerator {
             const opp1Hand = this.getRandomHand();
             
             /// 2. Le coup de l'adversaire
-            const possibleShots = ['CLEAR', 'SMASH', 'DROP', 'DRIVE'];
+            let possibleShots = ['CLEAR', 'SMASH', 'DROP', 'DRIVE'];
             const riverMeters = 1.98;
             const limitY = (riverMeters + 1.0) / 6.70; // ~0.44 en normalisé
 
@@ -133,10 +133,11 @@ export class ScenarioGenerator {
                 (playerWasHitter) ? {x: 0.8, y: 0.5} : {x: 0.2, y: 0.5} // On passe la position du joueur pour que l'équiper se place en fonction
             );
 
-            const opp1Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp1Start, opp2Start, true, 'N1', {opp1: playerPos, opp2: partnerPos});
-            const opp1Pos = opp1Placements[0]; // On prend le meilleur pour un scénario fixe
-            const opp2Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp2Start, opp1Pos, false, 'N1', {opp1: playerPos, opp2: partnerPos});
-            const opp2Pos = opp2Placements[0]; // On prend le meilleur pour un scénario fixe
+            const opp1Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp1Start, opp2Start, true, 'N1', [playerPos, partnerPos]);
+            const opp1Pos = opp1Placements; // On prend le meilleur pour un scénario fixe
+
+            const opp2Placements = this.aiSpawn.generateBestPlacement(incomingShot, opp2Start, opp1Pos, false, 'N1', [playerPos, partnerPos]);
+            const opp2Pos = opp2Placements; // On prend le meilleur pour un scénario fixe
 
             if (impact) {
                 scenario = {
@@ -225,6 +226,7 @@ export class ScenarioGenerator {
         const strikerStartPos = isUserStriker ? playerStart : partnerStart;
         const prevOppShotContext = { 
             type: prevOppType, 
+            startPos: opp1Start,
             endPos: strikerStartPos, 
             hasSpin: false 
         };
@@ -238,8 +240,8 @@ export class ScenarioGenerator {
             opp2Start, 
             true, 
             'N1', 
-            { player: playerStart, partner: partnerStart }
-        )[0];
+            [playerStart,partnerStart ]
+        );
 
         const opp2End = this.aiSpawn.generateBestPlacement(
             prevOppShotContext, 
@@ -247,8 +249,8 @@ export class ScenarioGenerator {
             opp1Start, 
             false, 
             'N1', 
-            { player: playerStart, partner: partnerStart }
-        )[0];
+            [playerStart, partnerStart ]
+        );
 
         const currentOpps = [ opp1End, opp2End ];
 
@@ -272,8 +274,8 @@ export class ScenarioGenerator {
             partnerEnd: partnerEval.ideal,
             shotPlayed: shotContext,
             opponents: [
-                { posStart: opp1Start, posEnd: opp1End, hand: this.getRandomHand() },
-                { posStart: opp2Start, posEnd: opp2End, hand: this.getRandomHand() }
+                { posStart: opp1End, hand: this.getRandomHand() },
+                { posStart: opp2End, hand: this.getRandomHand() }
             ]
         };
     }

@@ -433,7 +433,7 @@ function renderLeaderboardPage(state) {
     <div class="lb-tabs" role="tablist" aria-label="Leaderboard type">
       <button class="lb-tab ${activeTab === 'rating'    ? 'active' : ''}" type="button" data-lb-tab="rating">⭐ Rating FFBAD</button>
       <button class="lb-tab ${activeTab === 'placement' ? 'active' : ''}" type="button" data-lb-tab="placement">📍 Placement</button>
-      <button class="lb-tab ${activeTab === 'tactical'  ? 'active' : ''}" type="button" data-lb-tab="tactical">🎯 Tactique</button>
+      <button class="lb-tab ${activeTab === 'tactical'  ? 'active' : ''}" type="button" data-lb-tab="tactical">🎯 Tactic</button>
     </div>
     <div class="personal-rank-grid">
       <article class="personal-rank-card card">
@@ -723,7 +723,7 @@ function ratingHistoryModalMarkup(state) {
         <div class="rating-delta-row">
           ${nextRankEntry ? `
             <div class="rating-delta-card positive">
-              <span class="delta-label">Vers ${nextRankEntry[0]}</span>
+              <span class="delta-label">Until ${nextRankEntry[0]}</span>
               <strong>+${ptsToNext} pts</strong>
             </div>` : `
             <div class="rating-delta-card positive">
@@ -732,7 +732,7 @@ function ratingHistoryModalMarkup(state) {
             </div>`}
           ${prevRankEntry ? `
             <div class="rating-delta-card negative">
-              <span class="delta-label">Au-dessus de ${prevRankEntry[0]}</span>
+              <span class="delta-label">Above${prevRankEntry[0]}</span>
               <strong>+${ptsAbovePrev} pts</strong>
             </div>` : `
             <div class="rating-delta-card negative">

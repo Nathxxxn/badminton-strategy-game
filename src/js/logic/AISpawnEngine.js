@@ -75,7 +75,7 @@ export class AISpawnEngine {
                 for (let y = 0.05; y <= 0.95; y += step) {
                     const res = this.tactical.evaluateSituation(incoming, { type, endPos: {x, y} }, opponents, startPos);
                     // Application
-                    const rankProb = spinProbabilities[strikerRank] || 0.0;
+                    const rankProb = spinProbabilities[rank] || 0.0;
                     const hasSpin = (type === 'NET_DROP') ? (Math.random() < rankProb) : false;
                     allPossibleShots.push({ type, startPos : startPos, endPos: {x, y}, score: res.score, hasSpin : hasSpin });
                 }
@@ -101,7 +101,7 @@ export class AISpawnEngine {
         // Calcul de la position idéale théorique pour le fallback
         const ideal = this.getIdealPos(shotContext.type, shotContext.endPos, isHitter, playerPos, partnerPos);
 
-        if (not (isHitter)) {
+        if (!(isHitter)) {
             // GÉNÉRATION DU NUAGE (Hitter)
             for (let i = 0; i < 200; i++) {
                 const p = {
