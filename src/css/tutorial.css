@@ -45,9 +45,9 @@
   position: fixed;
   inset: 0;
   z-index: 491;
-  background: rgba(10, 14, 22, 0.82);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 26, 20, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   opacity: 0;
   transition: opacity 220ms ease;
 }

@@ -640,13 +640,6 @@ async function onPositionClick(e) {
   stopTurnTimer();
   const pos = constrainPlacementPos(turn, point);
 
-  // Tutorial mode: skip evaluation and async animations entirely.
-  // tutorial.js successCheck uses getZoneAt(pos.x, pos.y) to decide correctness.
-  if (_tutorialMode && _tutorialObserver) {
-    _tutorialObserver.onPositionResult({ isCorrect: true, pos, turn });
-    return;
-  }
-
   await animatePlacementResolution(turn, pos);
 
   const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
@@ -681,10 +674,18 @@ async function onPositionClick(e) {
     },
   );
 
+  // In tutorial mode pass a timeout so the message auto-dismisses without
+  // waiting for the "Continuer →" button (which is not shown in tutorial).
   await hud.showMessages(
     buildScoreLines(feedback.totalScore, feedback.messages ?? []),
     isCorrect ? '#34d399' : '#f87171',
+    _tutorialMode ? 2200 : undefined,
   );
+
+  if (_tutorialMode && _tutorialObserver) {
+    _tutorialObserver.onPositionResult({ isCorrect, pos, turn });
+    return;
+  }
 
   applyScore(feedback.totalScore, isCorrect);
   if (currentWorkshop !== 'match') await waitForContinue();
@@ -766,12 +767,6 @@ async function onShotFired(shot) {
     bonus: feedback.details?.breakdown?.bonus ?? 0,
   });
 
-  // Tutorial mode: report result immediately, skip all canvas feedback rendering
-  if (_tutorialMode && _tutorialObserver) {
-    _tutorialObserver.onShotResult({ isCorrect, shot: bridedShot, turn });
-    return;
-  }
-
   // Freeze result frame
   renderFeedbackFrame(turn, {
     showShuttle: false,
@@ -799,6 +794,11 @@ async function onShotFired(shot) {
     isCorrect ? '#34d399' : '#f87171',
     2200,
   );
+
+  if (_tutorialMode && _tutorialObserver) {
+    _tutorialObserver.onShotResult({ isCorrect, shot: bridedShot, turn });
+    return;
+  }
 
   applyScore(feedback.totalScore, isCorrect);
   if (currentWorkshop !== 'match') await waitForContinue();
