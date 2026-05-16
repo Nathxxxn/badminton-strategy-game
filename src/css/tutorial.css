@@ -1,0 +1,293 @@
+/* ── Tutorial entry button (Drills page) ──────────────────────────────────── */
+
+.tutorial-cta-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  margin: 0 36px 20px;
+  flex-wrap: wrap;
+}
+
+.tutorial-cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tutorial-cta-body strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--rally-ink);
+  font-family: var(--font-rally);
+}
+.tutorial-cta-body span {
+  font-size: 12px;
+  color: var(--rally-ink-soft);
+  font-family: var(--font-rally-mono);
+}
+
+/* ── Tutorial overlay root ───────────────────────────────────────────────── */
+
+#tutorial-root {
+  position: fixed;
+  inset: 0;
+  z-index: 490;
+  pointer-events: none;
+}
+#tutorial-root.tut-active {
+  pointer-events: auto;
+}
+
+/* ── Backdrop (panels + end card) ────────────────────────────────────────── */
+
+.tut-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 491;
+  background: rgba(10, 14, 22, 0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.tut-overlay.tut-visible {
+  opacity: 1;
+}
+
+/* ── Cinematic panel — game-styled (cream + ink) ──────────────────────────── */
+
+.tut-panel {
+  position: fixed;
+  z-index: 500;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -46%);
+  max-width: 460px;
+  width: 90%;
+  background: var(--rally-cream);
+  border: 4px solid var(--rally-ink);
+  border-radius: 18px;
+  padding: 28px 32px;
+  box-shadow: 8px 8px 0 0 var(--rally-ink);
+  color: var(--rally-ink);
+  font-family: var(--font-rally);
+  opacity: 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.tut-panel.tut-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.tut-panel-eyebrow {
+  font-family: var(--font-rally-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rally-ink-soft);
+  margin-bottom: 8px;
+}
+
+.tut-panel-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--rally-ink);
+  line-height: 1.2;
+  margin-bottom: 14px;
+}
+
+.tut-panel-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--rally-ink-soft);
+  white-space: pre-line;
+}
+
+.tut-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+}
+
+.tut-progress {
+  font-family: var(--font-rally-mono);
+  font-size: 11px;
+  color: var(--rally-ink-soft);
+  opacity: 0.55;
+  letter-spacing: 0.06em;
+}
+
+.tut-btn-next {
+  background: var(--rally-accent);
+  color: var(--rally-ink);
+  border: 3px solid var(--rally-ink);
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-rally-mono);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.tut-btn-next:hover  { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 var(--rally-ink); }
+.tut-btn-next:active { transform: translate(2px, 2px);   box-shadow: 1px 1px 0 0 var(--rally-ink); }
+
+/* ── Spotlight cutout ────────────────────────────────────────────────────── */
+
+.tut-spotlight-veil {
+  position: fixed;
+  z-index: 495;
+  pointer-events: none;
+  border-radius: 10px;
+  outline: 2px solid var(--rally-accent);
+  box-shadow: 0 0 0 9999px rgba(10, 14, 22, 0.80);
+  transition: left 200ms ease, top 200ms ease, width 200ms ease, height 200ms ease;
+}
+
+/* ── Tooltip card — game-styled ──────────────────────────────────────────── */
+
+.tut-tooltip {
+  position: fixed;
+  z-index: 500;
+  max-width: 300px;
+  background: var(--rally-cream);
+  border: 3px solid var(--rally-ink);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  padding: 16px 20px;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  font-family: var(--font-rally);
+  color: var(--rally-ink);
+}
+.tut-tooltip.tut-visible { opacity: 1; }
+
+.tut-tooltip-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--rally-ink-soft);
+  margin-bottom: 14px;
+}
+
+.tut-tooltip-next {
+  display: inline-block;
+  background: var(--rally-accent);
+  color: var(--rally-ink);
+  border: 2px solid var(--rally-ink);
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 0 var(--rally-ink);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-rally-mono);
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.tut-tooltip-next:hover  { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 var(--rally-ink); }
+.tut-tooltip-next:active { transform: translate(1px, 1px);   box-shadow: 1px 1px 0 0 var(--rally-ink); }
+
+/* Arrow pointer for tooltip */
+.tut-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--rally-cream);
+  border-left: 3px solid var(--rally-ink);
+  border-top: 3px solid var(--rally-ink);
+}
+.tut-tooltip[data-arrow="bottom"]::before {
+  bottom: -7px; left: 22px;
+  transform: rotate(225deg);
+}
+.tut-tooltip[data-arrow="top"]::before {
+  top: -7px; left: 22px;
+  transform: rotate(45deg);
+}
+.tut-tooltip[data-arrow="right"]::before {
+  right: -7px; top: 18px;
+  transform: rotate(135deg);
+}
+.tut-tooltip[data-arrow="left"]::before {
+  left: -7px; top: 18px;
+  transform: rotate(-45deg);
+}
+
+/* ── Retry banner ─────────────────────────────────────────────────────────── */
+
+.tut-retry-banner {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 502;
+  background: #7f1d1d;
+  border: 3px solid var(--rally-ink);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 0 var(--rally-ink);
+  padding: 12px 28px;
+  font-size: 13px;
+  font-family: var(--font-rally-mono);
+  font-weight: 600;
+  color: #fca5a5;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: tut-shake 0.42s ease;
+}
+
+@keyframes tut-shake {
+  0%, 100% { transform: translateX(-50%); }
+  20%       { transform: translateX(calc(-50% - 7px)); }
+  40%       { transform: translateX(calc(-50% + 7px)); }
+  60%       { transform: translateX(calc(-50% - 4px)); }
+  80%       { transform: translateX(calc(-50% + 4px)); }
+}
+
+@media (max-width: 640px) {
+  .tutorial-cta-card { margin: 0 18px 16px; }
+}
+
+/* ── Goal zone highlight (on canvas) ─────────────────────────────────────── */
+
+.tut-goal-highlight {
+  position: fixed;
+  z-index: 496;
+  pointer-events: none;
+  border: 2px dashed var(--rally-accent);
+  border-radius: 4px;
+  background: rgba(255, 210, 63, 0.08);
+  animation: tut-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes tut-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Action banner (during interactive phase) ────────────────────────────── */
+
+.tut-action-banner {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 502;
+  background: var(--rally-ink);
+  border: 2px solid var(--rally-accent);
+  border-radius: 10px;
+  padding: 10px 24px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-rally-mono);
+  color: var(--rally-accent);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 4px 4px 0 0 rgba(0,0,0,0.3);
+}

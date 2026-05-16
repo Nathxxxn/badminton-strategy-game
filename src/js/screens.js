@@ -284,6 +284,7 @@ function drillCardMarkup(drill) {
 }
 
 function renderDrillsPage(state) {
+  const tutorialDone = !!localStorage.getItem('rally.tutorialDone');
   const dailyDrill = DRILLS_LIST[0];
   const categories = ['All', 'Attack', 'Defense'];
   const activeFilter = categories.includes(state.preferences.drillFilter) ? state.preferences.drillFilter : 'All';
@@ -311,39 +312,15 @@ function renderDrillsPage(state) {
           `).join('')}
         </div>`,
     })}
-    <details class="tutorial-card card">
-      <summary class="tutorial-summary">
-        <span class="tutorial-icon">${SVG_SHUTTLE}</span>
-        <span>
-          <strong>Tutoriel</strong>
-          <span class="tutorial-sub">Déplacements · Coups · Spin · Exemples de coups ratés</span>
-        </span>
-        <span class="tutorial-chevron">▸</span>
-      </summary>
-      <div class="tutorial-body">
-        <div class="tutorial-section">
-          <p class="tutorial-label">DÉPLACEMENTS</p>
-          <p>En exercice de <em>placement</em>, clique dans ta moitié de terrain pour indiquer où tu veux te positionner. La zone de portée (cercle pointillé) limite tes déplacements réalistes.</p>
-        </div>
-        <div class="tutorial-section">
-          <p class="tutorial-label">COUPS — DRAG TO SHOOT</p>
-          <p>En exercice de <em>tactique</em>, maintiens et fais glisser depuis la volant pour viser. <strong>Longueur du glisser = puissance</strong> (court = touche, long = smash). La trajectoire prévisualisée s'adapte au type de coup sélectionné.</p>
-        </div>
-        <div class="tutorial-section">
-          <p class="tutorial-label">SPIN / EFFET</p>
-          <p>Un glisser légèrement courbé ajoute de l'effet. La courbe du trait indique le sens : <em>incurvé à gauche</em> = slice gauche, <em>à droite</em> = slice droit. L'indicateur de trajectoire affiche des boucles quand le spin est détecté.</p>
-        </div>
-        <div class="tutorial-section">
-          <p class="tutorial-label">COUPS RATÉS — EXEMPLES FRÉQUENTS</p>
-          <ul class="tutorial-list">
-            <li><strong>Filet</strong> : puissance trop faible sur un smash depuis le fond, ou trajectoire trop rasante.</li>
-            <li><strong>Trop long</strong> : clear avec trop de puissance depuis la moitié de terrain.</li>
-            <li><strong>Mauvaise zone</strong> : attaquer en milieu de terrain au lieu des coins — les adversaires récupèrent facilement.</li>
-            <li><strong>Amortie sur bonne hauteur</strong> : une drop trop lente sur une bonne position adverse donne une interception facile.</li>
-          </ul>
-        </div>
+    <div class="card tutorial-cta-card">
+      <div class="tutorial-cta-body">
+        <strong>${tutorialDone ? 'Interactive Tutorial' : 'New here?'}</strong>
+        <span>${tutorialDone ? 'Replay the 3-min interactive tutorial anytime.' : 'Learn attack &amp; defense in 3 minutes.'}</span>
       </div>
-    </details>
+      <button class="btn ${tutorialDone ? '' : 'primary'}" type="button" data-action="tutorial">
+        ${tutorialDone ? 'Replay Tutorial' : '▶ Play Tutorial'}
+      </button>
+    </div>
     <section class="daily-drill" style="--drill-color:${dailyDrill.color}">
       <div class="daily-shuttle">${SVG_SHUTTLE}</div>
       <div class="daily-copy">
@@ -808,6 +785,11 @@ export class ScreenManager {
             </span>
           </div>
         </header>
+        <div class="rally-credits">
+          <span>Di FRAJA Nathan &amp; Axel PREMIER</span>
+          <span class="rally-credits-sep">·</span>
+          <span>GameLab CS 2025 – 2026</span>
+        </div>
 
         <main class="rally-main">
           <section class="rally-page active" data-panel="home">
@@ -884,6 +866,18 @@ export class ScreenManager {
         menu.querySelectorAll('.rally-page').forEach(panel => panel.classList.toggle('active', panel.dataset.panel === page));
       });
     });
+
+    // Delegated listener catches the tutorial button wherever it lives (Drills panel)
+    menu.addEventListener('click', e => {
+      if (e.target.closest('[data-action="tutorial"]')) {
+        this._emit('tutorial:start');
+      }
+    });
+
+    // Welcome modal for first-time visitors (no tutorialDone in localStorage)
+    if (!localStorage.getItem('rally.tutorialDone')) {
+      setTimeout(() => this._showWelcomeModal(), 500);
+    }
 
     menu.querySelectorAll('.mode-card').forEach(card => {
       card.addEventListener('click', event => {
@@ -1106,6 +1100,38 @@ export class ScreenManager {
     menu.querySelectorAll('.drill-card').forEach(card => {
       card.hidden = category !== 'All' && card.dataset.category !== category;
     });
+  }
+
+  _showWelcomeModal() {
+    if (localStorage.getItem('rally.tutorialDone')) return;
+    if (document.getElementById('welcome-modal-overlay')) return; // already open
+
+    const overlay = document.createElement('div');
+    overlay.id = 'welcome-modal-overlay';
+    overlay.className = 'pause-overlay';
+    overlay.style.zIndex = '200';
+
+    overlay.innerHTML = `
+      <div class="pause-card" style="text-align:left">
+        <p class="pause-eyebrow">WELCOME TO RALLY</p>
+        <h2 class="pause-title">First time here?</h2>
+        <p class="pause-hint">The interactive tutorial walks you through the two core mechanics — attack and defense — in about 3 minutes.</p>
+        <div class="pause-actions">
+          <button class="btn-rally btn-rally-primary" type="button" id="welcome-play-tut">Play Tutorial ▸</button>
+          <button class="btn-rally" type="button" id="welcome-skip-tut">Not now</button>
+        </div>
+      </div>
+    `;
+
+    overlay.querySelector('#welcome-play-tut').addEventListener('click', () => {
+      overlay.remove();
+      this._emit('tutorial:start');
+    });
+    overlay.querySelector('#welcome-skip-tut').addEventListener('click', () => {
+      overlay.remove();
+    });
+
+    document.getElementById('app').appendChild(overlay);
   }
 
   _renderDrillsPanel(menu) {
@@ -1391,6 +1417,16 @@ export class ScreenManager {
   show(screenId) {
     if (screenId === 'menu' && !this._authenticated) {
       screenId = 'auth';
+    }
+
+    // Refresh drills panel when returning from exercise so the tutorial
+    // button label (Play vs Replay) reflects the current localStorage state.
+    if (screenId === 'menu' && this._currentScreen === 'exercise') {
+      const menu = this._screens.menu;
+      if (menu) {
+        this._renderDrillsPanel(menu);
+        this._wireDrills(menu);
+      }
     }
 
     if (this._currentScreen === screenId) {

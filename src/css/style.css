@@ -1207,6 +1207,19 @@ body::after {
   flex-direction: column;
 }
 
+.rally-credits {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 24px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #000;
+  user-select: none;
+}
+.rally-credits-sep { opacity: 0.5; }
+
 .rally-header {
   display: flex;
   align-items: center;

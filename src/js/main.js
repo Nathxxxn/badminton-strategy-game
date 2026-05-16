@@ -117,6 +117,10 @@ const shotTypeSelector = new ShotTypeSelector(
 
 // ─── Game state ───────────────────────────────────────────────────────────────
 
+/** Tutorial mode: bypasses timer, scoring, and screen routing */
+let _tutorialMode     = false;
+let _tutorialObserver = null; // { onShotResult(data), onPositionResult(data) }
+
 /** @type {Array|null} Active rally turn list */
 let currentRally    = null;
 let currentWorkshop = null;
@@ -415,6 +419,7 @@ const TIMER_DISABLED = true;
 
 function startTurnTimer(turn) {
   stopTurnTimer();
+  if (_tutorialMode) return;
   const isMatch = currentWorkshop === 'match';
   if (TIMER_DISABLED && !isMatch) return;
 
@@ -635,6 +640,13 @@ async function onPositionClick(e) {
   stopTurnTimer();
   const pos = constrainPlacementPos(turn, point);
 
+  // Tutorial mode: skip evaluation and async animations entirely.
+  // tutorial.js successCheck uses getZoneAt(pos.x, pos.y) to decide correctness.
+  if (_tutorialMode && _tutorialObserver) {
+    _tutorialObserver.onPositionResult({ isCorrect: true, pos, turn });
+    return;
+  }
+
   await animatePlacementResolution(turn, pos);
 
   const feedback = evaluatePlacementTurn(turn, payloadToLogic(buildPlacementPayload(pos, turn)));
@@ -754,6 +766,12 @@ async function onShotFired(shot) {
     bonus: feedback.details?.breakdown?.bonus ?? 0,
   });
 
+  // Tutorial mode: report result immediately, skip all canvas feedback rendering
+  if (_tutorialMode && _tutorialObserver) {
+    _tutorialObserver.onShotResult({ isCorrect, shot: bridedShot, turn });
+    return;
+  }
+
   // Freeze result frame
   renderFeedbackFrame(turn, {
     showShuttle: false,
@@ -814,6 +832,59 @@ function applyScore(pts, isCorrect) {
 }
 
 // ─── Extended stat recorders (called by Logic engine integration) ──────────
+
+// ─── Tutorial API ─────────────────────────────────────────────────────────────
+
+/**
+ * Start a single tutorial turn without scoring or timer.
+ * @param {Object} rawScenario  Frozen scenario object (will be deep-cloned)
+ * @param {{ onShotResult: Function, onPositionResult: Function }} observer
+ */
+export function startTutorialTurn(rawScenario, observer) {
+  _tutorialMode = true;
+  _tutorialObserver = observer;
+  const cloned = structuredClone(rawScenario);
+  const prepared = prepareTurnForRuntime(cloned);
+  prepared.__raw = rawScenario;
+  currentRally = [prepared];
+  turnIndex = 0;
+  score = 0; combo = 0; correct = 0;
+  scoreTacticalSum = 0; countTactical = 0;
+  scorePlacementSum = 0; countPlacement = 0;
+  currentWorkshop = 'tutorial';
+  screens.show('exercise');
+  hud.show();
+  hud.setMode('training');
+  hud.showMatchHud(false);
+  runTurn(0);
+}
+
+/**
+ * Re-arm the current tutorial turn from scratch (used on wrong answers).
+ */
+export function retryTutorialTurn() {
+  stopTurnTimer();
+  cleanupTurnListeners();
+  turnActive = false;
+  const raw = currentRally[0]?.__raw;
+  if (!raw) return;
+  const prepared = prepareTurnForRuntime(structuredClone(raw));
+  prepared.__raw = raw;
+  currentRally = [prepared];
+  turnIndex = 0;
+  runTurn(0);
+}
+
+/**
+ * End tutorial mode — clean up state without touching screens.
+ */
+export function endTutorialMode() {
+  _tutorialMode = false;
+  _tutorialObserver = null;
+  stopTurnTimer();
+  cleanupTurnListeners();
+  turnActive = false;
+}
 
 export function recordBonus(pts) { totalBonus += pts; }
 export function recordMalus(pts) { totalMalus += pts; }
@@ -1092,6 +1163,11 @@ screens.on('menu:start',       ()             => screens.show('workshop-select')
 screens.on('workshop:select',  ({ workshop }) => { void startGame(workshop); });
 screens.on('end:replay',       ()             => { if (currentWorkshop) void startGame(currentWorkshop); });
 screens.on('end:menu',         ()             => resetAndShowMenu());
+screens.on('tutorial:start',   ()             => {
+  import('./tutorial.js').then(({ TutorialManager }) => {
+    new TutorialManager({ screens, court, hud }).start();
+  }).catch(err => { console.error('[tutorial] load failed', err); });
+});
 
 // HUD back button → return to main menu
 hud.onBack(() => resetAndShowMenu());
