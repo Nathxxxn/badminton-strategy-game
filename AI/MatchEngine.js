@@ -8,12 +8,7 @@ class MatchEngine {
         this.rating = rating;
 
         this.players = {};
-        this.players = {
-            1: { ...teamA[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A', servingPos : 'right' },
-            2: { ...teamA[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A', servingPos : 'left' },
-            3: { ...teamB[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B', servingPos : 'right' },
-            4: { ...teamB[1], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'B', servingPos : 'left' }
-        };
+        
         
         // État global du match en cours
         this.matchState = null;

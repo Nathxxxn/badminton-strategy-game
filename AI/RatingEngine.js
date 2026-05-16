@@ -32,7 +32,7 @@ this.ELO_K_FACTOR = 500; // Facteur de lissage pour le gain de points
 /**
  * Calcule le gain de points de classement après une victoire
  */
-export class ratingEngine{
+export class RatingEngine{
     calculateRankingGain(winnerPoints, loserPoints) {
         const base = 15;
         const diff = loserPoints - winnerPoints;

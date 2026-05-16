@@ -4,23 +4,42 @@
  */
 
 /**
- * Temps de réaction de base (ms).
- * N1 reçoit un KILL = 1600ms.
+ * Génère le tableau des temps de réaction avec une progression linéaire
+ * entre N1 (Base) et P12 (Base x 4)
  */
-export const BASE_REACTION_TIMES = {
-    'P12': { CLEAR: 5500, DROP: 4600, DRIVE: 3900, SMASH: 3200, KILL: 2800, NET_DROP: 4200, NET_CLEAR: 5500 },
-    'P11': { CLEAR: 5200, DROP: 4300, DRIVE: 3600, SMASH: 3000, KILL: 2650, NET_DROP: 4000, NET_CLEAR: 5200 },
-    'P10': { CLEAR: 4900, DROP: 4000, DRIVE: 3400, SMASH: 2850, KILL: 2500, NET_DROP: 3800, NET_CLEAR: 4900 },
-    'D9':  { CLEAR: 4500, DROP: 3700, DRIVE: 3100, SMASH: 2600, KILL: 2350, NET_DROP: 3500, NET_CLEAR: 4500 },
-    'D8':  { CLEAR: 4200, DROP: 3400, DRIVE: 2900, SMASH: 2450, KILL: 2200, NET_DROP: 3300, NET_CLEAR: 4200 },
-    'D7':  { CLEAR: 3900, DROP: 3200, DRIVE: 2700, SMASH: 2300, KILL: 2050, NET_DROP: 3100, NET_CLEAR: 3900 },
-    'R6':  { CLEAR: 3500, DROP: 2900, DRIVE: 2450, SMASH: 2100, KILL: 1900, NET_DROP: 2800, NET_CLEAR: 3500 },
-    'R5':  { CLEAR: 3200, DROP: 2700, DRIVE: 2250, SMASH: 1950, KILL: 1850, NET_DROP: 2650, NET_CLEAR: 3200 },
-    'R4':  { CLEAR: 3000, DROP: 2500, DRIVE: 2100, SMASH: 1850, KILL: 1780, NET_DROP: 2500, NET_CLEAR: 3000 },
-    'N3':  { CLEAR: 2700, DROP: 2250, DRIVE: 1950, SMASH: 1750, KILL: 1720, NET_DROP: 2300, NET_CLEAR: 2700 },
-    'N2':  { CLEAR: 2500, DROP: 2100, DRIVE: 1800, SMASH: 1650, KILL: 1660, NET_DROP: 2150, NET_CLEAR: 2500 },
-    'N1':  { CLEAR: 2300, DROP: 1950, DRIVE: 1700, SMASH: 1600, KILL: 1600, NET_DROP: 2000, NET_CLEAR: 2300 }
+const generateReactionTimes = () => {
+    const ranks = ['N1', 'N2', 'N3', 'R4', 'R5', 'R6', 'D7', 'D8', 'D9', 'P10', 'P11', 'P12'];
+    
+    // Valeurs de référence pour N1 (le niveau le plus rapide)
+    const n1Base = {
+        CLEAR: 3000,
+        DROP: 2625,
+        DRIVE: 2400,
+        SMASH: 2150,
+        KILL: 1600,
+        NET_DROP: 2000,
+        NET_CLEAR: 2500
+    };
+
+    const table = {};
+    const maxMultiplier = 4;
+    const steps = ranks.length - 1; // 11 intervalles pour 12 rangs
+
+    ranks.forEach((rank, index) => {
+        // Calcul du multiplicateur linéaire : 1.0 à l'index 0 (N1), 4.0 à l'index 11 (P12)
+        const multiplier = 1 + (index * (maxMultiplier - 1) / steps);
+        
+        table[rank] = {};
+        for (let shot in n1Base) {
+            // On arrondit pour avoir des ms propres
+            table[rank][shot] = Math.round(n1Base[shot] * multiplier);
+        }
+    });
+
+    return table;
 };
+
+export const BASE_REACTION_TIMES = generateReactionTimes();
 
 /**
  * Calcule le temps accordé au joueur pour ce tour.
