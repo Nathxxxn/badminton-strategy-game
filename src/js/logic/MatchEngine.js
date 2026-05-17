@@ -423,11 +423,11 @@ class MatchEngine {
      */
     applyTeamShot(strikerId,shotIntent, incomingShotContext) {
         this._flushPendingMovements();
-        const striker = this.players[striker];
+        const striker = this.players[strikerId];
         const opponents = [this.players[3].position, this.players[4].position]; // Format Array pour TacticalEngine
 
         // 2. Exécution Physique (A-t-il fait une faute ?)
-        const shotResult = this.executionEngine.executeShot(
+        const shotResult = this.execution.executeShot(
             shotIntent, 
             striker, 
             incomingShotContext.type, 
@@ -496,23 +496,23 @@ class MatchEngine {
                             opp2 :{x : this.players[4].position.x , y : this.players[4].position.y}};
 
         // 1. Déplacement du partenaire (via AISpawnEngine)
-        const partnerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext, (aiShot) ? striker.position : partner.position, (aiShot) ? partner.position : striker.position, aiShot, (aiShot) ? striker.rank : partner.rank, opponents);
+        const partnerPlacements = this.aiSpawn.generateBestPlacement(shotContext, (aiShot) ? striker.position : partner.position, (aiShot) ? partner.position : striker.position, aiShot, (aiShot) ? striker.rank : partner.rank, opponents);
         const chosenPartnerPlacement = this._pickRandomFromList(partnerPlacements).pos;
 
-        const partnerExec = this.executionEngine.executeMovement(chosenPartnerPlacement, (aiShot) ? striker.fatigue : striker.fatigue, (aiShot) ? striker.position : partner.position);
+        const partnerExec = this.execution.executeMovement(chosenPartnerPlacement, (aiShot) ? striker.fatigue : striker.fatigue, (aiShot) ? striker.position : partner.position);
         const finalPartnerPlacement = partnerExec.actualPos;
         this.addFatigue(2, partnerExec.distanceCovered, null);
 
         // 2. Calcul du temps de réflexion pour le joueur humain (ID 1)
         // Note: getAdjustedReactionTime est maintenant dans KinematicEngine
-        const reactionTime = this.kinematicEngine.getAdjustedTime(this.kinematicEngine.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
+        const reactionTime = this.kinematic.getAdjustedTime(this.kinematic.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
 
         this.matchState.pendingMovements = {
             2 : finalPartnerPlacement,
         }
 
         return {
-            shotContext: finalShotContext,
+            shotContext: shotContext,
             partnerTarget: finalPartnerPlacement,
             reflectionTime: Math.max(reactionTime, 0.4) // Minimum 400ms
         };
@@ -539,7 +539,7 @@ class MatchEngine {
         const opponents = { opp1: this.players[3].position, opp2: this.players[4].position };
 
         // 1. Exécution physique avec la fatigue
-        const moveResult = this.executionEngine.executeMovement(intendedPos, player.fatigue, player.position);
+        const moveResult = this.execution.executeMovement(intendedPos, player.fatigue, player.position);
         
         // Mise à jour de la position réelle et ajout de la fatigue
         player.position = moveResult.actualPos;
@@ -585,15 +585,15 @@ class MatchEngine {
         const aiPartner = this.players[aiPartnerId];
         const aiStrikerStartPos = aiStriker.position;
 
-        const reachMeters = this.kinematicEngine.movementPossibility(shotContext, opponents)
-        const startPos = this.aiSpawnEngine.getValidImpactPoint(shotContext, aiStriker.position, reachMeters, aiStriker.fatigue)
+        const reachMeters = this.kinematic.movementPossibility(shotContext, opponents)
+        const startPos = this.aiSpawn.getValidImpactPoint(shotContext, aiStriker.position, reachMeters, aiStriker.fatigue)
 
         // 2. Choix du coup de l'IA adverse (via AISpawnEngine)
-        const aiShots = this.aiSpawnEngine.generateBestShot(shotContext, opponents, aiStriker.rank, startPos);
+        const aiShots = this.aiSpawn.generateBestShot(shotContext, opponents, aiStriker.rank, startPos);
         const chosenAiShot = this._pickRandomFromList(aiShots);
 
 
-        const aiShotExec = this.executionEngine.executeShot(chosenAiShot, aiStriker, shotContext.type, shotContext.hasSpin);
+        const aiShotExec = this.execution.executeShot(chosenAiShot, aiStriker, shotContext.type, shotContext.hasSpin);
         const finalAiShot = aiShotExec.shot; // Le coup avec ses trajectoires réelles
 
         const striker_rank = aiStriker.rank
@@ -604,17 +604,17 @@ class MatchEngine {
 
         // 3. Déplacements des deux IA adverses
         // Le striker se place par rapport au volant
-        const strikerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext,aiStriker.position, aiPartner.position, true, aiStriker.rank, opponents);
+        const strikerPlacements = this.aiSpawn.generateBestPlacement(shotContext,aiStriker.position, aiPartner.position, true, aiStriker.rank, opponents);
         const chosenAiStrikerPlacement = this._pickRandomFromList(strikerPlacements).pos;
 
-        const strikerExec = this.executionEngine.executeMovement(chosenAiStrikerPlacement, aiStriker.fatigue, aiStriker.position);
+        const strikerExec = this.execution.executeMovement(chosenAiStrikerPlacement, aiStriker.fatigue, aiStriker.position);
         const finalAiStrikerPlacement = strikerExec.actualPos;
 
         // Le partenaire se place par rapport au volant ET au striker
-        const partnerPlacements = this.aiSpawnEngine.generateBestPlacement(shotContext,aiPartner.position, aiStriker.position, false, aiPartner.rank, opponents);
+        const partnerPlacements = this.aiSpawn.generateBestPlacement(shotContext,aiPartner.position, aiStriker.position, false, aiPartner.rank, opponents);
         const chosenAiPartnerPlacement = this._pickRandomFromList(partnerPlacements).pos;
 
-        const partnerExec = this.executionEngine.executeMovement(chosenAiPartnerPlacement, aiPartner.fatigue, aiPartner.position);
+        const partnerExec = this.execution.executeMovement(chosenAiPartnerPlacement, aiPartner.fatigue, aiPartner.position);
         const finalAiPartnerPlacement = partnerExec.actualPos;
 
         // AJOUT DE LA FATIGUE POUR L'ÉQUIPE IA
@@ -628,7 +628,7 @@ class MatchEngine {
             return { rallyOver: true, winnerId: 3, reason: 'UNREACHABLE_BY_PLAYER' };
         }
 
-        const reactionTime = this.kinematicEngine.getAdjustedTime(this.kinematicEngine.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
+        const reactionTime = this.kinematic.getAdjustedTime(this.kinematic.BASE_REACTION_TIMES[striker_rank][shotType], shotScore);
         this.matchState.pendingMovements = {
             [aiStrikerId]: finalAiStrikerPlacement,
             [aiPartnerId]: finalAiPartnerPlacement
@@ -655,13 +655,13 @@ class MatchEngine {
             { opp1: this.players[1].position, opp2: this.players[2].position };
 
         // 2. Obtenir la reach via shotPossibility
-        const reachP1 = this.kinematicEngine.shotPossibility(shotContext.type, shotContext.startPos, opponents, p1.fatigue).allowedReach;
-        const reachP2 = this.kinematicEngine.shotPossibility(shotContext.type, shotContext.startPos, opponents, p2.fatigue).allowedReach;
+        const reachP1 = this.kinematic.shotPossibility(shotContext.type, shotContext.startPos, opponents, p1.fatigue).allowedReach;
+        const reachP2 = this.kinematic.shotPossibility(shotContext.type, shotContext.startPos, opponents, p2.fatigue).allowedReach;
 
         // 3. Vérifier si les joueurs peuvent l'atteindre physiquement
         // On suppose que getValidImpactPoint renvoie un tableau vide ou null si hors de portée
-        const impactsP1 = this.aiSpawnEngine.getValidImpactPoint(shotContext, p1.position, reachP1, p1.fatigue);
-        const impactsP2 = this.aiSpawnEngine.getValidImpactPoint(shotContext, p2.position, reachP2, p2.fatigue);
+        const impactsP1 = this.aiSpawn.getValidImpactPoint(shotContext, p1.position, reachP1, p1.fatigue);
+        const impactsP2 = this.aiSpawn.getValidImpactPoint(shotContext, p2.position, reachP2, p2.fatigue);
 
         const canP1 = Array.isArray(impactsP1) ? impactsP1.length > 0 : impactsP1 !== null;
         const canP2 = Array.isArray(impactsP2) ? impactsP2.length > 0 : impactsP2 !== null;
@@ -769,22 +769,22 @@ class MatchEngine {
      * @param {Object} incomingShotContext - Le coup de l'IA qu'il doit renvoyer
      */
     nextScenarioPostShot(shotPlayed, incomingShotContext) {
-        const postShotdata = applyTeamShot(1, shotPlayed, incomingShotContext);
-        if (postShotData.rallyOver) return postShotData;
+        const postShotdata = this.applyTeamShot(1, shotPlayed, incomingShotContext);
+        if (postShotdata.rallyOver) return postShotdata;
 
         return {
             mode: 'PLACEMENT',
-            isUserStriker: isUserStriker,
+
             playerStart: this.players[1].position,
             partnerStart: this.players[2].position,
-            partnerEnd: postShotData.partnerTarget, // Destination idéale calculée
+            partnerEnd: postShotdata.partnerTarget, // Destination idéale calculée
             shotPlayed: postShotdata.shotContext,
             opponents: [
                 // Les adversaires n'ont pas encore bougé à ce stade (réaction au prochain tour)
                 { posStart: this.players[3].position, posEnd: this.players[3].position, hand: 'right' },
                 { posStart: this.players[4].position, posEnd: this.players[4].position, hand: 'right' }
             ],
-            reflectionTime: postShotData.reflectionTime
+            reflectionTime: postShotdata.reflectionTime
         };
     }
 

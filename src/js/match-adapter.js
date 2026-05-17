@@ -1,4 +1,4 @@
-import { KinematicEngine }   from './logic/KinematicEngine.js';
+import { KinematicEngine, BASE_REACTION_TIMES, calculateAdjustedTime } from './logic/KinematicEngine.js';
 import { PlacementEngine }   from './logic/PlacementEngine.js';
 import { TacticalEngine }    from './logic/TacticalEngine.js';
 import { ExecutionEngine }   from './logic/ExecutionEngine.js';
@@ -11,6 +11,10 @@ import { MatchEngine }       from './logic/MatchEngine.js';
 // Singleton engines — instantiated once, reused across matches.
 // Order is required by Developer B; do not reorder.
 const kinematic   = new KinematicEngine();
+// Expose module-level helpers as instance properties so MatchEngine can call
+// this.kinematic.BASE_REACTION_TIMES and this.kinematic.getAdjustedTime
+kinematic.BASE_REACTION_TIMES = BASE_REACTION_TIMES;
+kinematic.getAdjustedTime = calculateAdjustedTime;
 const placement   = new PlacementEngine(kinematic);
 const tactical    = new TacticalEngine();
 const execution   = new ExecutionEngine();
