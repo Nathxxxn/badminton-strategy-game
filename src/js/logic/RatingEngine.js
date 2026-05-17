@@ -47,7 +47,7 @@ export class RatingEngine{
      */
     getRankFromRating(rating) {
        // On trie les seuils du plus grand au plus petit (ex: [['N1', 1650], ['N2', 1425]...])
-        const thresholds = Object.entries(this.rating.RATING_THRESHOLDS).sort((a, b) => b[1] - a[1]);
+        const thresholds = Object.entries(RATING_THRESHOLDS).sort((a, b) => b[1] - a[1]);
         
         for (let [rank, minPoints] of thresholds) {
             if (rating >= minPoints) {

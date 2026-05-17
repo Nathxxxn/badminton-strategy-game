@@ -2,7 +2,7 @@ import { KinematicEngine, BASE_REACTION_TIMES, calculateAdjustedTime } from './l
 import { PlacementEngine }   from './logic/PlacementEngine.js';
 import { TacticalEngine }    from './logic/TacticalEngine.js';
 import { ExecutionEngine }   from './logic/ExecutionEngine.js';
-import { RatingEngine }      from './logic/RatingEngine.js';
+import { RatingEngine, RATING_THRESHOLDS } from './logic/RatingEngine.js';
 import { AISpawnEngine }     from './logic/AISpawnEngine.js';
 import { ScenarioGenerator } from './logic/ScenarioGenerator.js';
 import { FeedbackEngine }    from './logic/FeedbackEngine.js';
@@ -19,6 +19,8 @@ const placement   = new PlacementEngine(kinematic);
 const tactical    = new TacticalEngine();
 const execution   = new ExecutionEngine();
 const rating      = new RatingEngine();
+// Expose module-level RATING_THRESHOLDS on instance for MatchEngine._generateOpponents
+rating.RATING_THRESHOLDS = RATING_THRESHOLDS;
 const aiSpawn     = new AISpawnEngine(tactical, placement, kinematic);
 const scenarioGen = new ScenarioGenerator(tactical, placement, aiSpawn, kinematic);
 const feedback    = new FeedbackEngine();
