@@ -825,6 +825,20 @@ async function onShotFired(shot) {
     return;
   }
 
+  // Match mode: pass shot to MatchEngine and let handleMatchScenario drive next turn
+  if (currentWorkshop === 'match' && matchAdapter && currentMatchTurn) {
+    const shotForEngine = {
+      type:     bridedShot.type,
+      startPos: impactPoint,
+      endPos:   bridedShot.aimPoint,
+      hasSpin:  false,
+    };
+    const incoming = currentMatchTurn.incoming ?? currentMatchTurn._raw?.incoming ?? null;
+    const next = matchAdapter.onShotPlayed(shotForEngine, incoming);
+    handleMatchScenario(next);
+    return;
+  }
+
   applyScore(feedback.totalScore, isCorrect);
   if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
