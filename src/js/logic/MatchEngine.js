@@ -153,43 +153,40 @@ class MatchEngine {
          */
         _generateInitialScenario(serverId, side) {
             const isRight = (side === 'right');
-            
-            // 1. Définition des zones de service (coordonnées normalisées)
-            // Serveur : x=0.25 (droite) ou x=0.75 (gauche) | y=0.4 (fond de zone de service)
-            const serverX = isRight ? 0.45 : 0.55;
-            const serverY = 0.35; // Juste derrière la ligne de service court
+            // Coordinate convention (shared with renderer):
+            //   Team A (ally)     → y > 0.5  (bottom half)
+            //   Team B (opponent) → y < 0.5  (top half)
+            const isTeamA = this.players[serverId].team === 'A';
 
-            // Réceptionneur : En diagonale (si serveur à droite (bas), réceptionneur à gauche (haut))
-            // Note: Pour l'adversaire (y > 0.5), "droite" est à x=0.75 de son point de vue
+            const serverX   = isRight ? 0.45 : 0.55;
             const receiverX = isRight ? 0.75 : 0.25;
-            const receiverY = 0.45; // Juste derrière la ligne de service court adverse
+
+            // Each team's y-positions relative to their side of the net
+            const serverY     = isTeamA ? 0.65 : 0.35; // server service zone
+            const receiverY   = isTeamA ? 0.35 : 0.65; // receiver service zone
+            const serverPartY = isTeamA ? 0.75 : 0.25; // server's partner (deeper)
+            const recvPartY   = isTeamA ? 0.25 : 0.75; // receiver's partner (deeper)
+            const shotLandY   = isTeamA ? 0.40 : 0.60; // service lands just past net
 
             // 2. Attribution du rôle de réceptionneur
-            // Si Team A sert, le réceptionneur est dans Team B (3 ou 4)
-            // Si Team B sert, le réceptionneur est dans Team A (1 ou 2)
-            let receiverId;
-            const opponentTeam = (this.players[serverId].team === 'A') ? [3, 4] : [1, 2];
-            
-            // Le réceptionneur est celui dont la 'servingPos' correspond au côté du service
-            receiverId = opponentTeam.find(id => this.players[id].servingPos === (isRight ? 'right' : 'left'));
+            const opponentTeam = isTeamA ? [3, 4] : [1, 2];
+            let receiverId = opponentTeam.find(id => this.players[id].servingPos === (isRight ? 'right' : 'left'));
+            if (receiverId == null) receiverId = opponentTeam[0]; // fallback
 
-            // 3. Placement des partenaires (en retrait ou sur le côté)
-            const partnerServerId = (serverId % 2 === 0) ? serverId - 1 : serverId + 1;
+            // 3. Partenaires
+            const partnerServerId   = (serverId   % 2 === 0) ? serverId   - 1 : serverId   + 1;
             const partnerReceiverId = (receiverId % 2 === 0) ? receiverId - 1 : receiverId + 1;
 
-            // On met à jour les positions réelles dans l'objet players
-            this.players[serverId].position = { x: serverX, y: serverY };
-            this.players[receiverId].position = { x: receiverX, y: receiverY };
-            
-            // Partenaires : position neutre
-            this.players[partnerServerId].position = { x: 0.50, y: 0.70 };
-            this.players[partnerReceiverId].position = { x: 1 - receiverX, y: 0.75 };
+            // 4. Mise à jour des positions
+            this.players[serverId].position          = { x: serverX,       y: serverY };
+            this.players[receiverId].position        = { x: receiverX,     y: receiverY };
+            this.players[partnerServerId].position   = { x: 0.50,          y: serverPartY };
+            this.players[partnerReceiverId].position = { x: 1 - receiverX, y: recvPartY };
 
-            // 4. Définition du coup de service (Direction le T du filet adverse)
             const initialShot = {
-                type: 'NET_DROP', // On utilise NET_DROP pour simuler un service court
+                type: 'NET_DROP',
                 startPos: { x: serverX, y: serverY },
-                endPos: { x: (isRight)? 1 - Math.random() * 0.50 : 0.50 - Math.random() * 0.50, y: 0.30 }, // Tombe juste après la rivière
+                endPos: { x: isRight ? 1 - Math.random() * 0.50 : 0.50 - Math.random() * 0.50, y: shotLandY },
                 hasSpin: false,
                 isServe: true
             };
