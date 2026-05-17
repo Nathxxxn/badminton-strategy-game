@@ -1028,20 +1028,23 @@ async function handleMatchScenario(scen) {
   hud.clearFeedback();
 
   // Partner-playing pair: animate the partner's action then handle the follow-up
-  if (scen.scenarios) {
+  if (scen?.scenarios) {
     await autoPlayPartnerTurn(scen.scenarios[0]);
     return handleMatchScenario(scen.scenarios[1]);
   }
 
   // Rally ended
-  if (scen.rallyOver) {
+  if (scen?.rallyOver) {
     const winner = (scen.winnerId ?? 3) <= 2 ? 'player' : 'opp';
     await showPointResult({ winner, reason: scen.reason ?? '' });
     hud.setMatchState(matchAdapter.getMatchState());
     if (matchAdapter.isMatchOver()) {
       setTimeout(showEndScreen, 350);
     } else {
-      handleMatchScenario(matchAdapter.startRally());
+      handleMatchScenario(matchAdapter.startRally()).catch(err => {
+        console.error('[match] rally start failed', err);
+        hud.showExplanation(err?.message ?? String(err), '#f87171', 3000).then(resetAndShowMenu);
+      });
     }
     return;
   }
@@ -1234,7 +1237,10 @@ async function startGame(workshop) {
     hud.update(score, 0, 0, 0);
     await showMatchReadyPrompt();
     if (requestId !== startRequestId) return;
-    handleMatchScenario(matchAdapter.startRally());
+    handleMatchScenario(matchAdapter.startRally()).catch(err => {
+      console.error('[match] handleMatchScenario failed', err);
+      hud.showExplanation(err?.message ?? String(err), '#f87171', 3000).then(resetAndShowMenu);
+    });
     return;
   }
   // ─────────────────────────────────────────────────────────────────────────
