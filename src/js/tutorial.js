@@ -384,9 +384,11 @@ export class TutorialManager {
     if (arrow === 'right') {
       left = rect.right + GAP;
       top  = Math.max(8, rect.top);
+      tooltip.dataset.arrow = 'left';
     } else if (arrow === 'left') {
       left = rect.left - TW - GAP;
       top  = Math.max(8, rect.top);
+      tooltip.dataset.arrow = 'right';
     } else if (arrow === 'top') {
       left = rect.left;
       top  = rect.bottom + GAP;

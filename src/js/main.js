@@ -647,6 +647,16 @@ async function onPositionClick(e) {
   // Continuous coordinates — no grid snap so the choice matches the cursor.
   const point = { x: raw.x, y: raw.y };
 
+  // Reject clicks outside the movement radius (mirrors the hover check)
+  if (turn?.moveRadius && turn?.players?.ally1) {
+    const dxM = (point.x - turn.players.ally1.x) * 6.1;
+    const dyM = (point.y - turn.players.ally1.y) * 13.4;
+    if (Math.hypot(dxM, dyM) > turn.moveRadius) {
+      canvas.addEventListener('pointerup', onPositionClick, { once: true });
+      return;
+    }
+  }
+
   // Reject clicks on opponent half
   if (point.y < 0.5) {
     renderBase(turn, { showVeil: true, reachMode: 'idle' });
