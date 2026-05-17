@@ -24,7 +24,7 @@ export class MatchAdapter {
   /** Call before startRally(). profile = { rank, rating, racketHand } */
   initMatch(profile) {
     const player = { rank: profile.rank, rating: profile.rating, hand: profile.racketHand ?? 'right' };
-    const partner = { ...player, hand: 'left' };
+    const partner = { ...player, hand: 'left' }; // default partner hand for v1
     engine.initMatch([player, partner], 'QUICK_MATCH', 21);
   }
 
@@ -75,11 +75,11 @@ export class MatchAdapter {
         opponent: ms.score?.teamB ?? 0,
       },
       sets: {
-        player:   ms.score?.setsA ?? 0,
-        opponent: ms.score?.setsB ?? 0,
+        player:   ms.setsP1 ?? 0,
+        opponent: ms.setsP2 ?? 0,
       },
       winner: ms.matchOver
-        ? ((ms.score?.setsA ?? 0) >= (ms.score?.setsB ?? 0) ? 'player' : 'opponent')
+        ? ((ms.setsP1 ?? 0) > (ms.setsP2 ?? 0) ? 'player' : 'opponent')
         : null,
       ratingDelta: ms.matchReport?.finalStats?.pointsGained ?? null,
       fatigue: {
@@ -110,9 +110,10 @@ export class MatchAdapter {
    * - attach the raw MatchEngine scenario as ._raw for use in intercepts
    */
   _process(result) {
-    if (!result) return { rallyOver: true, winnerId: 3, reason: 'ENGINE_NULL' };
+    if (!result) return { rallyOver: true, winnerId: null, reason: 'ENGINE_NULL' };
     if (result.rallyOver) return result;
     if (result.scenarios) {
+      // Callers are responsible for calling translate() on each scenario in this array.
       return { scenarios: result.scenarios };
     }
     // Normal single scenario — attach raw reference for intercepts
