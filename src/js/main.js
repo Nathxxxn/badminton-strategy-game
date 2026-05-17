@@ -659,10 +659,10 @@ async function onPositionClick(e) {
     partnerDist: feedback.details?.realDistance,
   });
 
-  // In tutorial mode pin the optimal indicator to the declared goal zone center.
-  if (_tutorialMode && _tutorialGoalCenter) {
-    feedback.idealPositionRender = _tutorialGoalCenter;
-  }
+  // In tutorial mode pin the optimal to the goal zone center (avoids mutating
+  // a potentially frozen feedback object from the evaluator).
+  const positionCorrectionTo =
+    (_tutorialMode && _tutorialGoalCenter) ? _tutorialGoalCenter : feedback.idealPositionRender;
 
   // Tier governs the choice-marker color in drawChoiceVsOptimal.
   const tier =
@@ -673,7 +673,7 @@ async function onPositionClick(e) {
   // Freeze result frame
   renderFeedbackFrame(turn, {
     correctionFrom: pos,
-    correctionTo: feedback.idealPositionRender,
+    correctionTo: positionCorrectionTo,
     correctionTier: tier,
   });
 
@@ -682,7 +682,7 @@ async function onPositionClick(e) {
     () => {
       renderFeedbackFrame(turn, {
         correctionFrom: pos,
-        correctionTo: feedback.idealPositionRender,
+        correctionTo: positionCorrectionTo,
         correctionTier: tier,
       });
     },
@@ -781,16 +781,16 @@ async function onShotFired(shot) {
     bonus: feedback.details?.breakdown?.bonus ?? 0,
   });
 
-  // In tutorial mode pin the optimal indicator to the declared goal zone center.
-  if (_tutorialMode && _tutorialGoalCenter) {
-    feedback.correctionRenderPos = _tutorialGoalCenter;
-  }
+  // In tutorial mode pin the optimal to the goal zone center (avoids mutating
+  // a potentially frozen feedback object from the evaluator).
+  const shotCorrectionTo =
+    (_tutorialMode && _tutorialGoalCenter) ? _tutorialGoalCenter : feedback.correctionRenderPos;
 
   // Freeze result frame
   renderFeedbackFrame(turn, {
     showShuttle: false,
     correctionFrom: impactPoint,
-    correctionTo: feedback.correctionRenderPos,
+    correctionTo: shotCorrectionTo,
   });
   if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
   else            zones.drawCheckmark(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
@@ -801,7 +801,7 @@ async function onShotFired(shot) {
       renderFeedbackFrame(turn, {
         showShuttle: false,
         correctionFrom: impactPoint,
-        correctionTo: feedback.correctionRenderPos,
+        correctionTo: shotCorrectionTo,
       });
       if (!isCorrect) zones.drawClickMarker(bridedShot.aimPoint.x, bridedShot.aimPoint.y);
       else            zones.drawCheckmark(bridedShot.aimPoint.x, bridedShot.aimPoint.y);

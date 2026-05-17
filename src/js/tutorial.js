@@ -3,7 +3,7 @@
  * Developer A · Rendering & UI
  */
 
-import { getZoneAt, ZONES }              from './zones.js';
+import { getZoneAt, ZONES, getZoneCenter } from './zones.js';
 import { startTutorialTurn, retryTutorialTurn, endTutorialMode } from './main.js';
 
 // ─── Tutorial scenarios ────────────────────────────────────────────────────────
@@ -458,12 +458,8 @@ export class TutorialManager {
         },
       };
 
-      // Compute goal zone center to pin the optimal indicator inside the zone.
-      let goalCenter = null;
-      if (step.goalZone && ZONES[step.goalZone]) {
-        const z = ZONES[step.goalZone];
-        goalCenter = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 };
-      }
+      // Pin the optimal indicator to the goal zone center.
+      const goalCenter = step.goalZone ? getZoneCenter(step.goalZone) : null;
 
       startTutorialTurn(step.scenario, observer, goalCenter);
 
