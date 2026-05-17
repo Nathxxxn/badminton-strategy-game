@@ -34,7 +34,6 @@ import { AISpawnEngine }          from './logic/AISpawnEngine.js';
 import { KinematicEngine }        from './logic/KinematicEngine.js';
 import { PlacementEngine }        from './logic/PlacementEngine.js';
 import { TacticalEngine }        from './logic/TacticalEngine.js';
-import { MatchAdapter }          from './match-adapter.js';
 import {
   createMatchState,
   applyMatchPoint,
@@ -1219,6 +1218,7 @@ async function startGame(workshop) {
   // ── Match mode: use MatchEngine instead of static scenarios ──────────────
   if (workshop === 'match') {
     try {
+      const { MatchAdapter } = await import('./match-adapter.js');
       matchAdapter = new MatchAdapter();
       matchAdapter.initMatch(buildPlayerInitPayload());
     } catch (err) {
