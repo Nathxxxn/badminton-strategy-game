@@ -25,6 +25,7 @@ const aiSpawn     = new AISpawnEngine(tactical, placement, kinematic);
 const scenarioGen = new ScenarioGenerator(tactical, placement, aiSpawn, kinematic);
 const feedback    = new FeedbackEngine();
 const engine      = new MatchEngine(tactical, placement, kinematic, execution, aiSpawn, rating);
+const MIN_MATCH_TURN_MS = 12000;
 
 export class MatchAdapter {
   /** Call before startRally(). profile = { rank, rating, racketHand } */
@@ -55,6 +56,10 @@ export class MatchAdapter {
    */
   onPositionPlayed(pos, shotContext) {
     return this._process(engine.nextScenarioPostMovement(pos, shotContext, 1));
+  }
+
+  onTimeout(reason = 'TIME') {
+    return this._process(engine.forfeitPoint(3, reason));
   }
 
   /**
@@ -146,7 +151,7 @@ export class MatchAdapter {
         type:     inc.type     ?? 'CLEAR',
         speed:    'medium',
       },
-      timeLimitMs:  scen.reflectionTime ?? 8000,
+      timeLimitMs:  this._turnTimeLimitMs(scen),
       passingScore: 0,
     };
   }
@@ -167,8 +172,13 @@ export class MatchAdapter {
       },
       moveRadius:   2.5,
       playerReach:  1.8,
-      timeLimitMs:  scen.reflectionTime ?? 8000,
+      timeLimitMs:  this._turnTimeLimitMs(scen),
       passingScore: 0,
     };
+  }
+
+  _turnTimeLimitMs(scen) {
+    const requested = Number.isFinite(scen?.reflectionTime) ? scen.reflectionTime : 8000;
+    return Math.max(MIN_MATCH_TURN_MS, requested);
   }
 }

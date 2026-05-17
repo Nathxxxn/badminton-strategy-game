@@ -3,6 +3,7 @@ import { KinematicEngine } from './logic/KinematicEngine.js';
 import { PlacementEngine } from './logic/PlacementEngine.js';
 import { TacticalEngine } from './logic/TacticalEngine.js';
 import { ScenarioGenerator } from './logic/ScenarioGenerator.js';
+import { AISpawnEngine } from './logic/AISpawnEngine.js';
 import { toFullCourtAlly, toFullCourtOpp } from './coord-adapter.js';
 
 const DATA_FILES = {
@@ -404,8 +405,8 @@ function adaptTacticalScenario(gen, workshop, kinematic) {
   const positions = {
     player:  user.pos,
     partner: partner.pos,
-    opp1:    opponents[0].pos,
-    opp2:    opponents[1].pos,
+    opp1:    opponents[0].posStart,
+    opp2:    opponents[1].posStart,
   };
 
   const equipment = {
@@ -437,11 +438,11 @@ function adaptTacticalScenario(gen, workshop, kinematic) {
     players: {
       ally1:     { ...toFullCourtAlly(user.pos), label: 'YOU' },
       ally2:     toFullCourtAlly(partner.pos),
-      opponent1: toFullCourtOpp(opponents[0].pos),
-      opponent2: toFullCourtOpp(opponents[1].pos),
+      opponent1: { ...toFullCourtOpp(opponents[0].posStart), movingTo: toFullCourtOpp(opponents[0].posEnd) },
+      opponent2: { ...toFullCourtOpp(opponents[1].posStart), movingTo: toFullCourtOpp(opponents[1].posEnd) },
     },
     shuttlecock: {
-      position: toFullCourtAlly(incoming.endPos),
+      position: toFullCourtAlly(user.pos),
       from:     toFullCourtOpp(incoming.startPos),
       type:     incoming.type,
       speed:    shotSpeed(incoming.type),
@@ -450,13 +451,13 @@ function adaptTacticalScenario(gen, workshop, kinematic) {
 }
 
 function adaptPlacementScenario(gen, workshop, kinematic, placement) {
-  const { playerStart, shotPlayed, partnerStart, opponents, target } = gen;
+  const { playerStart, shotPlayed, partnerStart, opponents, isUserStriker } = gen;
 
   const positions = {
     player:  playerStart,
     partner: partnerStart,
-    opp1:    opponents[0].pos,
-    opp2:    opponents[1].pos,
+    opp1:    opponents[0].posStart,
+    opp2:    opponents[1].posStart,
   };
 
   const equipment = {
@@ -478,6 +479,12 @@ function adaptPlacementScenario(gen, workshop, kinematic, placement) {
     false,
   ).ideal;
 
+  const playerIdeal = placement.evaluateGlobalPlacement(
+    playerStart, partnerStart,
+    { type: shotPlayed.type, endPos: shotPlayed.endPos },
+    isUserStriker,
+  ).ideal;
+
   const partnerMovement = { from: partnerStart, to: partnerIdeal };
   const moveRadius = kinematic.movementPossibility(shotPlayed.type).allowedRadius;
 
@@ -492,14 +499,14 @@ function adaptPlacementScenario(gen, workshop, kinematic, placement) {
     equipment,
     playedShuttle,
     partnerMovement,
-    isHitter:     true,
+    isHitter:     isUserStriker,
     moveRadius,
-    idealPosition: target,
+    idealPosition: playerIdeal,
     players: {
       ally1:     { ...toFullCourtAlly(playerStart), label: 'YOU' },
       ally2:     { ...toFullCourtAlly(partnerStart), movingTo: toFullCourtAlly(partnerIdeal) },
-      opponent1: toFullCourtOpp(opponents[0].pos),
-      opponent2: toFullCourtOpp(opponents[1].pos),
+      opponent1: toFullCourtOpp(opponents[0].posStart),
+      opponent2: toFullCourtOpp(opponents[1].posStart),
     },
     shuttlecock: {
       position: toFullCourtOpp(shotPlayed.endPos),
@@ -536,7 +543,7 @@ function generateWorkshopRally(workshop) {
   const exercises = [];
 
   for (let i = 0; i < counts.tactical; i++) {
-    const raw = gen.generateTacticalScenario();
+    const raw = gen.generateTacticalScenario(Math.random() < 0.1 ? 'left' : 'right');
     if (raw) exercises.push(adaptTacticalScenario(raw, workshop, kinematic));
   }
   for (let i = 0; i < counts.placement; i++) {

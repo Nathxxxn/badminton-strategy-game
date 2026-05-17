@@ -239,6 +239,19 @@ class MatchEngine {
         player.fatigue = Math.min(player.fatigue + totalFatigueAdded, 1.0);
     }
 
+    _getShotFatigueCost(shotType) {
+        const costs = {
+            SMASH: 0.012,
+            KILL: 0.010,
+            DRIVE: 0.007,
+            CLEAR: 0.008,
+            DROP: 0.005,
+            NET_DROP: 0.004,
+            NET_CLEAR: 0.006
+        };
+        return costs[shotType] ?? 0.006;
+    }
+
     _initFatigueResistance() {
         const ranks = ['N1', 'N2', 'N3', 'R4', 'R5', 'R6', 'D7', 'D8', 'D9', 'P10', 'P11', 'P12', 'NC'];
         let resistance = {};
@@ -432,7 +445,7 @@ class MatchEngine {
         );
 
         // 3. Application de la fatigue de frappe
-        this.addFatigue(strikerId, this.kinematic.getTraveledDistance(striker,shotResult.startPos), shotResult.type);
+        this.addFatigue(strikerId, this.kinematic.getTraveledDistance(striker.position, shotResult.startPos), shotResult.type);
 
         const finalShotContext = {
             type: shotResult.type,
@@ -465,7 +478,7 @@ class MatchEngine {
         }
 
         // Si c'est OUT (vérifié par le TacticalEngine)
-        if (tacticalEval.score === 0 && tacticalEval.player.message.includes("OUT")) {
+        if (tacticalEval.score === 0 && (tacticalEval.player.message ?? '').includes("OUT")) {
             this._endRally(3, "Volant OUT par l'équipe A");
             return { rallyOver: true, winnerId: 3, reason: 'OUT', finalShot: finalShotContext };
         }
@@ -518,6 +531,10 @@ class MatchEngine {
     // Utilitaire simple pour piocher dans tes listes générées
     _pickRandomFromList(list) {
         if (!list || list.length === 0) return null;
+        if (!Array.isArray(list)) {
+            if (Number.isFinite(list.x) && Number.isFinite(list.y)) return { pos: list };
+            return list;
+        }
         const randomIndex = Math.floor(Math.random() * list.length);
         return list[randomIndex];
     }
@@ -913,6 +930,19 @@ class MatchEngine {
         // 4. Déclenchement des vérifications de fin de set/match
         this.checkScore();
     }
+
+    forfeitPoint(winnerId = 3, reason = 'TIME') {
+        if (!this.matchState || this.matchState.matchOver) {
+            return { rallyOver: true, winnerId, reason };
+        }
+
+        if (this.matchState.rallyStatus !== 'FINISHED') {
+            this._endRally(winnerId, reason);
+        }
+
+        return { rallyOver: true, winnerId, reason };
+    }
+
     /**
      * Démarre un nouvel échange (Rally) et place les joueurs.
      * Renvoie le bon scénario initial (Tactique ou Placement) selon le serveur.
@@ -928,10 +958,16 @@ class MatchEngine {
         this.matchState.pendingMovements = {};
         this.matchState.lastShotScore = 100;
 
-        // 2. Détermination du côté de service
-        const serverId = this.matchState.currentServerId;
-        const serverTeam = this.players[serverId].team;
-        const serveSide = this.players[serverId].servingPos;
+        // MVP: the UI has no dedicated serve mechanic and auto-played partner
+        // serves could resolve points before the user touched anything. Start
+        // every rally with an opponent serve toward the human player.
+        this.players[1].servingPos = 'right';
+        this.players[2].servingPos = 'left';
+        this.players[3].servingPos = 'right';
+        this.players[4].servingPos = 'left';
+        const serverId = 3;
+        this.matchState.currentServerId = serverId;
+        const serveSide = 'right';
 
         // 3. Application des positions strictes de service
         const initialSetup = this._generateInitialScenario(serverId, serveSide);
@@ -946,66 +982,16 @@ class MatchEngine {
             { posStart: this.players[4].position, posEnd: this.players[4].position, hand: 'right', isHitter: (serverId === 4) }
         ];
 
-        // 5. Aiguillage selon le serveur
-        // CAS A : Le joueur (1) sert
-        if (serverId === 1) {
-            return {
-                mode: 'TACTICAL',
-                isServe: true,
-                incoming: null, // C'est un service
-                players: {
-                    user: { pos: this.players[1].position, hand: 'right' },
-                    partner: { pos: this.players[2].position, hand: 'right' },
-                    opponents: opponentsData
-                }
-            };
-        } 
-        // CAS B : Le partenaire (2) sert
-        else if (serverId === 2) {
-            // Un service est "autorisé" comme réponse à un CLEAR fictif pour le moteur tactique
-            const dummyIncoming = { type: 'CLEAR', startPos: this.players[3].position, endPos: this.players[2].position, hasSpin: false };
-           
-            return this.nextScenarioPostShot(serveShot, dummyIncoming);
-        } 
-        // CAS C : L'adversaire sert sur le joueur (1)
-        else if (receiverId === 1) {
-            return {
-                mode: 'TACTICAL',
-                isServe: true,
-                incoming: serveShot,
-                players: {
-                    user: { pos: this.players[1].position, hand: 'right' },
-                    partner: { pos: this.players[2].position, hand: 'right' },
-                    opponents: opponentsData
-                }
-            };
-        } 
-        // CAS D : L'adversaire sert sur le partenaire (2)
-        else {
-            // 1. Le partenaire réceptionne automatiquement
-            const aiShots = this.aiSpawn.generateBestShot(serveShot, [this.players[3].position, this.players[4].position], this.players[2].rank, this.players[2].position);
-            const chosenPartnerShot = this._pickRandomFromList(aiShots);
-
-            const postShotRes = this.applyTeamShot(2, chosenPartnerShot, serveShot);
-
-            // 2. On crée le scénario tactique "Spectateur"
-            const tacticalScen = {
-                mode: 'TACTICAL',
-                isServe: true,
-                partnerPlaying: true, // DEV A affichera l'action du partenaire sans input joueur
-                incoming: serveShot,
-                players: {
-                    user: { pos: this.players[1].position, hand: 'right' },
-                    partner: { pos: this.players[2].position, hand: 'right' },
-                    opponents: opponentsData
-                }
-            };
-
-            // 3. On crée le scénario de placement qui suit
-            const placementScen = this.nextScenarioPostShot(chosenPartnerShot, serveShot);
-
-            return { scenarios: [tacticalScen, placementScen] };
-        }
+        return {
+            mode: 'TACTICAL',
+            isServe: true,
+            incoming: serveShot,
+            players: {
+                user: { pos: this.players[1].position, hand: 'right' },
+                partner: { pos: this.players[2].position, hand: 'right' },
+                opponents: opponentsData
+            }
+        };
     }
 }
 export { MatchEngine };

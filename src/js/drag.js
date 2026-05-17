@@ -49,6 +49,17 @@ const DEFAULT_DRAG_PROFILE = Object.freeze({
   ringBoost: 1,
 });
 
+// Built-in per-type profiles — override DEFAULT_DRAG_PROFILE for specific shots.
+// External profiles passed to the constructor take priority over these.
+const BUILT_IN_SHOT_PROFILES = Object.freeze({
+  // CLEAR must land deep: targetYMin/Max both in the opponent's back third.
+  // Even at low raw power the projection keeps the shuttle behind the back service line.
+  CLEAR: Object.freeze({
+    targetYMin: 0.02,  // very close to opponent's back wall (max power)
+    targetYMax: 0.14,  // doubles back-service-line area (min power)
+  }),
+});
+
 /**
  * Power threshold (post-easing) at which the max-tension cue appears.
  * Picked just below 1.0 so the player sees the cue before bottoming out.
@@ -738,17 +749,15 @@ export class DragShooter {
   }
 
   _activeProfile() {
-    const profile = this._profiles?.[this._shotType] ?? null;
-    if (!profile) return DEFAULT_DRAG_PROFILE;
-
-    return {
-      ...DEFAULT_DRAG_PROFILE,
-      ...profile,
-    };
+    const external = this._profiles?.[this._shotType] ?? null;
+    const builtin  = BUILT_IN_SHOT_PROFILES[this._shotType] ?? null;
+    const override = external ?? builtin ?? null;
+    if (!override) return DEFAULT_DRAG_PROFILE;
+    return { ...DEFAULT_DRAG_PROFILE, ...override };
   }
 
   _hasActiveCustomProfile() {
-    return Boolean(this._profiles?.[this._shotType]);
+    return Boolean(this._profiles?.[this._shotType] ?? BUILT_IN_SHOT_PROFILES[this._shotType]);
   }
 
   // ─── Utilities ────────────────────────────────────────────────────────────────

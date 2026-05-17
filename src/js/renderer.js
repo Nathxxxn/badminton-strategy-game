@@ -352,7 +352,24 @@ export class Renderer {
   // ─── Players ───────────────────────────────────────────────────────────────
 
   _drawPlayers(players, activePlayerId, equipment = null) {
-    for (const [id, data] of Object.entries(players)) {
+    // Resolve positions, offsetting any two players that share the same spot
+    // so neither is hidden behind the other.
+    const entries = Object.entries(players).filter(([, d]) => d != null);
+    const JITTER  = 0.025; // ~15 cm offset in normalised coords
+    const seen    = [];
+    const resolved = entries.map(([id, data]) => {
+      let { x, y } = data;
+      for (const prev of seen) {
+        if (Math.abs(x - prev.x) < 0.005 && Math.abs(y - prev.y) < 0.005) {
+          x += JITTER;
+          y -= JITTER * 0.5;
+        }
+      }
+      seen.push({ x, y });
+      return [id, { ...data, x, y }];
+    });
+
+    for (const [id, data] of resolved) {
       const isAlly   = id.startsWith('ally');
       const isActive = id === activePlayerId;
       const label    = data.label ?? this._defaultLabel(id);

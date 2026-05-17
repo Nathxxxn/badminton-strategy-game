@@ -892,11 +892,6 @@ export class ScreenManager {
       }
     });
 
-    // Welcome modal for first-time visitors (no tutorialDone in localStorage)
-    if (!localStorage.getItem('rally.tutorialDone')) {
-      setTimeout(() => this._showWelcomeModal(), 500);
-    }
-
     menu.querySelectorAll('.mode-card').forEach(card => {
       card.addEventListener('click', event => {
         if (card.classList.contains('mode--wip')) return;
@@ -1027,6 +1022,7 @@ export class ScreenManager {
     this._renderSettingsPanel(menu);
     this._wireSettingsAfterRender(menu);
     if (this._currentScreen === 'auth') this.show('menu');
+    setTimeout(() => this._showWelcomeModal(), 500);
   }
 
   _wireAuth(auth) {
@@ -1099,6 +1095,7 @@ export class ScreenManager {
     this._renderSettingsPanel(menu);
     this._wireSettingsAfterRender(menu);
     this.show('menu');
+    setTimeout(() => this._showWelcomeModal(), 500);
   }
 
   _homeStatsMarkup(profile, state) {
