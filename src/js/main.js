@@ -1051,9 +1051,17 @@ async function handleMatchScenario(scen) {
 
   // Normal turn — store raw scenario for intercepts, translate, dispatch
   currentMatchTurn = scen;
-  const turn = matchAdapter.translate(scen);
+  let turn;
+  try {
+    turn = matchAdapter.translate(scen);
+  } catch (err) {
+    console.error('[match] translate failed', err, scen);
+    throw err;
+  }
+  console.log('[match] starting turn', turn?.type, turn);
   if (turn.type === 'shot')             startShotTurn(turn);
   else if (turn.type === 'positioning') startPositioningTurn(turn);
+  else console.error('[match] unknown turn type', turn?.type);
 }
 
 /**
@@ -1237,9 +1245,18 @@ async function startGame(workshop) {
     hud.update(score, 0, 0, 0);
     await showMatchReadyPrompt();
     if (requestId !== startRequestId) return;
-    handleMatchScenario(matchAdapter.startRally()).catch(err => {
+    let firstScen;
+    try {
+      firstScen = matchAdapter.startRally();
+    } catch (err) {
+      console.error('[match] startRally threw:', err);
+      await hud.showExplanation(err?.message ?? String(err), '#f87171', 4000);
+      resetAndShowMenu();
+      return;
+    }
+    handleMatchScenario(firstScen).catch(err => {
       console.error('[match] handleMatchScenario failed', err);
-      hud.showExplanation(err?.message ?? String(err), '#f87171', 3000).then(resetAndShowMenu);
+      hud.showExplanation(err?.message ?? String(err), '#f87171', 4000).then(resetAndShowMenu);
     });
     return;
   }
