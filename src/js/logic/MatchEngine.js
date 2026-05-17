@@ -48,14 +48,14 @@ class MatchEngine {
                     teamA: playerTeam, 
                     teamB: oppTeam 
                 },
-                pendingMovements = {},
+                pendingMovements: {},
                 // Le serveur initial
                 currentServerId: (Math.random() > 0.5)? ((Math.random() > 0.5)? 1 : 2 ) : ((Math.random() > 0.5)? 3 : 4),
                 lastShotScore : 0,
                 // Statistiques évolutives
                 matchReport : {
                         winner: null,
-                        initialStats: {rating: players[1].rating, rank: players[1].rank },
+                        initialStats: {rating: this.players[1].rating, rank: this.players[1].rank },
                         finalStats: {},
                         totalRallies : 0,
                         globalScores: { tactical: 0, placement: 0, totalBonus: 0, totalMalus: 0, nbTactical : 0, nbPlacement :0 }, //Somme des scores de tactique et placement de chaque scénario.
