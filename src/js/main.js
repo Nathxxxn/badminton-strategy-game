@@ -1116,6 +1116,9 @@ function runTurn(index) {
 
 function showEndScreen() {
   hud.hideInstruction();
+  const finalMatchState = (currentWorkshop === 'match' && matchAdapter)
+    ? matchAdapter.getMatchState()
+    : currentMatchState;
   const totalPlayed = currentWorkshop === 'match'
     ? countTactical + countPlacement
     : currentRally.length;
@@ -1125,14 +1128,14 @@ function showEndScreen() {
   const avgPlacement  = countPlacement  > 0 ? Math.round(scorePlacementSum / countPlacement)  : '—';
 
   document.getElementById('end-title').textContent = currentWorkshop === 'match'
-    ? `${currentMatchState?.winner === 'player' ? 'Match won!' : 'Match lost'}`
+    ? `${finalMatchState?.winner === 'player' ? 'Match won!' : 'Match lost'}`
     : `${stars}  Rally complete!`;
   document.getElementById('end-score').textContent = currentWorkshop === 'match'
-    ? `Sets: ${currentMatchState?.sets.player ?? 0}-${currentMatchState?.sets.opponent ?? 0} · Score: ${score} pts`
+    ? `Sets: ${finalMatchState?.sets.player ?? 0}-${finalMatchState?.sets.opponent ?? 0} · Score: ${score} pts`
     : `Score: ${score} pts`;
 
   // ratingDelta is populated by Logic at end of match (null until then).
-  const ratingDelta = currentMatchState?.ratingDelta ?? null;
+  const ratingDelta = finalMatchState?.ratingDelta ?? null;
 
   const details = [
     `${correct} / ${totalPlayed} correct answers`,
