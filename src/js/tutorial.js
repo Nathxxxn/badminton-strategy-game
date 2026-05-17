@@ -40,7 +40,15 @@ const DEFENSE_SCENARIO = Object.freeze({
     opponent1: { x: 0.35, y: 0.20 },
     opponent2: { x: 0.65, y: 0.20 },
   },
-  playedShuttle: { position: { x: 0.25, y: 0.87 }, type: 'CLEAR' },
+  // shuttlecock required by buildPlacementPayload — CLEAR from ally back-left to opponent back-left
+  // trajectory[0] = ally-side origin (startPos), position = opponent-side landing (endPos)
+  shuttlecock: {
+    from:       { x: 0.25, y: 0.87 },
+    position:   { x: 0.25, y: 0.08 },
+    trajectory: [{ x: 0.25, y: 0.87 }, { x: 0.25, y: 0.08 }],
+    type: 'CLEAR',
+  },
+  playedShuttle: { startPos: { x: 0.25, y: 0.87 }, endPos: { x: 0.25, y: 0.08 }, type: 'CLEAR' },
   // moveRadius in metres — 2.8m gives a visible circle covering mid-court
   moveRadius: 2.8,
   playerReach: 2.2,
@@ -549,21 +557,10 @@ export class TutorialManager {
     }
   }
 
-  // ── Retry banner ────────────────────────────────────────────────────────────
+  // ── Retry message ────────────────────────────────────────────────────────────
 
   _showRetry(message, onRetry) {
-    const existing = this._root.querySelector('.tut-retry-banner');
-    if (existing) existing.remove();
-
-    const banner = document.createElement('div');
-    banner.className = 'tut-retry-banner';
-    banner.textContent = message;
-    this._root.appendChild(banner);
-
-    setTimeout(() => {
-      banner.remove();
-      onRetry();
-    }, 1600);
+    this._hud.showExplanation(message, '#f87171', 1600).then(onRetry);
   }
 
   // ── Cleanup helpers ─────────────────────────────────────────────────────────

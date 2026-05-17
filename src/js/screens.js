@@ -370,9 +370,9 @@ function dailyBonusMarkup(state) {
         type="button"
         data-interclub
         ${!interclubAvail ? 'disabled' : ''}
-        title="1 match par jour contre un duo de classement supérieur. Peu à perdre, beaucoup à gagner !"
+        title="1 interclub match per day against a higher-ranked pair. Little to lose, much to gain!"
       >
-        ${interclubAvail ? '⚡ Interclubs' : '✓ Interclubs joué'}
+        ${interclubAvail ? '⚡ Interclubs' : '✓ Interclubs played'}
       </button>
     </div>`;
 }
@@ -519,7 +519,7 @@ function renderSettingsPage(state) {
                 type="button"
                 data-hand-toggle
                 aria-pressed="${isLeftHanded}"
-                title="Ta raquette sera affichée du bon côté sur le terrain"
+                title="Your racket will be displayed on the correct side of the court"
               >
                 <span class="hand-toggle-knob"></span>
               </button>
@@ -790,7 +790,7 @@ export class ScreenManager {
             <button class="nav-pill" type="button" data-page="leaderboard">Leaderboard</button>
             <button class="nav-pill" type="button" data-page="settings">Settings</button>
           </nav>
-          <div class="player-pill" data-player-pill aria-label="Profil joueur" style="--avatar-color:${profile.avatarColor}">
+          <div class="player-pill" data-player-pill aria-label="Player profile" style="--avatar-color:${profile.avatarColor}">
             <span class="player-avatar" data-player-initials>${initials}</span>
             <span class="player-rank-group">
               <span class="player-rank" data-player-rank style="color:${rankColor(profile.rank)}">${escapeHtml(profile.rank.toUpperCase())} · ${profile.rating ?? 600} pts</span>
