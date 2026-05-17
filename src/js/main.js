@@ -34,6 +34,7 @@ import { AISpawnEngine }          from './logic/AISpawnEngine.js';
 import { KinematicEngine }        from './logic/KinematicEngine.js';
 import { PlacementEngine }        from './logic/PlacementEngine.js';
 import { TacticalEngine }        from './logic/TacticalEngine.js';
+import { MatchAdapter }          from './match-adapter.js';
 import {
   createMatchState,
   applyMatchPoint,
@@ -121,6 +122,11 @@ const shotTypeSelector = new ShotTypeSelector(
 let _tutorialMode      = false;
 let _tutorialObserver  = null; // { onShotResult(data), onPositionResult(data) }
 let _tutorialGoalCenter = null; // {x,y} normalized — overrides correctionRenderPos on shot feedback
+
+/** MatchEngine adapter — non-null only during match mode */
+let matchAdapter     = null;
+/** Raw MatchEngine scenario for the active match turn (TACTICAL or PLACEMENT) */
+let currentMatchTurn = null;
 
 /** @type {Array|null} Active rally turn list */
 let currentRally    = null;
@@ -983,6 +989,53 @@ export async function handleStopSignal(signal) {
   await showPointResult(signal);
   applyScore(0, false);
   nextTurn();
+}
+
+/**
+ * Central dispatcher for MatchEngine scenarios.
+ * Handles: partner-playing pair, rally-over, and normal shot/positioning turns.
+ */
+async function handleMatchScenario(scen) {
+  stopTurnTimer();
+  turnActive = false;
+  cleanupTurnListeners();
+  hud.clearFeedback();
+
+  // Partner-playing pair: animate the partner's action then handle the follow-up
+  if (scen.scenarios) {
+    await autoPlayPartnerTurn(scen.scenarios[0]);
+    return handleMatchScenario(scen.scenarios[1]);
+  }
+
+  // Rally ended
+  if (scen.rallyOver) {
+    const winner = (scen.winnerId ?? 3) <= 2 ? 'player' : 'opp';
+    await showPointResult({ winner, reason: scen.reason ?? '' });
+    hud.setMatchState(matchAdapter.getMatchState());
+    if (matchAdapter.isMatchOver()) {
+      setTimeout(showEndScreen, 350);
+    } else {
+      handleMatchScenario(matchAdapter.startRally());
+    }
+    return;
+  }
+
+  // Normal turn — store raw scenario for intercepts, translate, dispatch
+  currentMatchTurn = scen;
+  const turn = matchAdapter.translate(scen);
+  if (turn.type === 'shot')             startShotTurn(turn);
+  else if (turn.type === 'positioning') startPositioningTurn(turn);
+}
+
+/**
+ * Render a partner-auto-play scenario for ~1.5 s then resolve.
+ * No player input; used when the partner strikes instead of the player.
+ */
+async function autoPlayPartnerTurn(scen) {
+  const turn = matchAdapter.translate(scen);
+  if (!turn || !turn.players) return;
+  renderBase(turn, { showShuttle: true });
+  await new Promise(r => setTimeout(r, 1500));
 }
 
 // ─── Turn sequencing ────────────────────────────────────────────────────────
