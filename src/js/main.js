@@ -1179,6 +1179,29 @@ async function startGame(workshop) {
   hud.updateRallyStats({ score: 0, correct: 0, total: 0, malus: 0 });
   court.draw();
 
+  // ── Match mode: use MatchEngine instead of static scenarios ──────────────
+  if (workshop === 'match') {
+    try {
+      matchAdapter = new MatchAdapter();
+      matchAdapter.initMatch(buildPlayerInitPayload());
+    } catch (err) {
+      console.error('[match] MatchEngine init failed', err);
+      const msg = err instanceof Error ? err.message : 'Could not initialise match engine.';
+      await hud.showExplanation(msg, '#f87171', 2200);
+      resetAndShowMenu();
+      return;
+    }
+    currentRally = []; // prevents null-crashes in shared hud.update() calls
+    hud.setMatchState(matchAdapter.getMatchState());
+    hud.updateOpponents(...DEFAULT_OPPONENT_NAMES);
+    hud.update(score, 0, 0, 0);
+    await showMatchReadyPrompt();
+    if (requestId !== startRequestId) return;
+    handleMatchScenario(matchAdapter.startRally());
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   try {
     const rally = await loadWorkshopRally(workshop);
     if (requestId !== startRequestId) return;
@@ -1225,6 +1248,8 @@ function resetAndShowMenu() {
   if (readyOverlay) readyOverlay.hidden = true;
   currentRally = null;
   currentMatchState = null;
+  matchAdapter     = null;
+  currentMatchTurn = null;
   document.getElementById('end-screen').style.display = 'none';
   hud.hideInstruction();
   hud.showMatchHud(false);
