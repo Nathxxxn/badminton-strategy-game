@@ -707,6 +707,14 @@ async function onPositionClick(e) {
     return;
   }
 
+  // Match mode: pass position to MatchEngine and let handleMatchScenario drive next turn
+  if (currentWorkshop === 'match' && matchAdapter && currentMatchTurn) {
+    const shotContext = currentMatchTurn.shotPlayed ?? currentMatchTurn._raw?.shotPlayed ?? null;
+    const next = matchAdapter.onPositionPlayed(pos, shotContext);
+    handleMatchScenario(next);
+    return;
+  }
+
   applyScore(feedback.totalScore, isCorrect);
   if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
