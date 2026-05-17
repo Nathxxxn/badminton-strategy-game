@@ -1243,19 +1243,8 @@ async function startGame(workshop) {
     const rally = await loadWorkshopRally(workshop);
     if (requestId !== startRequestId) return;
     currentRally = rally.map(prepareTurnForRuntime);
-    if (workshop === 'match') {
-      const initPayload = buildPlayerInitPayload();
-      currentMatchState = createMatchState({
-        opponentRank: currentRally[0]?.opponentRank ?? DEFAULT_OPPONENT_RANK,
-        playerRating: initPayload.rating,
-      });
-      hud.setMatchState(currentMatchState);
-      const styles = currentMatchState.opponentStyles;
-      hud.updateOpponents(styles.opp1.name, styles.opp2.name);
-    } else {
-      const [n1, n2] = pickExerciseOppNames();
-      hud.updateOpponents(n1, n2);
-    }
+    const [n1, n2] = pickExerciseOppNames();
+    hud.updateOpponents(n1, n2);
   } catch (error) {
     console.error('Unable to load rally', error);
     if (requestId !== startRequestId) return;
@@ -1266,10 +1255,6 @@ async function startGame(workshop) {
   }
 
   hud.update(score, 0, currentRally.length, 0);
-  if (workshop === 'match') {
-    await showMatchReadyPrompt();
-    if (requestId !== startRequestId) return;
-  }
   runTurn(0);
 }
 
