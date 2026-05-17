@@ -381,3 +381,4 @@ class ExecutionEngine {
         return val;
     }
 }
+export { ExecutionEngine };
