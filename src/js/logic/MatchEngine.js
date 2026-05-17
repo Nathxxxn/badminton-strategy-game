@@ -23,7 +23,7 @@ class MatchEngine {
         initMatch(playerTeam, matchType = 'QUICK_MATCH', format = 21) {
             this.setMatchFormat(format)
             // 1. Détermination des adversaires selon le type de match
-            const oppTeam = this._generateOpponents(playerTeam.rating, matchType);
+            const oppTeam = this._generateOpponents(playerTeam[0].rating, matchType);
             // 1.1. Initialisation de this.players
             this.players = {
                 1: { ...playerTeam[0], fatigue: 0.0, position: { x: 0, y: 0 }, team: 'A', servingPos: 'right' },
@@ -934,10 +934,10 @@ class MatchEngine {
         // 2. Détermination du côté de service
         const serverId = this.matchState.currentServerId;
         const serverTeam = this.players[serverId].team;
-    
+        const serveSide = this.players[serverId].servingPos;
 
         // 3. Application des positions strictes de service
-        const initialSetup = this._generateInitialScenario(serverId, players[serverId].servingPos);
+        const initialSetup = this._generateInitialScenario(serverId, serveSide);
         const serveShot = initialSetup.initialShot; // NET_DROP par défaut
         const receiverId = initialSetup.receiverId;
 
