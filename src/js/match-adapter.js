@@ -64,7 +64,7 @@ export class MatchAdapter {
   /**
    * Returns a state object shaped for hud.setMatchState().
    * hud expects: { points:{player,opponent}, sets:{player,opponent}, fatigue:{player,partner,opponent1,opponent2} }
-   * MatchEngine uses: { score:{teamA,teamB,setsA,setsB}, players:{1,2,3,4}.fatigue (0–1) }
+   * MatchEngine uses: { score:{teamA,teamB}, setsP1, setsP2, players:{1,2,3,4}.fatigue (0–1) }
    */
   getMatchState() {
     const ms = engine.matchState;
