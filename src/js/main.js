@@ -1009,6 +1009,11 @@ export async function handleStopSignal(signal) {
   }
 
   await showPointResult(signal);
+  if (currentWorkshop === 'match' && matchAdapter) {
+    hud.setMatchState(matchAdapter.getMatchState());
+    handleMatchScenario(matchAdapter.startRally());
+    return;
+  }
   applyScore(0, false);
   nextTurn();
 }
@@ -1066,6 +1071,13 @@ function nextTurn() {
   stopTurnTimer();
   turnActive = false;
   hud.clearFeedback();  // remove feedback colour without collapsing the panel
+
+  // MatchEngine match mode: timeouts are handled as opponent points.
+  // The engine score is not updated for Dev-A-side timeouts (v1 known limitation).
+  if (currentWorkshop === 'match' && matchAdapter) {
+    handleMatchScenario(matchAdapter.startRally());
+    return;
+  }
 
   if (currentWorkshop === 'match' && currentMatchState) {
     if (isMatchComplete(currentMatchState)) {
