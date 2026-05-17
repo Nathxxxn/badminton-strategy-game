@@ -227,12 +227,12 @@
 
     <div id="pause-overlay" class="pause-overlay" hidden>
       <div class="pause-card">
-        <div class="pause-eyebrow">EN PAUSE</div>
-        <h2 class="pause-title">Rally suspendu</h2>
+        <div class="pause-eyebrow">PAUSED</div>
+        <h2 class="pause-title">Rally paused</h2>
         <p class="pause-hint">Take a breath. Press <kbd>ESC</kbd> or click Resume when you are ready.</p>
         <div class="pause-actions">
           <button id="pause-resume-btn" class="btn-rally btn-rally-primary" type="button">Resume</button>
-          <button id="pause-menu-btn"   class="btn-rally" type="button">Quitter au menu</button>
+          <button id="pause-menu-btn"   class="btn-rally" type="button">Back to menu</button>
         </div>
       </div>
     </div>
@@ -247,13 +247,18 @@
   </div>
 
   <div id="end-screen">
-    <h2 id="end-title">Fin du rally !</h2>
-    <p  id="end-score"></p>
-    <p  id="end-detail"></p>
-    <button id="end-btn" class="btn-primary">Play again</button>
+    <div class="end-card">
+      <div class="pause-eyebrow" id="end-eyebrow">RALLY TERMINÉ</div>
+      <h2 class="pause-title" id="end-title">Fin du rally !</h2>
+      <p  class="end-score-line" id="end-score"></p>
+      <p  class="end-detail-block" id="end-detail"></p>
+      <div class="end-actions pause-actions">
+        <button id="end-btn" class="btn-rally btn-rally-primary" type="button">Play again</button>
+      </div>
+    </div>
   </div>
 
-  <button id="continue-btn" hidden>Continuer →</button>
+  <button id="continue-btn" hidden>Continue →</button>
 
   <div id="tutorial-root"></div>
 

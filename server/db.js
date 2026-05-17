@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { createClient } from '@libsql/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -188,223 +188,118 @@ function readMigrations() {
     }));
 }
 
-function runMigrations(db) {
-  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
-  const applied = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(row => row.version));
-  const insert = db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)');
+async function runMigrations(client) {
+  await client.execute('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
+  const result = await client.execute('SELECT version FROM schema_migrations');
+  const applied = new Set(result.rows.map(row => Number(row.version)));
 
   for (const migration of readMigrations()) {
     if (applied.has(migration.version)) continue;
-    const apply = db.transaction(() => {
-      db.exec(migration.sql);
-      insert.run(migration.version, nowIso());
-    });
-    apply();
+    const stmts = migration.sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(sql => ({ sql, args: [] }));
+    await client.batch([
+      ...stmts,
+      { sql: 'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', args: [migration.version, nowIso()] },
+    ], 'write');
   }
+}
+
+function controlsStatements(userId, controls) {
+  return [
+    { sql: 'DELETE FROM player_controls WHERE user_id = ?', args: [userId] },
+    ...controls.map((bind, index) => ({
+      sql: 'INSERT INTO player_controls (user_id, action, key_value, sort_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, action) DO UPDATE SET key_value = excluded.key_value, sort_order = excluded.sort_order',
+      args: [userId, bind.action, bind.key, index],
+    })),
+  ];
 }
 
 function getDefaultControls() {
   return clone(DEFAULT_CONTROLS);
 }
 
-export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/data/rally.sqlite') } = {}) {
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  runMigrations(db);
+export async function createPlayerStore() {
+  const url = process.env.TURSO_DATABASE_URL
+    ?? `file:${path.join(process.cwd(), 'server/data/rally.sqlite')}`;
 
-  const insertUser = db.prepare(`
-    INSERT INTO users (id, email, password_hash, created_at, updated_at)
-    VALUES (@id, @email, @passwordHash, @createdAt, @updatedAt)
-  `);
-  const findUserByEmail = db.prepare('SELECT * FROM users WHERE email = ?');
-  const findUserById = db.prepare('SELECT * FROM users WHERE id = ?');
-  const updatePassword = db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?');
-  const insertProfile = db.prepare(`
-    INSERT INTO player_profiles (
-      user_id, name, initials, country, avatar_color, level, xp, xp_max, rank,
-      wins, losses, win_rate, streak, best_streak, trained_seconds, rating, peak_rating
-    )
-    VALUES (@userId, @name, @initials, @country, @avatarColor, @level, @xp, @xpMax, @rank,
-      @wins, @losses, @winRate, @streak, @bestStreak, @trainedSeconds, @rating, @peakRating)
-  `);
-  const insertPreferences = db.prepare(`
-    INSERT INTO player_preferences (user_id, drill_filter, leaderboard_period)
-    VALUES (?, ?, ?)
-  `);
-  const insertStats = db.prepare('INSERT INTO player_stats (user_id) VALUES (?)');
-  const replaceControl = db.prepare(`
-    INSERT INTO player_controls (user_id, action, key_value, sort_order)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id, action) DO UPDATE SET key_value = excluded.key_value, sort_order = excluded.sort_order
-  `);
-  const deleteControls = db.prepare('DELETE FROM player_controls WHERE user_id = ?');
-  const getProfileRow = db.prepare('SELECT * FROM player_profiles WHERE user_id = ?');
-  const getPreferencesRow = db.prepare('SELECT * FROM player_preferences WHERE user_id = ?');
-  const getControlsRows = db.prepare('SELECT action, key_value, sort_order FROM player_controls WHERE user_id = ? ORDER BY sort_order ASC');
-  const getStatsRow = db.prepare('SELECT * FROM player_stats WHERE user_id = ?');
-  const getDrillRows = db.prepare('SELECT * FROM drill_progress WHERE user_id = ?');
-  const getSessionsRows = db.prepare(`
-    SELECT * FROM game_sessions
-    WHERE user_id = ?
-    ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC
-  `);
-  const getWeeklySessionsRows = db.prepare(`
-    SELECT * FROM game_sessions
-    WHERE user_id = ? AND completed_at >= ?
-    ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC
-  `);
-  const insertSession = db.prepare(`
-    INSERT INTO sessions (id, user_id, token_hash, created_at, expires_at)
-    VALUES (@id, @userId, @tokenHash, @createdAt, @expiresAt)
-  `);
-  const getSessionByHash = db.prepare(`
-    SELECT sessions.*, users.email
-    FROM sessions
-    JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?
-  `);
-  const revokeSession = db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ?');
-  const updateProfileStatement = db.prepare(`
-    UPDATE player_profiles
-    SET name = @name, initials = @initials, country = @country, avatar_color = @avatarColor
-    WHERE user_id = @userId
-  `);
-  const updateProfileStatsStatement = db.prepare(`
-    UPDATE player_profiles
-    SET level = @level, xp = @xp, xp_max = @xpMax, rank = @rank, rating = @rating,
-      peak_rating = @peakRating, wins = @wins, losses = @losses, win_rate = @winRate,
-      streak = @streak, best_streak = @bestStreak, trained_seconds = @trainedSeconds
-    WHERE user_id = @userId
-  `);
-  const updatePreferencesStatement = db.prepare(`
-    UPDATE player_preferences
-    SET drill_filter = @drillFilter, leaderboard_period = @leaderboardPeriod
-    WHERE user_id = @userId
-  `);
-  const upsertDrillStart = db.prepare(`
-    INSERT INTO drill_progress (user_id, drill_id, workshop, started)
-    VALUES (?, ?, ?, 1)
-    ON CONFLICT(user_id, drill_id) DO UPDATE SET started = 1
-  `);
-  const upsertDrillResult = db.prepare(`
-    INSERT INTO drill_progress (user_id, drill_id, workshop, started, completed, attempts, best_score, last_played_at, last_result)
-    VALUES (@userId, @drillId, @workshop, 1, @completed, 1, @bestScore, @lastPlayedAt, @lastResult)
-    ON CONFLICT(user_id, drill_id) DO UPDATE SET
-      started = 1,
-      completed = MAX(completed, excluded.completed),
-      attempts = attempts + 1,
-      best_score = CASE
-        WHEN best_score IS NULL OR excluded.best_score > best_score THEN excluded.best_score
-        ELSE best_score
-      END,
-      last_played_at = excluded.last_played_at,
-      last_result = excluded.last_result
-  `);
-  const insertGameSession = db.prepare(`
-    INSERT INTO game_sessions (
-      id, user_id, drill_id, workshop, match_id, score, correct, total_turns, duration_seconds,
-      tactical_average, placement_average, result, accuracy, rating_before, rating_after,
-      rating_delta, xp_gained, daily_bonus_applied, xp_multiplier, completed_at, created_at
-    )
-    VALUES (@id, @userId, @drillId, @workshop, @matchId, @score, @correct, @totalTurns, @durationSeconds,
-      @tacticalAverage, @placementAverage, @result, @accuracy, @ratingBefore, @ratingAfter,
-      @ratingDelta, @xpGained, @dailyBonusApplied, @xpMultiplier, @completedAt, @createdAt)
-  `);
-  const updateStats = db.prepare(`
-    UPDATE player_stats
-    SET sessions_played = sessions_played + 1,
-      total_score = total_score + @score,
-      total_correct = total_correct + @correct,
-      total_turns = total_turns + @totalTurns,
-      total_duration_seconds = total_duration_seconds + @durationSeconds,
-      best_score = MAX(best_score, @score),
-      wins = @wins,
-      losses = @losses,
-      current_streak = @streak,
-      best_streak = @bestStreak,
-      rating = @rating,
-      peak_rating = @peakRating,
-      last_daily_bonus_date = @lastDailyBonusDate,
-      last_played_at = @completedAt
-    WHERE user_id = @userId
-  `);
-  const resetProgressRows = db.prepare('DELETE FROM game_sessions WHERE user_id = ?');
-  const resetDrillRows = db.prepare('DELETE FROM drill_progress WHERE user_id = ?');
-  const resetStats = db.prepare(`
-    UPDATE player_stats
-    SET sessions_played = 0, total_score = 0, total_correct = 0, total_turns = 0,
-      total_duration_seconds = 0, best_score = 0, wins = 0, losses = 0,
-      current_streak = 0, best_streak = 0, rating = 600, peak_rating = 600,
-      last_daily_bonus_date = NULL, last_played_at = NULL
-    WHERE user_id = ?
-  `);
-
-  function writeControls(userId, controls) {
-    deleteControls.run(userId);
-    controls.forEach((bind, index) => replaceControl.run(userId, bind.action, bind.key, index));
+  if (url.startsWith('file:')) {
+    mkdirSync(path.dirname(url.slice(5)), { recursive: true });
   }
 
-  function createUser({ email, passwordHash, name, country }) {
+  const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+
+  try {
+    await client.execute('PRAGMA foreign_keys = ON');
+  } catch {
+    // Remote Turso handles referential integrity server-side
+  }
+
+  await runMigrations(client);
+
+  async function createUser({ email, passwordHash, name, country }) {
     const timestamp = nowIso();
     const userId = randomUUID();
     const profile = DEFAULT_APP_STATE.profile;
     const normalizedName = String(name ?? profile.name).trim() || profile.name;
-    const create = db.transaction(() => {
-      insertUser.run({ id: userId, email: normalizeEmail(email), passwordHash, createdAt: timestamp, updatedAt: timestamp });
-      insertProfile.run({
-        userId,
-        name: normalizedName,
-        initials: initialsFor(normalizedName),
-        country: normalizeCountry(country),
-        avatarColor: profile.avatarColor,
-        level: profile.level,
-        xp: profile.xp,
-        xpMax: profile.xpMax,
-        rank: rankForRating(profile.rating),
-        rating: profile.rating,
-        peakRating: profile.peakRating,
-        wins: profile.wins,
-        losses: profile.losses,
-        winRate: profile.winRate,
-        streak: profile.streak,
-        bestStreak: profile.bestStreak,
-        trainedSeconds: 0,
-      });
-      insertPreferences.run(userId, DEFAULT_APP_STATE.preferences.drillFilter, DEFAULT_APP_STATE.preferences.leaderboardPeriod);
-      insertStats.run(userId);
-      writeControls(userId, getDefaultControls());
-    });
-    create();
-    return findUserById.get(userId);
+
+    await client.batch([
+      {
+        sql: 'INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        args: [userId, normalizeEmail(email), passwordHash, timestamp, timestamp],
+      },
+      {
+        sql: 'INSERT INTO player_profiles (user_id, name, initials, country, avatar_color, level, xp, xp_max, rank, wins, losses, win_rate, streak, best_streak, trained_seconds, rating, peak_rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [
+          userId, normalizedName, initialsFor(normalizedName), normalizeCountry(country),
+          profile.avatarColor, profile.level, profile.xp, profile.xpMax,
+          rankForRating(profile.rating), profile.wins, profile.losses, profile.winRate,
+          profile.streak, profile.bestStreak, 0, profile.rating, profile.peakRating,
+        ],
+      },
+      {
+        sql: 'INSERT INTO player_preferences (user_id, drill_filter, leaderboard_period) VALUES (?, ?, ?)',
+        args: [userId, DEFAULT_APP_STATE.preferences.drillFilter, DEFAULT_APP_STATE.preferences.leaderboardPeriod],
+      },
+      { sql: 'INSERT INTO player_stats (user_id) VALUES (?)', args: [userId] },
+      ...controlsStatements(userId, getDefaultControls()),
+    ], 'write');
+
+    const res = await client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [userId] });
+    return res.rows[0];
   }
 
-  function createSession(userId) {
+  async function createSession(userId) {
     const token = randomBytes(32).toString('base64url');
-    const createdAt = nowIso();
-    insertSession.run({
-      id: randomUUID(),
-      userId,
-      tokenHash: hashToken(token),
-      createdAt,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+    await client.execute({
+      sql: 'INSERT INTO sessions (id, user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+      args: [randomUUID(), userId, hashToken(token), nowIso(), new Date(Date.now() + SESSION_TTL_MS).toISOString()],
     });
     return token;
   }
 
-  function findSession(token) {
+  async function findSession(token) {
     if (!token) return null;
-    return getSessionByHash.get(hashToken(token), nowIso()) ?? null;
+    const res = await client.execute({
+      sql: 'SELECT sessions.*, users.email FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?',
+      args: [hashToken(token), nowIso()],
+    });
+    return res.rows[0] ?? null;
   }
 
-  function revokeSessionToken(token) {
+  async function revokeSessionToken(token) {
     if (!token) return;
-    revokeSession.run(nowIso(), hashToken(token));
+    await client.execute({
+      sql: 'UPDATE sessions SET revoked_at = ? WHERE token_hash = ?',
+      args: [nowIso(), hashToken(token)],
+    });
   }
 
-  function getUser(userId) {
-    return findUserById.get(userId) ?? null;
+  async function getUser(userId) {
+    const res = await client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [userId] });
+    return res.rows[0] ?? null;
   }
 
   function publicUser(user) {
@@ -412,9 +307,27 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     return { id: user.id, email: user.email };
   }
 
-  function getDrillProgress(userId) {
-    const progressById = new Map(getDrillRows.all(userId).map(row => [row.drill_id, row]));
-    return DRILL_CATALOG.map(drill => {
+  async function getState(userId, referenceDate) {
+    const [userRes, profileRes, prefsRes, controlsRes, statsRes, drillsRes] = await Promise.all([
+      client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [userId] }),
+      client.execute({ sql: 'SELECT * FROM player_profiles WHERE user_id = ?', args: [userId] }),
+      client.execute({ sql: 'SELECT * FROM player_preferences WHERE user_id = ?', args: [userId] }),
+      client.execute({ sql: 'SELECT action, key_value, sort_order FROM player_controls WHERE user_id = ? ORDER BY sort_order ASC', args: [userId] }),
+      client.execute({ sql: 'SELECT * FROM player_stats WHERE user_id = ?', args: [userId] }),
+      client.execute({ sql: 'SELECT * FROM drill_progress WHERE user_id = ?', args: [userId] }),
+    ]);
+
+    const user = userRes.rows[0] ?? null;
+    const profileRow = profileRes.rows[0];
+    const preferencesRow = prefsRes.rows[0];
+    const controls = controlsRes.rows.map(row => ({ action: row.action, key: row.key_value }));
+    const statsRow = statsRes.rows[0];
+    const progressById = new Map(drillsRes.rows.map(row => [row.drill_id, row]));
+
+    const profile = mapProfile(profileRow);
+    const preferences = mapPreferences(preferencesRow);
+
+    const drills = DRILL_CATALOG.map(drill => {
       const row = progressById.get(drill.id);
       return {
         ...drill,
@@ -426,70 +339,70 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         lastResult: row?.last_result ?? null,
       };
     });
-  }
 
-  function getState(userId, referenceDate) {
-    const user = getUser(userId);
-    const profile = mapProfile(getProfileRow.get(userId));
-    const preferences = mapPreferences(getPreferencesRow.get(userId));
-    const controls = getControlsRows.all(userId).map(row => ({ action: row.action, key: row.key_value }));
-    const drills = getDrillProgress(userId);
-    const bestScores = Object.fromEntries(drills.filter(drill => drill.bestScore !== null).map(drill => [drill.id, drill.bestScore]));
-    const statsRow = getStatsRow.get(userId);
+    const bestScores = Object.fromEntries(drills.filter(d => d.bestScore !== null).map(d => [d.id, d.bestScore]));
+    const leaderboard = await sessionsForPeriod(userId, preferences.leaderboardPeriod);
 
     return {
       user: publicUser(user),
-      account: { email: user.email },
+      account: { email: user?.email },
       profile,
       preferences,
       progression: {
-        startedDrills: drills.filter(drill => drill.started).map(drill => drill.id),
+        startedDrills: drills.filter(d => d.started).map(d => d.id),
         bestScores,
       },
       dailyBonus: mapDailyBonus(statsRow, referenceDate),
       controls,
       stats: mapStats(statsRow),
       drills,
-      leaderboard: sessionsForPeriod(userId, preferences.leaderboardPeriod),
+      leaderboard,
     };
   }
 
-  function updateProfile(userId, patch) {
-    const current = mapProfile(getProfileRow.get(userId));
+  async function updateProfile(userId, patch) {
+    const profileRes = await client.execute({ sql: 'SELECT * FROM player_profiles WHERE user_id = ?', args: [userId] });
+    const current = mapProfile(profileRes.rows[0]);
     const name = typeof patch.name === 'string' && patch.name.trim() ? patch.name.trim() : current.name;
-    updateProfileStatement.run({
-      userId,
-      name,
-      initials: initialsFor(name),
-      country: typeof patch.country === 'string' ? normalizeCountry(patch.country) : current.country,
-      avatarColor: typeof patch.avatarColor === 'string' && patch.avatarColor.trim() ? patch.avatarColor.trim() : current.avatarColor,
+    await client.execute({
+      sql: 'UPDATE player_profiles SET name = ?, initials = ?, country = ?, avatar_color = ? WHERE user_id = ?',
+      args: [
+        name,
+        initialsFor(name),
+        typeof patch.country === 'string' ? normalizeCountry(patch.country) : current.country,
+        typeof patch.avatarColor === 'string' && patch.avatarColor.trim() ? patch.avatarColor.trim() : current.avatarColor,
+        userId,
+      ],
     });
     return getState(userId);
   }
 
-  function updatePreferences(userId, patch) {
-    const current = mapPreferences(getPreferencesRow.get(userId));
-    updatePreferencesStatement.run({
-      userId,
-      drillFilter: patch.drillFilter ?? current.drillFilter,
-      leaderboardPeriod: patch.leaderboardPeriod ?? current.leaderboardPeriod,
+  async function updatePreferences(userId, patch) {
+    const prefsRes = await client.execute({ sql: 'SELECT * FROM player_preferences WHERE user_id = ?', args: [userId] });
+    const current = mapPreferences(prefsRes.rows[0]);
+    await client.execute({
+      sql: 'UPDATE player_preferences SET drill_filter = ?, leaderboard_period = ? WHERE user_id = ?',
+      args: [patch.drillFilter ?? current.drillFilter, patch.leaderboardPeriod ?? current.leaderboardPeriod, userId],
     });
     return getState(userId);
   }
 
-  function updateControls(userId, controls) {
-    writeControls(userId, Array.isArray(controls) ? controls : getDefaultControls());
+  async function updateControls(userId, controls) {
+    await client.batch(controlsStatements(userId, Array.isArray(controls) ? controls : getDefaultControls()), 'write');
     return getState(userId);
   }
 
-  function resetControls(userId) {
-    writeControls(userId, getDefaultControls());
+  async function resetControls(userId) {
+    await client.batch(controlsStatements(userId, getDefaultControls()), 'write');
     return getState(userId);
   }
 
-  function startDrill(userId, drillId) {
+  async function startDrill(userId, drillId) {
     const drill = DRILL_CATALOG.find(entry => entry.id === drillId);
-    upsertDrillStart.run(userId, drillId, drill?.workshop ?? null);
+    await client.execute({
+      sql: 'INSERT INTO drill_progress (user_id, drill_id, workshop, started) VALUES (?, ?, ?, 1) ON CONFLICT(user_id, drill_id) DO UPDATE SET started = 1',
+      args: [userId, drillId, drill?.workshop ?? null],
+    });
     return getState(userId);
   }
 
@@ -499,7 +412,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     return null;
   }
 
-  function recordGameSession(userId, payload) {
+  async function recordGameSession(userId, payload) {
     const completedAt = typeof payload.completedAt === 'string' ? payload.completedAt : nowIso();
     const score = Math.max(0, Number.parseInt(payload.score, 10) || 0);
     const totalTurns = Math.max(0, Number.parseInt(payload.totalTurns, 10) || 0);
@@ -509,11 +422,18 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     const workshop = String(payload.workshop ?? 'attack');
     const drillId = payload.drillId ? String(payload.drillId) : defaultDrillForWorkshop(workshop);
     const drill = DRILL_CATALOG.find(entry => entry.id === drillId);
-    const profileRow = getProfileRow.get(userId);
-    const statsRow = getStatsRow.get(userId);
+
+    const [profileRes, statsRes] = await Promise.all([
+      client.execute({ sql: 'SELECT * FROM player_profiles WHERE user_id = ?', args: [userId] }),
+      client.execute({ sql: 'SELECT * FROM player_stats WHERE user_id = ?', args: [userId] }),
+    ]);
+    const profileRow = profileRes.rows[0];
+    const statsRow = statsRes.rows[0];
+
     const sessionDate = localDateKey(completedAt);
     const dailyBonusApplied = statsRow?.last_daily_bonus_date !== sessionDate;
     const xpMultiplier = dailyBonusApplied ? 2 : 1;
+
     const progression = calculateProgression({
       current: {
         level: profileRow.level,
@@ -536,84 +456,78 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
         xpMultiplier,
       },
     });
+
     const completed = progression.session.result === 'W' ? 1 : 0;
-    const tx = db.transaction(() => {
-      insertGameSession.run({
-        id: randomUUID(),
-        userId,
-        drillId,
-        workshop,
-        matchId: payload.matchId ? String(payload.matchId) : null,
-        score,
-        correct,
-        totalTurns,
-        durationSeconds,
-        tacticalAverage: Number.isFinite(payload.tacticalAverage) ? payload.tacticalAverage : null,
-        placementAverage: Number.isFinite(payload.placementAverage) ? payload.placementAverage : null,
-        result: progression.session.result,
-        accuracy: progression.session.accuracy,
-        ratingBefore: progression.session.ratingBefore,
-        ratingAfter: progression.session.ratingAfter,
-        ratingDelta: progression.session.ratingDelta,
-        xpGained: progression.session.xpGained,
-        dailyBonusApplied: progression.session.dailyBonusApplied ? 1 : 0,
-        xpMultiplier: progression.session.xpMultiplier,
-        completedAt,
-        createdAt: nowIso(),
+
+    const statements = [
+      {
+        sql: 'INSERT INTO game_sessions (id, user_id, drill_id, workshop, match_id, score, correct, total_turns, duration_seconds, tactical_average, placement_average, result, accuracy, rating_before, rating_after, rating_delta, xp_gained, daily_bonus_applied, xp_multiplier, completed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [
+          randomUUID(), userId, drillId, workshop,
+          payload.matchId ? String(payload.matchId) : null,
+          score, correct, totalTurns, durationSeconds,
+          Number.isFinite(payload.tacticalAverage) ? payload.tacticalAverage : null,
+          Number.isFinite(payload.placementAverage) ? payload.placementAverage : null,
+          progression.session.result,
+          progression.session.accuracy,
+          progression.session.ratingBefore,
+          progression.session.ratingAfter,
+          progression.session.ratingDelta,
+          progression.session.xpGained,
+          progression.session.dailyBonusApplied ? 1 : 0,
+          progression.session.xpMultiplier,
+          completedAt,
+          nowIso(),
+        ],
+      },
+    ];
+
+    if (drillId) {
+      statements.push({
+        sql: 'INSERT INTO drill_progress (user_id, drill_id, workshop, started, completed, attempts, best_score, last_played_at, last_result) VALUES (?, ?, ?, 1, ?, 1, ?, ?, ?) ON CONFLICT(user_id, drill_id) DO UPDATE SET started = 1, completed = MAX(completed, excluded.completed), attempts = attempts + 1, best_score = CASE WHEN best_score IS NULL OR excluded.best_score > best_score THEN excluded.best_score ELSE best_score END, last_played_at = excluded.last_played_at, last_result = excluded.last_result',
+        args: [userId, drillId, workshop, completed, score, completedAt, progression.session.result],
       });
-      if (drillId) {
-        upsertDrillResult.run({
+    }
+
+    statements.push(
+      {
+        sql: 'UPDATE player_stats SET sessions_played = sessions_played + 1, total_score = total_score + ?, total_correct = total_correct + ?, total_turns = total_turns + ?, total_duration_seconds = total_duration_seconds + ?, best_score = MAX(best_score, ?), wins = ?, losses = ?, current_streak = ?, best_streak = ?, rating = ?, peak_rating = ?, last_daily_bonus_date = ?, last_played_at = ? WHERE user_id = ?',
+        args: [
+          score, correct, totalTurns, durationSeconds, score,
+          progression.profile.wins, progression.profile.losses,
+          progression.profile.streak, progression.profile.bestStreak,
+          progression.profile.rating, progression.profile.peakRating,
+          dailyBonusApplied ? sessionDate : (statsRow?.last_daily_bonus_date ?? null),
+          completedAt,
           userId,
-          drillId,
-          workshop,
-          completed,
-          bestScore: score,
-          lastPlayedAt: completedAt,
-          lastResult: progression.session.result,
-        });
-      }
-      updateStats.run({
-        userId,
-        score,
-        correct,
-        totalTurns,
-        durationSeconds,
-        completedAt,
-        wins: progression.profile.wins,
-        losses: progression.profile.losses,
-        streak: progression.profile.streak,
-        bestStreak: progression.profile.bestStreak,
-        rating: progression.profile.rating,
-        peakRating: progression.profile.peakRating,
-        lastDailyBonusDate: dailyBonusApplied ? sessionDate : statsRow?.last_daily_bonus_date ?? null,
-      });
-      updateProfileStatsStatement.run({
-        userId,
-        level: progression.profile.level,
-        xp: progression.profile.xp,
-        xpMax: progression.profile.xpMax,
-        rank: progression.profile.rank,
-        rating: progression.profile.rating,
-        peakRating: progression.profile.peakRating,
-        wins: progression.profile.wins,
-        losses: progression.profile.losses,
-        winRate: progression.profile.winRate,
-        streak: progression.profile.streak,
-        bestStreak: progression.profile.bestStreak,
-        trainedSeconds: progression.profile.trainedSeconds,
-      });
-    });
-    tx();
+        ],
+      },
+      {
+        sql: 'UPDATE player_profiles SET level = ?, xp = ?, xp_max = ?, rank = ?, rating = ?, peak_rating = ?, wins = ?, losses = ?, win_rate = ?, streak = ?, best_streak = ?, trained_seconds = ? WHERE user_id = ?',
+        args: [
+          progression.profile.level, progression.profile.xp, progression.profile.xpMax,
+          progression.profile.rank, progression.profile.rating, progression.profile.peakRating,
+          progression.profile.wins, progression.profile.losses, progression.profile.winRate,
+          progression.profile.streak, progression.profile.bestStreak, progression.profile.trainedSeconds,
+          userId,
+        ],
+      },
+    );
+
+    await client.batch(statements, 'write');
     return getState(userId, completedAt);
   }
 
-  function sessionsForPeriod(userId, period = 'weekly') {
-    const rows = period === 'all-time'
-      ? getSessionsRows.all(userId)
-      : getWeeklySessionsRows.all(userId, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
-    const sessions = rows.map(mapSession);
-    const bestScore = sessions.reduce((best, session) => Math.max(best, session.score), 0);
-    const totalScore = sessions.reduce((sum, session) => sum + session.score, 0);
+  async function sessionsForPeriod(userId, period = 'weekly') {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const res = await client.execute(
+      period === 'all-time'
+        ? { sql: 'SELECT * FROM game_sessions WHERE user_id = ? ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC', args: [userId] }
+        : { sql: 'SELECT * FROM game_sessions WHERE user_id = ? AND completed_at >= ? ORDER BY rating_delta DESC, score DESC, accuracy DESC, completed_at DESC, created_at DESC', args: [userId, weekAgo] },
+    );
+    const sessions = res.rows.map(mapSession);
+    const bestScore = sessions.reduce((best, s) => Math.max(best, s.score), 0);
+    const totalScore = sessions.reduce((sum, s) => sum + s.score, 0);
     return {
       period,
       summary: {
@@ -625,39 +539,43 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     };
   }
 
-  function resetProgression(userId) {
-    const reset = db.transaction(() => {
-      resetProgressRows.run(userId);
-      resetDrillRows.run(userId);
-      resetStats.run(userId);
-      const profile = DEFAULT_APP_STATE.profile;
-      updateProfileStatsStatement.run({
-        userId,
-        level: profile.level,
-        xp: profile.xp,
-        xpMax: profile.xpMax,
-        rank: rankForRating(profile.rating),
-        rating: profile.rating,
-        peakRating: profile.peakRating,
-        wins: profile.wins,
-        losses: profile.losses,
-        winRate: profile.winRate,
-        streak: profile.streak,
-        bestStreak: profile.bestStreak,
-        trainedSeconds: 0,
-      });
-    });
-    reset();
+  async function resetProgression(userId) {
+    const profile = DEFAULT_APP_STATE.profile;
+    await client.batch([
+      { sql: 'DELETE FROM game_sessions WHERE user_id = ?', args: [userId] },
+      { sql: 'DELETE FROM drill_progress WHERE user_id = ?', args: [userId] },
+      {
+        sql: 'UPDATE player_stats SET sessions_played = 0, total_score = 0, total_correct = 0, total_turns = 0, total_duration_seconds = 0, best_score = 0, wins = 0, losses = 0, current_streak = 0, best_streak = 0, rating = 600, peak_rating = 600, last_daily_bonus_date = NULL, last_played_at = NULL WHERE user_id = ?',
+        args: [userId],
+      },
+      {
+        sql: 'UPDATE player_profiles SET level = ?, xp = ?, xp_max = ?, rank = ?, rating = ?, peak_rating = ?, wins = ?, losses = ?, win_rate = ?, streak = ?, best_streak = ?, trained_seconds = ? WHERE user_id = ?',
+        args: [
+          profile.level, profile.xp, profile.xpMax, rankForRating(profile.rating),
+          profile.rating, profile.peakRating, profile.wins, profile.losses, profile.winRate,
+          profile.streak, profile.bestStreak, 0,
+          userId,
+        ],
+      },
+    ], 'write');
     return getState(userId);
   }
 
   return {
     auth: {
       createUser,
-      findUserByEmail: email => findUserByEmail.get(normalizeEmail(email)) ?? null,
+      findUserByEmail: async email => {
+        const res = await client.execute({ sql: 'SELECT * FROM users WHERE email = ?', args: [normalizeEmail(email)] });
+        return res.rows[0] ?? null;
+      },
       getUser,
       publicUser,
-      updatePassword: (userId, passwordHash) => updatePassword.run(passwordHash, nowIso(), userId),
+      updatePassword: async (userId, passwordHash) => {
+        await client.execute({
+          sql: 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+          args: [passwordHash, nowIso(), userId],
+        });
+      },
       createSession,
       findSession,
       revokeSessionToken,
@@ -672,7 +590,7 @@ export function createPlayerStore({ dbPath = path.join(process.cwd(), 'server/da
     sessionsForPeriod,
     resetProgression,
     close() {
-      db.close();
+      client.close();
     },
   };
 }

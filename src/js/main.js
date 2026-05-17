@@ -527,6 +527,10 @@ async function resolvePositioningTimeout(turn) {
   );
 
   applyScore(awardedScore, isCorrect);
+  if (currentWorkshop === 'match') {
+    finishMatchTimeoutPoint('TIME');
+    return;
+  }
   if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
 }
@@ -554,8 +558,26 @@ async function resolveShotTimeout(turn) {
   );
 
   applyScore(0, false);
+  if (currentWorkshop === 'match') {
+    finishMatchTimeoutPoint('TIME');
+    return;
+  }
   if (currentWorkshop !== 'match') await waitForContinue();
   nextTurn();
+}
+
+function finishMatchTimeoutPoint(reason = 'TIME') {
+  if (!matchAdapter) return;
+  matchAdapter.onTimeout(reason);
+  hud.setMatchState(matchAdapter.getMatchState());
+  if (matchAdapter.isMatchOver()) {
+    setTimeout(showEndScreen, 350);
+    return;
+  }
+  handleMatchScenario(matchAdapter.startRally()).catch(err => {
+    console.error('[match] timeout rally start failed', err);
+    hud.showExplanation(err?.message ?? String(err), '#f87171', 3000).then(resetAndShowMenu);
+  });
 }
 
 async function handleTurnTimeout(context) {
@@ -1059,6 +1081,8 @@ async function handleMatchScenario(scen) {
     throw err;
   }
   console.log('[match] starting turn', turn?.type, turn);
+  currentRally = [turn];
+  turnIndex = 0;
   if (turn.type === 'shot')             startShotTurn(turn);
   else if (turn.type === 'positioning') startPositioningTurn(turn);
   else console.error('[match] unknown turn type', turn?.type);
@@ -1137,6 +1161,13 @@ function showEndScreen() {
   const avgTactical   = countTactical   > 0 ? Math.round(scoreTacticalSum  / countTactical)   : '—';
   const avgPlacement  = countPlacement  > 0 ? Math.round(scorePlacementSum / countPlacement)  : '—';
 
+  const eyebrow = currentWorkshop === 'match'   ? 'MATCH TERMINÉ'
+                : currentWorkshop === 'attack'  ? 'TACTIC TRAINING'
+                : currentWorkshop === 'defense' ? 'PLACEMENT TRAINING'
+                :                                 'RALLY TERMINÉ';
+  const eyebrowEl = document.getElementById('end-eyebrow');
+  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
+
   document.getElementById('end-title').textContent = currentWorkshop === 'match'
     ? `${finalMatchState?.winner === 'player' ? 'Match won!' : 'Match lost'}`
     : `${stars}  Rally complete!`;
@@ -1149,7 +1180,6 @@ function showEndScreen() {
 
   const details = [
     `${correct} / ${totalPlayed} correct answers`,
-    `Shot: ${avgTactical !== '—' ? avgTactical + ' pts' : '—'}  |  Positioning: ${avgPlacement !== '—' ? avgPlacement + ' pts' : '—'}`,
     ...(ratingDelta !== null ? [`FFBAD Rating: ${ratingDelta >= 0 ? '+' : ''}${ratingDelta}`] : []),
     ...(totalBonus  > 0 ? [`Bonus: +${totalBonus}`]     : []),
     ...(totalMalus  > 0 ? [`Penalty: -${totalMalus}`]   : []),
@@ -1162,7 +1192,7 @@ function showEndScreen() {
   document.getElementById('end-detail').textContent = details.join('\n');
   document.getElementById('end-screen').style.display = 'flex';
 
-  void recordGameSessionAsync({
+  recordGameSessionAsync({
     drillId: currentDrillId,
     workshop: currentWorkshop,
     matchId: currentRally[0]?.matchId ?? null,
@@ -1173,7 +1203,7 @@ function showEndScreen() {
     tacticalAverage: typeof avgTactical === 'number' ? avgTactical : null,
     placementAverage: typeof avgPlacement === 'number' ? avgPlacement : null,
     completedAt: new Date().toISOString(),
-  }).catch(error => {
+  }).then(state => screens.refreshStats(state)).catch(error => {
     console.warn('Sauvegarde de session impossible', error);
   });
 }

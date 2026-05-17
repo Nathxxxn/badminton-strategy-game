@@ -26,6 +26,7 @@ function cookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 1000 * 60 * 60 * 24 * 30,
   };
@@ -35,6 +36,7 @@ function clearCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 0,
   };
@@ -112,18 +114,18 @@ function sanitizeLogin(body) {
   return { email, password };
 }
 
-function authPayload(store, userId) {
-  const user = store.auth.getUser(userId);
+async function authPayload(store, userId) {
+  const user = await store.auth.getUser(userId);
   return {
     user: store.auth.publicUser(user),
-    state: store.getState(userId),
+    state: await store.getState(userId),
   };
 }
 
 function requireAuth(store) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const token = sessionTokenFromRequest(req);
-    const session = store.auth.findSession(token);
+    const session = await store.auth.findSession(token);
     if (!session) return unauthorized(res);
     req.sessionToken = token;
     req.user = { id: session.user_id, email: session.email };
@@ -131,7 +133,7 @@ function requireAuth(store) {
   };
 }
 
-export function createApp({ store = createPlayerStore(), staticRoot = PROJECT_ROOT } = {}) {
+export function createApp({ store, staticRoot = PROJECT_ROOT } = {}) {
   const app = express();
   const protectedRoute = requireAuth(store);
 
@@ -145,103 +147,100 @@ export function createApp({ store = createPlayerStore(), staticRoot = PROJECT_RO
   app.post('/api/auth/signup', async (req, res) => {
     const input = sanitizeSignup(req.body ?? {});
     if (!input) return badRequest(res, 'Invalid signup');
-    if (store.auth.findUserByEmail(input.email)) {
+    if (await store.auth.findUserByEmail(input.email)) {
       return res.status(409).json({ error: 'Email already registered' });
     }
-
     const passwordHash = await bcrypt.hash(input.password, 12);
-    const user = store.auth.createUser({ ...input, passwordHash });
-    const token = store.auth.createSession(user.id);
+    const user = await store.auth.createUser({ ...input, passwordHash });
+    const token = await store.auth.createSession(user.id);
     res.cookie(SESSION_COOKIE, token, cookieOptions());
-    return res.status(201).json(authPayload(store, user.id));
+    return res.status(201).json(await authPayload(store, user.id));
   });
 
   app.post('/api/auth/login', async (req, res) => {
     const input = sanitizeLogin(req.body ?? {});
     if (!input) return badRequest(res, 'Invalid login');
-    const user = store.auth.findUserByEmail(input.email);
+    const user = await store.auth.findUserByEmail(input.email);
     if (!user || !(await bcrypt.compare(input.password, user.password_hash))) {
       return unauthorized(res);
     }
-    const token = store.auth.createSession(user.id);
+    const token = await store.auth.createSession(user.id);
     res.cookie(SESSION_COOKIE, token, cookieOptions());
-    return res.json(authPayload(store, user.id));
+    return res.json(await authPayload(store, user.id));
   });
 
-  app.post('/api/auth/logout', protectedRoute, (req, res) => {
-    store.auth.revokeSessionToken(req.sessionToken);
+  app.post('/api/auth/logout', protectedRoute, async (req, res) => {
+    await store.auth.revokeSessionToken(req.sessionToken);
     res.cookie(SESSION_COOKIE, '', clearCookieOptions());
     res.json({ ok: true });
   });
 
-  app.get('/api/auth/me', protectedRoute, (req, res) => {
-    res.json(authPayload(store, req.user.id));
+  app.get('/api/auth/me', protectedRoute, async (req, res) => {
+    res.json(await authPayload(store, req.user.id));
   });
 
   app.put('/api/auth/password', protectedRoute, async (req, res) => {
     const currentPassword = String(req.body?.currentPassword ?? '');
     const newPassword = String(req.body?.newPassword ?? '');
     if (newPassword.length < PASSWORD_MIN_LENGTH) return badRequest(res, 'Invalid new password');
-
-    const user = store.auth.getUser(req.user.id);
+    const user = await store.auth.getUser(req.user.id);
     if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
       return badRequest(res, 'Invalid current password');
     }
-
-    store.auth.updatePassword(req.user.id, await bcrypt.hash(newPassword, 12));
+    await store.auth.updatePassword(req.user.id, await bcrypt.hash(newPassword, 12));
     return res.json({ ok: true });
   });
 
-  app.get('/api/player/state', protectedRoute, (req, res) => {
-    res.json(store.getState(req.user.id));
+  app.get('/api/player/state', protectedRoute, async (req, res) => {
+    res.json(await store.getState(req.user.id));
   });
 
-  app.put('/api/player/profile', protectedRoute, (req, res) => {
-    res.json(store.updateProfile(req.user.id, sanitizeProfile(req.body ?? {})));
+  app.put('/api/player/profile', protectedRoute, async (req, res) => {
+    res.json(await store.updateProfile(req.user.id, sanitizeProfile(req.body ?? {})));
   });
 
-  app.put('/api/player/preferences', protectedRoute, (req, res) => {
+  app.put('/api/player/preferences', protectedRoute, async (req, res) => {
     const preferencesPatch = sanitizePreferences(req.body ?? {});
     if (!preferencesPatch) return badRequest(res, 'Invalid preferences');
-    return res.json(store.updatePreferences(req.user.id, preferencesPatch));
+    return res.json(await store.updatePreferences(req.user.id, preferencesPatch));
   });
 
-  app.put('/api/player/controls', protectedRoute, (req, res) => {
+  app.put('/api/player/controls', protectedRoute, async (req, res) => {
     const controls = sanitizeControls(req.body ?? {});
     if (!controls) return badRequest(res, 'Invalid controls');
-    return res.json(store.updateControls(req.user.id, controls));
+    return res.json(await store.updateControls(req.user.id, controls));
   });
 
-  app.post('/api/player/controls/reset', protectedRoute, (req, res) => {
-    res.json(store.resetControls(req.user.id));
+  app.post('/api/player/controls/reset', protectedRoute, async (req, res) => {
+    res.json(await store.resetControls(req.user.id));
   });
 
-  app.post('/api/player/reset-progression', protectedRoute, (req, res) => {
-    res.json(store.resetProgression(req.user.id));
+  app.post('/api/player/reset-progression', protectedRoute, async (req, res) => {
+    res.json(await store.resetProgression(req.user.id));
   });
 
-  app.post('/api/player/drills/:drillId/start', protectedRoute, (req, res) => {
+  app.post('/api/player/drills/:drillId/start', protectedRoute, async (req, res) => {
     const drillId = String(req.params.drillId ?? '').trim();
     if (!drillId) return badRequest(res, 'Invalid drill');
-    res.json(store.startDrill(req.user.id, drillId));
+    res.json(await store.startDrill(req.user.id, drillId));
   });
 
-  app.get('/api/player/drills', protectedRoute, (req, res) => {
-    res.json({ drills: store.getState(req.user.id).drills });
+  app.get('/api/player/drills', protectedRoute, async (req, res) => {
+    res.json({ drills: (await store.getState(req.user.id)).drills });
   });
 
-  app.get('/api/player/leaderboard', protectedRoute, (req, res) => {
+  app.get('/api/player/leaderboard', protectedRoute, async (req, res) => {
     const period = LEADERBOARD_PERIODS.has(req.query.period) ? req.query.period : 'weekly';
-    res.json(store.sessionsForPeriod(req.user.id, period));
+    res.json(await store.sessionsForPeriod(req.user.id, period));
   });
 
-  app.post('/api/game-sessions', protectedRoute, (req, res) => {
-    res.status(201).json(store.recordGameSession(req.user.id, req.body ?? {}));
+  app.post('/api/game-sessions', protectedRoute, async (req, res) => {
+    res.status(201).json(await store.recordGameSession(req.user.id, req.body ?? {}));
   });
 
-  app.get('/api/game-sessions', protectedRoute, (req, res) => {
+  app.get('/api/game-sessions', protectedRoute, async (req, res) => {
     const period = LEADERBOARD_PERIODS.has(req.query.period) ? req.query.period : 'weekly';
-    res.json(store.sessionsForPeriod(req.user.id, period));
+    res.json(await store.sessionsForPeriod(req.user.id, period));
   });
 
   app.use(express.static(staticRoot));
@@ -251,8 +250,9 @@ export function createApp({ store = createPlayerStore(), staticRoot = PROJECT_RO
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 3000);
-  const app = createApp();
+  const store = await createPlayerStore();
+  const app = createApp({ store });
   app.listen(port, () => {
-    console.log(`Rally dev server running at http://localhost:${port}`);
+    console.log(`Rally server running at http://localhost:${port}`);
   });
 }

@@ -60,6 +60,22 @@ function recentWinRate(sessions, n = 5) {
   return Math.round((wins / slice.length) * 100);
 }
 
+function computeModeStat(modeId, sessions) {
+  const isAttack  = modeId === 'attack';
+  const isDefense = modeId === 'defense';
+  if (!isAttack && !isDefense) return null;
+
+  const relevant = sessions.filter(s =>
+    isAttack
+      ? (s.workshop === 'attack'  || s.workshop === 'tactic')
+      : (s.workshop === 'defense' || s.workshop === 'placement')
+  );
+  const field = isAttack ? 'tacticalAverage' : 'placementAverage';
+  const values = relevant.map(s => s[field]).filter(v => typeof v === 'number');
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
 function homeStats(profile, state = null) {
   const rating = profile.rating ?? 600;
   const peakRating = profile.peakRating ?? rating;
@@ -74,7 +90,7 @@ function homeStats(profile, state = null) {
     { label: 'RANK', value: profile.rank, hint: `${rating.toLocaleString()} pts · PEAK ${peakRating.toLocaleString()}` },
     { label: 'LEVEL', value: String(profile.level), hint: `${profile.xp.toLocaleString()} / ${profile.xpMax.toLocaleString()} XP`, bar: xpRatio },
     { label: 'RECORD', value: `${wins}-${losses}`, hint: `lifetime ${winRate}% WR` },
-    { label: '5 DERNIERS', value: recent5 !== null ? `${recent5}%` : '—', hint: `lifetime ${winRate}%` },
+    { label: 'LAST 5', value: recent5 !== null ? `${recent5}%` : '—', hint: `lifetime ${winRate}%` },
     { label: 'STREAK', value: String(profile.streak), hint: `best: ${profile.bestStreak}` },
   ];
 }
@@ -120,7 +136,8 @@ const MODES = Object.freeze([
     drills: ['Ranked flow preview', 'Opponent analysis', 'Shot-clock concept', 'Post-match summary'],
     statLabel: 'Win rate',
     statValue: '61%',
-    available: true,
+    available: false,
+    wip: true,
   },
 ]);
 
@@ -414,7 +431,7 @@ function renderLeaderboardPage(state) {
     </div>
     <div class="personal-rank-grid">
       <article class="personal-rank-card card">
-        <span class="stat-label">JOUEUR</span>
+        <span class="stat-label">PLAYER</span>
         <strong>${escapeHtml(profile.name)}</strong>
         <span class="stat-hint">${flagBadge(profile.country)} ${rankBadge(profile.rank)} · ${profile.rating ?? 600} pts</span>
       </article>
@@ -429,24 +446,24 @@ function renderLeaderboardPage(state) {
         <span class="stat-hint">personal record</span>
       </article>
       <article class="personal-rank-card card">
-        <span class="stat-label">MOYENNE</span>
+        <span class="stat-label">AVERAGE</span>
         <strong>${summary.averageScore ?? 0}</strong>
-        <span class="stat-hint">par rally</span>
+        <span class="stat-hint">per rally</span>
       </article>
     </div>
     <div class="standings-wrap card">
       <div class="standings-row standings-head">
         <span class="rank-cell">#</span>
         <span class="player-cell">SESSION</span>
-        <span class="tier">RÉSULTAT</span>
+        <span class="tier">RESULT</span>
         <span class="wins">SCORE</span>
-        <span class="wr">PRÉC.</span>
+        <span class="wr">PREV.</span>
         <span class="xp">${headLabel}</span>
         <span class="weekly-delta">WEEKLY</span>
       </div>
       ${sessions.length
         ? sessions.map((s, i) => leaderboardSessionRow(s, i, profile)).join('')
-        : '<p class="season-note">AUCUNE SESSION · JOUE UN DRILL POUR REMPLIR CE TABLEAU</p>'}
+        : '<p class="season-note">NO SESSIONS · PLAY A DRILL TO FILL THIS TABLE</p>'}
     </div>`;
 }
 
@@ -637,10 +654,10 @@ function ratingHistoryModalMarkup(state) {
   const reversedDeltas = sessions.map(s => s.ratingDelta ?? 0);
   const startRating = Math.max(RATING_MIN, reversedDeltas.reduce((acc, d) => acc - d, running));
   running = startRating;
-  history.push({ label: 'Départ', rating: running });
+  history.push({ label: 'Start', rating: running });
   for (const session of sessions) {
     running = Math.max(RATING_MIN, Math.min(RATING_MAX, running + (session.ratingDelta ?? 0)));
-    history.push({ label: new Date(session.completedAt).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }), rating: running });
+    history.push({ label: new Date(session.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), rating: running });
   }
 
   // Compute next rank / fallback rank
@@ -688,7 +705,7 @@ function ratingHistoryModalMarkup(state) {
             ${rankBadge(profile.rank)}
             <strong>${currentRating} pts FFBAD</strong>
           </span>
-          <button class="rating-modal-close" type="button" aria-label="Fermer">✕</button>
+          <button class="rating-modal-close" type="button" aria-label="Close">✕</button>
         </div>
 
         <svg class="rating-chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -704,7 +721,7 @@ function ratingHistoryModalMarkup(state) {
               <strong>+${ptsToNext} pts</strong>
             </div>` : `
             <div class="rating-delta-card positive">
-              <span class="delta-label">Classement max</span>
+              <span class="delta-label">Top rank</span>
               <strong>N1 ★</strong>
             </div>`}
           ${prevRankEntry ? `
@@ -713,7 +730,7 @@ function ratingHistoryModalMarkup(state) {
               <strong>+${ptsAbovePrev} pts</strong>
             </div>` : `
             <div class="rating-delta-card negative">
-              <span class="delta-label">Classement min</span>
+              <span class="delta-label">Lowest rank</span>
               <strong>P12</strong>
             </div>`}
         </div>
@@ -805,7 +822,7 @@ export class ScreenManager {
             </div>
             <div class="mode-grid">
               ${MODES.map(mode => `
-                <article class="mode-card" data-mode="${mode.id}" style="--mode-color:${mode.color}">
+                <article class="mode-card${mode.wip ? ' mode--wip' : ''}" data-mode="${mode.id}" style="--mode-color:${mode.color}">
                   <div class="mode-stripe"></div>
                   <div class="mode-body">
                     <div class="mode-top">
@@ -816,6 +833,7 @@ export class ScreenManager {
                           ${[1, 2, 3].map(n => `<span class="${n <= mode.difficulty ? 'filled' : ''}"></span>`).join('')}
                         </span>
                       </span>
+                      ${mode.wip ? '<span class="mode-wip-badge">In development</span>' : ''}
                     </div>
                     <p class="mode-tagline">${mode.tagline}</p>
                     <h2>${mode.title}</h2>
@@ -826,7 +844,7 @@ export class ScreenManager {
                         ${mode.drills.map(drill => `<span><b>✓</b>${drill}</span>`).join('')}
                       </div>
                       <div class="mode-stat-row">
-                        <span><small>YOUR ${mode.statLabel.toUpperCase()}</small><strong>${mode.statValue}</strong></span>
+                        <span><small>YOUR ${mode.statLabel.toUpperCase()}</small><strong data-mode-stat="${mode.id}">—</strong></span>
                         <span><small>REWARDS</small><strong>${mode.rewards}</strong></span>
                       </div>
                       <div class="mode-actions">
@@ -836,7 +854,7 @@ export class ScreenManager {
                     </div>
                     <div class="mode-footer">
                       <span>${mode.rewards}</span>
-                      <span>${mode.available ? 'Tap to view' : 'Preview'} <b>→</b></span>
+                      <span>${mode.wip ? 'Coming soon' : mode.available ? 'Tap to view' : 'Preview'} <b>→</b></span>
                     </div>
                   </div>
                 </article>
@@ -881,6 +899,7 @@ export class ScreenManager {
 
     menu.querySelectorAll('.mode-card').forEach(card => {
       card.addEventListener('click', event => {
+        if (card.classList.contains('mode--wip')) return;
         if (event.target.closest('button')) return;
         const shouldExpand = !card.classList.contains('expanded');
         menu.querySelectorAll('.mode-card').forEach(other => {
@@ -960,7 +979,7 @@ export class ScreenManager {
         const menuBtn = document.createElement('button');
         menuBtn.id = 'end-menu-btn';
         menuBtn.textContent = 'Menu';
-        menuBtn.className = 'btn-secondary';
+        menuBtn.className = 'btn-rally';
         actions.appendChild(menuBtn);
       }
       endScreen.querySelector('#end-btn').addEventListener('click', () => {
@@ -1000,6 +1019,7 @@ export class ScreenManager {
     this._state = payload.state;
     this._syncProfileDom(menu);
     this._renderHomeStats(menu);
+    this._renderModeStats(menu, this._state);
     this._renderDrillsPanel(menu);
     this._wireDrills(menu);
     this._renderLeaderboardPanel(menu);
@@ -1071,6 +1091,7 @@ export class ScreenManager {
     const menu = this._screens.menu;
     this._syncProfileDom(menu);
     this._renderHomeStats(menu);
+    this._renderModeStats(menu, this._state);
     this._renderDrillsPanel(menu);
     this._wireDrills(menu);
     this._renderLeaderboardPanel(menu);
@@ -1094,6 +1115,23 @@ export class ScreenManager {
   _renderHomeStats(menu) {
     const stats = menu.querySelector('.stats-strip');
     if (stats) stats.innerHTML = this._homeStatsMarkup(getProfile(this._state), this._state);
+  }
+
+  _renderModeStats(menu, state) {
+    const sessions = state?.leaderboard?.sessions ?? [];
+    menu.querySelectorAll('[data-mode-stat]').forEach(el => {
+      const val = computeModeStat(el.dataset.modeStat, sessions);
+      el.textContent = val !== null ? `${val}%` : '—';
+    });
+  }
+
+  refreshStats(state) {
+    if (state) this._state = state;
+    const menu = this._screens.menu;
+    if (menu) {
+      this._renderHomeStats(menu);
+      this._renderModeStats(menu, this._state);
+    }
   }
 
   _applyDrillFilter(menu, category) {
@@ -1327,14 +1365,14 @@ export class ScreenManager {
       this._wireLeaderboard(menu);
       this._renderSettingsPanel(menu);
       this._wireSettingsAfterRender(menu);
-      this._showFeedback(menu, 'Progression remise a zero.', 'success');
+      this._showFeedback(menu, 'Progression reset.', 'success');
     });
 
     menu.querySelector('.reset-controls')?.addEventListener('click', async () => {
       this._state = await resetControlsAsync();
       this._renderSettingsPanel(menu);
       this._wireSettingsAfterRender(menu);
-      this._showFeedback(menu, 'Controles restaures.', 'success');
+      this._showFeedback(menu, 'Controls restored.', 'success');
     });
   }
 
@@ -1350,7 +1388,7 @@ export class ScreenManager {
     this._renderLeaderboardPanel(menu);
     this._wireLeaderboard(menu);
     this._markProfileDirty(menu, false);
-    this._showFeedback(menu, 'Profil sauvegarde.', 'success');
+    this._showFeedback(menu, 'Profile saved.', 'success');
   }
 
   _markProfileDirty(menu, dirty = true) {

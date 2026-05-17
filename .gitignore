@@ -7,3 +7,4 @@ Thumbs.db
 skills-lock.json
 node_modules/
 server/data/
+.env
