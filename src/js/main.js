@@ -613,7 +613,7 @@ function startPositioningTurn(turn) {
       if (raw.x < 0 || raw.x > 1 || raw.y < 0 || raw.y > 1) return;
 
       const dxM = (raw.x - turn.players.ally1.x) * 6.1;
-      const dyM = (raw.y - turn.players.ally1.y) * 13.4;
+      const dyM = (raw.y - turn.players.ally1.y) * 6.7;
       const distM = Math.hypot(dxM, dyM);
       const newOut = distM > turn.moveRadius;
 
@@ -650,7 +650,7 @@ async function onPositionClick(e) {
   // Reject clicks outside the movement radius (mirrors the hover check)
   if (turn?.moveRadius && turn?.players?.ally1) {
     const dxM = (point.x - turn.players.ally1.x) * 6.1;
-    const dyM = (point.y - turn.players.ally1.y) * 13.4;
+    const dyM = (point.y - turn.players.ally1.y) * 6.7;
     if (Math.hypot(dxM, dyM) > turn.moveRadius) {
       canvas.addEventListener('pointerup', onPositionClick, { once: true });
       return;
