@@ -211,6 +211,8 @@ export function evaluatePlacementTurn(turn, logicPayload) {
     logicPayload.partnerFinalPos,
     logicPayload.playedShuttle,
     logicPayload.isHitter ?? false,
+    undefined,
+    turn.moveRadius,
   );
   const feedback = feedbackEngine.getPlacementFeedback(result);
   const realDistance = feedback.details.realDistance;
