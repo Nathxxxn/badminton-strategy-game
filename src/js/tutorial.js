@@ -432,24 +432,12 @@ export class TutorialManager {
       };
       if (backBtn) backBtn.addEventListener('click', onBack, { once: true });
 
-      let autoAdvanceId = null;
-
       const advanceAfterSuccess = () => {
-        clearTimeout(autoAdvanceId);
         if (backBtn) backBtn.removeEventListener('click', onBack);
         this._root.style.pointerEvents = '';
         this._removeGoalHighlight();
         setTimeout(() => resolve(), 1200);
       };
-
-      // 45 s fallback — auto-advance even if the user never completes the exercise.
-      autoAdvanceId = setTimeout(() => {
-        endTutorialMode();
-        this._removeGoalHighlight();
-        this._root.style.pointerEvents = '';
-        if (backBtn) backBtn.removeEventListener('click', onBack);
-        resolve();
-      }, 30000);
 
       const observer = {
         onShotResult: ({ shot }) => {
