@@ -473,20 +473,26 @@ function adaptPlacementScenario(gen, workshop, kinematic, placement) {
     endPos:   shotPlayed.endPos,
   };
 
+  const shotContext = { type: shotPlayed.type, endPos: shotPlayed.endPos, startPos: playerStart };
+  const moveRadius = kinematic.movementPossibility(shotContext).allowedRadius;
+
   const partnerIdeal = placement.evaluateGlobalPlacement(
     partnerStart, playerStart,
     { type: shotPlayed.type, endPos: shotPlayed.endPos },
     false,
+    undefined,
+    moveRadius,
   ).ideal;
 
   const playerIdeal = placement.evaluateGlobalPlacement(
     playerStart, partnerStart,
     { type: shotPlayed.type, endPos: shotPlayed.endPos },
     isUserStriker,
+    undefined,
+    moveRadius,
   ).ideal;
 
   const partnerMovement = { from: partnerStart, to: partnerIdeal };
-  const moveRadius = kinematic.movementPossibility(shotPlayed.type).allowedRadius;
 
   return {
     id:           `GEN-P-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
