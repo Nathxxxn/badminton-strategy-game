@@ -273,16 +273,18 @@ export class PlacementEngine {
         return (partnerScore * 0.3) + (formationScore * 0.7);
     }
 
-    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter, opponents, moveRadius) {
+    evaluateGlobalPlacement(playerPos, partnerPos, shotContext, isHitter, opponents, moveRadius, startPos) {
         const shotType = shotContext.type;
         const shuttleEndPos = shotContext.endPos;
         const movementInfo = this.kinematicEngine.movementPossibility(shotContext, opponents);
         const kinematicRadius = (movementInfo?.allowedRadius) || 3.0;
         const reachMeters = moveRadius ?? kinematicRadius;
-        const bestPlacement = this.findBestPlacementExhaustive(playerPos, partnerPos, shotContext, isHitter, reachMeters);
+        // Search for optimal from start position when provided (matches the drawn circle),
+        // otherwise fall back to the player's current position.
+        const searchOrigin = startPos ?? playerPos;
+        const bestPlacement = this.findBestPlacementExhaustive(searchOrigin, partnerPos, shotContext, isHitter, reachMeters);
         const bestScore = bestPlacement.score;
 
-        
         const rawTotal = this._calculateRawScore(playerPos, partnerPos, shotContext, isHitter);
         const ratio = bestScore > 0 ? 100 / bestScore : 1;
 

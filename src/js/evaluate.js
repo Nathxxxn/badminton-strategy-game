@@ -206,6 +206,13 @@ export function evaluateTacticalTurn(turn, logicPayload) {
 
 
 export function evaluatePlacementTurn(turn, logicPayload) {
+  // Derive the player's start position (half-court) from the turn so the
+  // optimal is searched within moveRadius of the START position — matching
+  // the circle drawn on screen — while scoring still uses the final position.
+  const playerStartPos = turn.players?.ally1
+    ? toLogicPos(turn.players.ally1, 'ally')
+    : null;
+
   const result = placementEngine.evaluateGlobalPlacement(
     logicPayload.playerFinalPos,
     logicPayload.partnerFinalPos,
@@ -213,6 +220,7 @@ export function evaluatePlacementTurn(turn, logicPayload) {
     logicPayload.isHitter ?? false,
     undefined,
     turn.moveRadius,
+    playerStartPos,
   );
   const feedback = feedbackEngine.getPlacementFeedback(result);
   const realDistance = feedback.details.realDistance;
